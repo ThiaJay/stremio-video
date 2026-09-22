@@ -1,0 +1,64 @@
+name: Native A V session safety
+on:
+  push:
+    branches: [feat/av-sync-session-safety]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-av-sync-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-package-lock --no-audit --no-fund
+      - run: node scripts/integrate-av-sync-v2.cjs
+      - run: node --check src/ShellVideo/ShellVideo.js
+      - run: node --test tests/av-sync-session.test.cjs
+      - run: npx eslint src/ShellVideo/AvSyncSession.js
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: native-av-sync-source
+          retention-days: 7
+          path: src/ShellVideo/ShellVideo.js
+  persist:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-av-sync-source
+          path: src/ShellVideo
+      - name: Save the validated native adapter only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/ThiaJay/stremio-video/git/ref/heads/feat/av-sync-session-safety --jq .object.sha)" = "$EXPECTED_SHA"
+          git add -- src/ShellVideo/ShellVideo.js
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Integrate validated native session recovery adapter'
+          git -c credential.helper='!gh auth git-credential' push origin HEAD:refs/heads/feat/av-sync-session-safety
