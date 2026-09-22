@@ -1,0 +1,25 @@
+name: MPV recovery engine contract
+on:
+  push:
+    branches: [feat/av-sync-session-safety]
+    paths:
+      - tests/mpv-engine-contract.py
+      - .github/workflows/av-sync-engine-contract.yml
+      - src/ShellVideo/AvSyncSession.js
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engine-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install isolated test engines
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends mpv ffmpeg
+      - name: Verify recovery with real decoders and generated local media
+        run: python3 tests/mpv-engine-contract.py

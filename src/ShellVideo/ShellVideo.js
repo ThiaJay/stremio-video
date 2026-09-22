@@ -2,6 +2,7 @@ var EventEmitter = require('eventemitter3');
 var cloneDeep = require('lodash.clonedeep');
 var deepFreeze = require('deep-freeze');
 var ERROR = require('../error');
+var AvSyncSession = require('./AvSyncSession');
 
 var SUBS_SCALE_FACTOR = 0.0066;
 var EOF_END_TOLERANCE = 60000;
@@ -30,6 +31,8 @@ var stremioToMPVProps = {
     'assSubtitlesStylingActive': null,
     'hdrInfo': null,
     'videoScale': null,
+    'avSyncV2': null,
+    'avSyncV2Ack': null,
 };
 
 function parseVersion(version) {
@@ -50,6 +53,12 @@ function ShellVideo(options) {
     var ipc = options.shellTransport;
     var observedProps = {};
     var props = {};
+    var avSyncRevision = 0;
+    var avSyncSession = new AvSyncSession({
+        getPlayback: function() { return { loaded: props.loaded === true, url: stream ? stream.url : null }; },
+        send: function(name, value) { ipc.send(name, value); },
+        emit: function(name, value) { if (events && observedProps[name]) events.emit('propChanged', name, value); }
+    });
     var stremioProps = {};
     Object.keys(stremioToMPVProps).forEach(function(key) {
         if(stremioToMPVProps[key]) {
@@ -69,6 +78,8 @@ function ShellVideo(options) {
     ipc.send('mpv-observe-prop', 'volume');
     ipc.send('mpv-observe-prop', 'pause');
     ipc.send('mpv-observe-prop', 'seeking');
+    ipc.send('mpv-observe-prop', 'avsync');
+    AvSyncSession.properties.forEach(function(name) { ipc.send('mpv-observe-prop', name); });
     ipc.send('mpv-observe-prop', 'eof-reached');
 
     ipc.send('mpv-observe-prop', 'duration');
@@ -170,6 +181,9 @@ function ShellVideo(options) {
 
     var last_time = 0;
     ipc.on('mpv-prop-change', function(args) {
+        if (destroyed || !args) return;
+        if (args.name === 'avsync') { avSyncSession.observe(args.data); return; }
+        avSyncSession.update(args.name, args.data);
         switch (args.name) {
             case 'mpv-version':
                 resolveMPVVersion(args.data);
@@ -349,6 +363,8 @@ function ShellVideo(options) {
     });
 
     function getProp(propName) {
+        if (propName === 'avSyncV2') return avSyncSession.snapshot();
+        if (propName === 'avSyncV2Ack') return avSyncSession.lastAck();
         if (propName === 'hdrInfo') return props.hdrInfo || null;
         if (propName === 'videoScale') return props.videoScale || 'contain';
         if (propName === 'assSubtitlesStylingActive') return props.assSubtitlesStylingActive === true;
@@ -387,6 +403,7 @@ function ShellVideo(options) {
         observedProps[propName] = true;
     }
     function setProp(propName, propValue) {
+        if (['time', 'paused', 'selectedAudioTrackId', 'playbackSpeed'].indexOf(propName) !== -1) avSyncSession.interrupt();
         switch (propName) {
             case 'paused': {
                 if (stream !== null) {
@@ -503,10 +520,14 @@ function ShellVideo(options) {
     }
     function command(commandName, commandArgs) {
         switch (commandName) {
+            case 'correctAvSyncV2': { avSyncSession.correct(commandArgs); break; }
             case 'load': {
                 command('unload');
                 if (commandArgs && commandArgs.stream && typeof commandArgs.stream.url === 'string') {
+                    var loadRevision = avSyncRevision;
+                    avSyncSession.begin(commandArgs.avSyncSessionId);
                     waitForMPVVersion.then(function (mpvVersion) {
+                        if (destroyed || avSyncRevision !== loadRevision) return;
                         stream = commandArgs.stream;
                         onPropChanged('stream');
 
@@ -577,6 +598,8 @@ function ShellVideo(options) {
                 break;
             }
             case 'unload': {
+                avSyncRevision += 1;
+                avSyncSession.close();
                 var wasASSSubtitlesStylingActive = props.assSubtitlesStylingActive === true;
                 activeVideoReadyLoadId = null;
                 props = {
@@ -668,7 +691,7 @@ ShellVideo.manifest = {
     name: 'ShellVideo',
     external: false,
     props: Object.keys(stremioToMPVProps),
-    commands: ['load', 'unload', 'destroy'],
+    commands: ['load', 'unload', 'destroy', 'correctAvSyncV2'],
     events: [
         'propValue',
         'propChanged',

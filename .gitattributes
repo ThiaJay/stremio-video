@@ -1,0 +1,3 @@
+src/ShellVideo/*.js text eol=lf
+scripts/integrate-av-sync-v2.cjs text eol=lf
+tests/av-sync-session.test.cjs text eol=lf
