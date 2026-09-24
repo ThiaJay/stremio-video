@@ -412,6 +412,22 @@ build = replace_once(
 )
 write(build_path, build)
 
+mpv_build_path = "third_party/mpv-android-lib/app/build.gradle.kts"
+mpv_build = read(mpv_build_path)
+mpv_build = replace_once(
+    mpv_build,
+    "    compileSdk = 37",
+    "    compileSdk = 36",
+    "MPV test-build compileSdk",
+)
+write(mpv_build_path, mpv_build)
+
+gradle_properties_path = "gradle.properties"
+gradle_properties = read(gradle_properties_path)
+if "android.experimental.disableCompileSdkChecks=true" not in gradle_properties:
+    gradle_properties = gradle_properties.rstrip() + "\nandroid.experimental.disableCompileSdkChecks=true\n"
+write(gradle_properties_path, gradle_properties)
+
 strings_path = "app/src/main/res/values/strings.xml"
 strings = read(strings_path)
 strings = replace_once(
