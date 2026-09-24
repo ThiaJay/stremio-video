@@ -53,7 +53,8 @@ jobs:
           fi
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0" "platform-tools"
+          "$SDKMANAGER" --update || true
+          "$SDKMANAGER" --channel=3 "platforms;android-37" "platform-tools"
 
       - name: Apply side-by-side playback recovery
         run: python3 patch-source/android-dvfix/apply_patch.py android
