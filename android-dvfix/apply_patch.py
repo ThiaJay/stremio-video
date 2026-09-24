@@ -398,6 +398,18 @@ build = replace_once(
     '        applicationId = "com.stremio.dvfix"',
     "side-by-side applicationId",
 )
+build = replace_once(
+    build,
+    "    compileSdk = 37",
+    "    compileSdk = 36",
+    "test-build compileSdk",
+)
+build = replace_once(
+    build,
+    "        targetSdk = 37",
+    "        targetSdk = 36",
+    "test-build targetSdk",
+)
 write(build_path, build)
 
 strings_path = "app/src/main/res/values/strings.xml"
