@@ -400,6 +400,12 @@ build = replace_once(
 )
 build = replace_once(
     build,
+    'val supportedAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")',
+    'val supportedAbis = listOf("armeabi-v7a", "arm64-v8a")',
+    "Fire TV ARM ABI scope",
+)
+build = replace_once(
+    build,
     "    compileSdk = 37",
     "    compileSdk = 36",
     "test-build compileSdk",
