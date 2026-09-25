@@ -410,6 +410,12 @@ build = replace_once(
     "        targetSdk = 36",
     "test-build targetSdk",
 )
+build = replace_once(
+    build,
+    '    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")',
+    '    // LeakCanary intentionally omitted from the Fire TV DV Fix build.',
+    "remove LeakCanary developer UI",
+)
 write(build_path, build)
 
 mpv_build_path = "third_party/mpv-android-lib/app/build.gradle.kts"
