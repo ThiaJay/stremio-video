@@ -84,8 +84,34 @@ jobs:
 
           unzip -p upstream-jni/StremioMobile-v1.2.4-arm64-v8a-release.apk             lib/arm64-v8a/libstream_server.so             > android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
 
+          python3 - <<'PY'
+          from pathlib import Path
+          paths = [
+              Path("android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so"),
+              Path("android/app/src/main/jniLibs/arm64-v8a/libstream_server.so"),
+          ]
+          for path in paths:
+              data = path.read_bytes()
+              old = b"http://127.0.0.1:11470"
+              new = b"http://127.0.0.1:11471"
+              count = data.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one upstream 11470 endpoint, found {count}")
+              data = data.replace(old, new)
+              if b"11470" in data:
+                  raise SystemExit(f"{path}: native 11470 reference remains after patch")
+              if data.count(new) != 1:
+                  raise SystemExit(f"{path}: patched 11471 endpoint verification failed")
+              path.write_bytes(data)
+              print(f"patched native streaming endpoint in {path}")
+          PY
+
           test -s android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
           test -s android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
+          ! grep -a -q '11470' android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+          ! grep -a -q '11470' android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
+          grep -a -q 'http://127.0.0.1:11471' android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+          grep -a -q 'http://127.0.0.1:11471' android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
           file android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
           file android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
 
@@ -150,7 +176,12 @@ jobs:
                   info = z.getinfo(name)
                   if info.file_size <= 0:
                       raise SystemExit(f'Empty stream server JNI: {name}')
-                  print(name, info.file_size)
+                  data = z.read(name)
+                  if b'11470' in data:
+                      raise SystemExit(f'Native port 11470 remains in final APK: {name}')
+                  if b'http://127.0.0.1:11471' not in data:
+                      raise SystemExit(f'Native port 11471 endpoint missing in final APK: {name}')
+                  print(name, info.file_size, 'native port 11471 verified')
           PY
 
           sha256sum dist/STREMIO_DV_FIX_FIRETV_DEBUG.apk | tee dist/SHA256.txt
