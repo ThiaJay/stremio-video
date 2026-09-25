@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p android/dvplayer/src/main/assets
-          cp android/app/src/main/assets/cacert.pem android/dvplayer/src/main/assets/cacert.pem
+          cp android/third_party/mpv-android-lib/app/src/main/assets/cacert.pem android/dvplayer/src/main/assets/cacert.pem
 
           for abi in armeabi-v7a arm64-v8a; do
             mkdir -p "android/dvplayer/src/main/jniLibs/$abi"
