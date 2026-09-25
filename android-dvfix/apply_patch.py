@@ -502,8 +502,11 @@ auth = replace_once(
     "var screen by rememberSaveable { mutableStateOf(AuthScreen.Login) }",
     "open directly on login",
 )
-auth = replace_once(
-    auth,
+login_start = auth.index("@Composable\nprivate fun LoginScreen(")
+login_end = auth.index("@Composable\nprivate fun SignupScreen(", login_start)
+login_block = auth[login_start:login_end]
+login_block = replace_once(
+    login_block,
     """    val autofillManager = LocalAutofillManager.current
 
     AuthFormScaffold(""",
@@ -517,8 +520,8 @@ auth = replace_once(
     AuthFormScaffold(""",
     "login email focus requester",
 )
-auth = replace_once(
-    auth,
+login_block = replace_once(
+    login_block,
     """        AuthTextField(
             value = email,
             onValueChange = { email = it },
@@ -535,6 +538,7 @@ auth = replace_once(
         )""",
     "login email field focus",
 )
+auth = auth[:login_start] + login_block + auth[login_end:]
 auth = replace_once(
     auth,
     """            ThemedTextButton(
