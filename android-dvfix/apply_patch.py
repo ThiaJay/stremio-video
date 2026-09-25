@@ -428,6 +428,43 @@ if "android.experimental.disableCompileSdkChecks=true" not in gradle_properties:
     gradle_properties = gradle_properties.rstrip() + "\nandroid.experimental.disableCompileSdkChecks=true\n"
 write(gradle_properties_path, gradle_properties)
 
+# 7. Give the side-by-side build its own streaming-server port so it can coexist with official Stremio.
+jni_controller_path = "app/src/main/java/com/stremio/mobile/server/JniStreamingServerController.kt"
+jni_controller = read(jni_controller_path)
+jni_controller = replace_once(
+    jni_controller,
+    "startServerNative(context.applicationContext, configDir, cacheDir, 11470)",
+    "startServerNative(context.applicationContext, configDir, cacheDir, 11471)",
+    "DV Fix native streaming-server port",
+)
+write(jni_controller_path, jni_controller)
+
+core_path = "app/src/main/java/com/stremio/mobile/core/StremioCore.kt"
+core_text = read(core_path)
+core_text = replace_once(
+    core_text,
+    'const val STREAMING_SERVER_BASE = "http://127.0.0.1:11470"',
+    'const val STREAMING_SERVER_BASE = "http://127.0.0.1:11471"',
+    "DV Fix Core streaming-server base",
+)
+write(core_path, core_text)
+
+player_screen_path = "app/src/main/java/com/stremio/mobile/presentation/screens/PlayerScreen.kt"
+player_screen = read(player_screen_path)
+player_screen = replace_once(
+    player_screen,
+    'URL("http://127.0.0.1:11470/$infoHash/stats.json")',
+    'URL("http://127.0.0.1:11471/$infoHash/stats.json")',
+    "DV Fix player stats port",
+)
+write(player_screen_path, player_screen)
+
+server_utils_path = "app/src/main/java/com/stremio/mobile/server/ServerUtils.kt"
+server_utils = read(server_utils_path)
+server_utils = server_utils.replace('message.contains("11470")', 'message.contains("11471")')
+server_utils = server_utils.replace('Port 11470 is already in use.', 'Port 11471 is already in use.')
+write(server_utils_path, server_utils)
+
 strings_path = "app/src/main/res/values/strings.xml"
 strings = read(strings_path)
 strings = replace_once(
