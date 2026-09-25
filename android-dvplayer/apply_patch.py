@@ -148,8 +148,8 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
-import \`is\`.xyz.mpv.BaseMPVView
-import \`is\`.xyz.mpv.MPVLib
+import `is`.xyz.mpv.BaseMPVView
+import `is`.xyz.mpv.MPVLib
 import java.io.File
 import kotlin.math.max
 import kotlin.math.min
