@@ -335,7 +335,7 @@ class ExternalPlayerActivity : Activity() {
         }
         MPVLib.setPropertyDouble("time-pos", next / 1000.0)
         val seconds = kotlin.math.abs(deltaMs) / 1000
-        showOverlay(if (deltaMs < 0) "-${{seconds}s" else "+${{seconds}s")
+        showOverlay(if (deltaMs < 0) "-" + seconds + "s" else "+" + seconds + "s")
     }
 
     private fun showOverlay(message: String) {
@@ -399,7 +399,7 @@ class ExternalPlayerActivity : Activity() {
         }
     }
 
-    private class PlayerView(context: android.content.Context) : BaseMPVView(context, null) {
+    private class PlayerView(private val appContext: android.content.Context) : BaseMPVView(appContext, null) {
         override fun initOptions() {
             setVo("gpu")
             MPVLib.setOptionString("profile", "fast")
@@ -415,11 +415,11 @@ class ExternalPlayerActivity : Activity() {
 
             MPVLib.setOptionString("audio-set-media-role", "yes")
             MPVLib.setOptionString("tls-verify", "yes")
-            MPVLib.setOptionString("tls-ca-file", "${{context.filesDir.absolutePath}/cacert.pem")
+            MPVLib.setOptionString("tls-ca-file", appContext.filesDir.absolutePath + "/cacert.pem")
 
             MPVLib.setOptionString("input-default-bindings", "yes")
-            MPVLib.setOptionString("demuxer-max-bytes", "${{64 * 1024 * 1024}")
-            MPVLib.setOptionString("demuxer-max-back-bytes", "${{64 * 1024 * 1024}")
+            MPVLib.setOptionString("demuxer-max-bytes", (64 * 1024 * 1024).toString())
+            MPVLib.setOptionString("demuxer-max-back-bytes", (64 * 1024 * 1024).toString())
         }
 
         override fun postInitOptions() {
