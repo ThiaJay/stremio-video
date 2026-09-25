@@ -69,6 +69,7 @@ jobs:
           grep -q '127.0.0.1:11471' android/app/src/main/java/com/stremio/mobile/core/StremioCore.kt
           grep -q '127.0.0.1:11471' android/app/src/main/java/com/stremio/mobile/presentation/screens/PlayerScreen.kt
           grep -q 'Stremio DV Fix' android/app/src/main/res/values/strings.xml
+          ! grep -q 'leakcanary-android' android/app/build.gradle.kts
 
       - name: Run Android unit tests
         working-directory: android
