@@ -1,0 +1,143 @@
+name: Build Android TV DV Player Sidecar
+
+on:
+  push:
+    branches:
+      - fix/android-tv-dv-player-sidecar
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-dvplayer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      ANDROID_KEYSTORE_FILE: ${{ github.workspace }}/android/dvfix-test.keystore
+      ANDROID_KEYSTORE_PASSWORD: dvfix-test-only
+      ANDROID_KEY_ALIAS: dvfix
+      ANDROID_KEY_PASSWORD: dvfix-test-only
+
+    steps:
+      - name: Checkout patch source
+        uses: actions/checkout@v4
+        with:
+          ref: fix/android-tv-dv-player-sidecar
+          path: patch-source
+
+      - name: Checkout pinned Stremio Android source
+        uses: actions/checkout@v4
+        with:
+          repository: stremio-native/stremio-android
+          ref: 4bdef3b6be1186d9aa22acd8b3ec391c22f0e083
+          submodules: recursive
+          path: android
+
+      - name: Prepare stable player signing key
+        shell: bash
+        run: |
+          base64 -d patch-source/android-dvfix/dvfix-test.keystore.b64 > android/dvfix-test.keystore
+          test -s android/dvfix-test.keystore
+          keytool -list -keystore android/dvfix-test.keystore -storepass dvfix-test-only -alias dvfix >/dev/null
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Install Android 36 platform
+        shell: bash
+        run: |
+          SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "platform-tools"
+
+      - name: Apply player-only sidecar patch
+        run: python3 patch-source/android-dvplayer/apply_patch.py android
+
+      - name: Copy MPV runtime assets
+        shell: bash
+        run: |
+          mkdir -p android/dvplayer/src/main/assets
+          cp android/app/src/main/assets/cacert.pem android/dvplayer/src/main/assets/cacert.pem
+
+          for abi in armeabi-v7a arm64-v8a; do
+            mkdir -p "android/dvplayer/src/main/jniLibs/$abi"
+            cp "android/app/src/main/jniLibs/$abi/libc++_shared.so" \
+               "android/dvplayer/src/main/jniLibs/$abi/libc++_shared.so"
+          done
+
+      - name: Verify sidecar footprint
+        shell: bash
+        run: |
+          grep -q 'applicationId = "com.stremio.dvplayer"' android/dvplayer/build.gradle.kts
+          grep -q 'android.intent.action.VIEW' android/dvplayer/src/main/AndroidManifest.xml
+          grep -q 'android:mimeType="video/\\*"' android/dvplayer/src/main/AndroidManifest.xml
+          ! grep -q 'android.intent.action.MAIN' android/dvplayer/src/main/AndroidManifest.xml
+          ! grep -q 'android.intent.category.LAUNCHER' android/dvplayer/src/main/AndroidManifest.xml
+          grep -q 'putExtra("position"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
+          grep -q 'putExtra("duration"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
+          grep -q 'putExtra("end_by"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
+          grep -q 'audio-spdif.*truehd' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
+          test -s android/dvplayer/src/main/assets/cacert.pem
+          test -s android/dvplayer/src/main/jniLibs/armeabi-v7a/libc++_shared.so
+          test -s android/dvplayer/src/main/jniLibs/arm64-v8a/libc++_shared.so
+
+      - name: Build player APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :dvplayer:assembleDebug --stacktrace --no-daemon
+
+      - name: Collect and inspect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk="$(find android/dvplayer/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+          test -n "$apk"
+          cp "$apk" dist/STREMIO_DV_PLAYER_FIRETV.apk
+
+          python3 - <<'PY'
+          import zipfile
+          apk = "dist/STREMIO_DV_PLAYER_FIRETV.apk"
+          with zipfile.ZipFile(apk) as z:
+              names = set(z.namelist())
+              required = {
+                  "lib/armeabi-v7a/libmpv.so",
+                  "lib/arm64-v8a/libmpv.so",
+                  "lib/armeabi-v7a/libc++_shared.so",
+                  "lib/arm64-v8a/libc++_shared.so",
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit(f"Missing player runtime libraries: {missing}")
+              forbidden = [n for n in names if n.endswith("/libstream_server.so")]
+              if forbidden:
+                  raise SystemExit(f"Player-only APK unexpectedly contains stream server JNI: {forbidden}")
+              print("player runtime verified")
+          PY
+
+          sha256sum dist/STREMIO_DV_PLAYER_FIRETV.apk | tee dist/SHA256.txt
+
+      - name: Upload player artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stremio-dv-player-firetv
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
