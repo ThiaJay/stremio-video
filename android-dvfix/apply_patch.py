@@ -449,6 +449,93 @@ jni_controller = replace_once(
     "startServerNative(context.applicationContext, configDir, cacheDir, 11471)",
     "DV Fix native streaming-server port",
 )
+jni_controller = replace_once(
+    jni_controller,
+    """    companion object {
+        private const val TAG = "JniStreamingServer"
+""",
+    """    companion object {
+        private const val TAG = "JniStreamingServer"
+        private const val DV_FIX_BASE_URL = "http://127.0.0.1:11471"
+""",
+    "DV Fix server base constant",
+)
+jni_controller = replace_once(
+    jni_controller,
+    """    override suspend fun start() {
+        startMutex.withLock {
+            val current = mutableState.value
+""",
+    """    override suspend fun start() {
+        startMutex.withLock {
+            // A second start request can arrive while the first native server is already alive.
+            // Treat a healthy DV Fix server as idempotent success instead of attempting another bind.
+            if (waitForServerReady(DV_FIX_BASE_URL, timeoutMs = 350)) {
+                Timber.tag(TAG).i("Reusing already-running DV Fix streaming server at %s", DV_FIX_BASE_URL)
+                mutableState.value = StreamingServerState.Ready(DV_FIX_BASE_URL)
+                return@withLock
+            }
+
+            val current = mutableState.value
+""",
+    "idempotent pre-start server reuse",
+)
+jni_controller = replace_once(
+    jni_controller,
+    """                if (url != null && waitForServerReady(url)) {
+                    Timber.tag(TAG).i("Streaming server ready at %s", url)
+                    mutableState.value = StreamingServerState.Ready(url)
+                } else {
+                    val message = if (url == null) {
+                        "Native start returned null"
+                    } else {
+                        "Native server returned $url but did not become reachable"
+                    }
+                    Timber.tag(TAG).e(message)
+                    dumpServerLogsToLogcat(message)
+                    stopNativeServer()
+                    mutableState.value = StreamingServerState.Failed(message)
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Error starting native server")
+                dumpServerLogsToLogcat("start exception")
+                mutableState.value = StreamingServerState.Failed(e.message ?: "Unknown native error")
+                stopNativeServer()
+            }
+""",
+    """                if (url != null && waitForServerReady(url)) {
+                    Timber.tag(TAG).i("Streaming server ready at %s", url)
+                    mutableState.value = StreamingServerState.Ready(url)
+                } else if (waitForServerReady(DV_FIX_BASE_URL, timeoutMs = 750)) {
+                    // Native start may report a bind race after another start path has already won.
+                    // If the expected server is healthy, keep the healthy server and suppress the false error.
+                    Timber.tag(TAG).w("Native start result was not usable, but DV Fix server is healthy at %s; reusing it", DV_FIX_BASE_URL)
+                    mutableState.value = StreamingServerState.Ready(DV_FIX_BASE_URL)
+                } else {
+                    val message = if (url == null) {
+                        "Native start returned null"
+                    } else {
+                        "Native server returned $url but did not become reachable"
+                    }
+                    Timber.tag(TAG).e(message)
+                    dumpServerLogsToLogcat(message)
+                    stopNativeServer()
+                    mutableState.value = StreamingServerState.Failed(message)
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Error starting native server")
+                if (waitForServerReady(DV_FIX_BASE_URL, timeoutMs = 750)) {
+                    Timber.tag(TAG).w("Start raised an exception, but DV Fix server is already healthy at %s; suppressing duplicate-bind failure", DV_FIX_BASE_URL)
+                    mutableState.value = StreamingServerState.Ready(DV_FIX_BASE_URL)
+                } else {
+                    dumpServerLogsToLogcat("start exception")
+                    mutableState.value = StreamingServerState.Failed(e.message ?: "Unknown native error")
+                    stopNativeServer()
+                }
+            }
+""",
+    "duplicate bind recovery",
+)
 write(jni_controller_path, jni_controller)
 
 core_path = "app/src/main/java/com/stremio/mobile/core/StremioCore.kt"
