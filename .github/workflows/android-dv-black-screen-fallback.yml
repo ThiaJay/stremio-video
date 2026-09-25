@@ -129,6 +129,9 @@ jobs:
           grep -q 'onRenderedFirstFrame' android/app/src/main/java/com/stremio/mobile/player/ExoStreamPlayer.kt
           grep -q 'recoverSameSourceToMpv' android/app/src/main/java/com/stremio/mobile/player/PlaybackManager.kt
           grep -q '11471' android/app/src/main/java/com/stremio/mobile/server/JniStreamingServerController.kt
+          grep -q 'DV_FIX_BASE_URL = "http://127.0.0.1:11471"' android/app/src/main/java/com/stremio/mobile/server/JniStreamingServerController.kt
+          grep -q 'Reusing already-running DV Fix streaming server' android/app/src/main/java/com/stremio/mobile/server/JniStreamingServerController.kt
+          grep -q 'suppressing duplicate-bind failure' android/app/src/main/java/com/stremio/mobile/server/JniStreamingServerController.kt
           grep -q '127.0.0.1:11471' android/app/src/main/java/com/stremio/mobile/core/StremioCore.kt
           grep -q '127.0.0.1:11471' android/app/src/main/java/com/stremio/mobile/presentation/screens/PlayerScreen.kt
           grep -q 'Stremio DV Fix' android/app/src/main/res/values/strings.xml
