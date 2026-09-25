@@ -481,6 +481,103 @@ strings = replace_once(
 )
 write(strings_path, strings)
 
+# 8. Make authentication usable with a Fire TV remote and avoid the touch-only intro gate.
+auth_path = "app/src/main/java/com/stremio/mobile/presentation/screens/AuthFlow.kt"
+auth = read(auth_path)
+auth = replace_once(
+    auth,
+    "import androidx.compose.runtime.DisposableEffect",
+    "import androidx.compose.runtime.DisposableEffect\nimport androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.remember",
+    "AuthFlow runtime imports",
+)
+auth = replace_once(
+    auth,
+    "import androidx.compose.ui.Alignment",
+    "import androidx.compose.ui.Alignment\nimport androidx.compose.ui.focus.FocusRequester\nimport androidx.compose.ui.focus.focusRequester",
+    "AuthFlow focus imports",
+)
+auth = replace_once(
+    auth,
+    "var screen by rememberSaveable { mutableStateOf(AuthScreen.Intro) }",
+    "var screen by rememberSaveable { mutableStateOf(AuthScreen.Login) }",
+    "open directly on login",
+)
+auth = replace_once(
+    auth,
+    """    val autofillManager = LocalAutofillManager.current
+
+    AuthFormScaffold(""",
+    """    val autofillManager = LocalAutofillManager.current
+    val emailFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        emailFocusRequester.requestFocus()
+    }
+
+    AuthFormScaffold(""",
+    "login email focus requester",
+)
+auth = replace_once(
+    auth,
+    """        AuthTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = "Email",
+            modifier = Modifier.semantics { contentType = ContentType.EmailAddress }
+        )""",
+    """        AuthTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = "Email",
+            modifier = Modifier
+                .focusRequester(emailFocusRequester)
+                .semantics { contentType = ContentType.EmailAddress }
+        )""",
+    "login email field focus",
+)
+auth = replace_once(
+    auth,
+    """            ThemedTextButton(
+                text = "Log in",
+                onClick = onLoginClicked,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )""",
+    """            AuthButton(
+                text = "Log in",
+                enabled = !isLoading,
+                onClick = onLoginClicked,
+            )""",
+    "remote focusable intro login button",
+)
+write(auth_path, auth)
+
+# 9. Disable every in-app update route for the isolated DV Fix build.
+viewmodel_path = "app/src/main/java/com/stremio/mobile/presentation/viewmodel/MainViewModel.kt"
+viewmodel = read(viewmodel_path)
+viewmodel = replace_once(
+    viewmodel,
+    "private val isAutoUpdateEnabled = MutableStateFlow(authRepository.isAutoUpdateEnabled())",
+    "private val isAutoUpdateEnabled = MutableStateFlow(false)",
+    "disable DV Fix auto update state",
+)
+viewmodel = replace_once(
+    viewmodel,
+    "        checkForUpdates(manual = true)",
+    "        // DV Fix is an isolated compatibility build. Upstream self-update is intentionally disabled.",
+    "disable startup update check",
+)
+viewmodel = replace_once(
+    viewmodel,
+    """    fun checkForUpdates(manual: Boolean) {
+        viewModelScope.launch {""",
+    """    fun checkForUpdates(manual: Boolean) {
+        _updateState.value = UpdateState.Idle
+        return
+        viewModelScope.launch {""",
+    "disable manual and automatic update checks",
+)
+write(viewmodel_path, viewmodel)
+
 google_path = "app/google-services.json"
 google = json.loads(read(google_path))
 matched = 0
