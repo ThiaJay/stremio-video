@@ -84,18 +84,33 @@ jobs:
       - name: Verify sidecar footprint
         shell: bash
         run: |
-          grep -q 'applicationId = "com.stremio.dvplayer"' android/dvplayer/build.gradle.kts
-          grep -q 'android.intent.action.VIEW' android/dvplayer/src/main/AndroidManifest.xml
-          grep -q 'android:mimeType="video/\\*"' android/dvplayer/src/main/AndroidManifest.xml
-          ! grep -q 'android.intent.action.MAIN' android/dvplayer/src/main/AndroidManifest.xml
-          ! grep -q 'android.intent.category.LAUNCHER' android/dvplayer/src/main/AndroidManifest.xml
-          grep -q 'putExtra("position"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
-          grep -q 'putExtra("duration"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
-          grep -q 'putExtra("end_by"' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
-          grep -q 'audio-spdif.*truehd' android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt
-          test -s android/dvplayer/src/main/assets/cacert.pem
-          test -s android/dvplayer/src/main/jniLibs/armeabi-v7a/libc++_shared.so
-          test -s android/dvplayer/src/main/jniLibs/arm64-v8a/libc++_shared.so
+          python3 - <<'PY'
+          from pathlib import Path
+
+          checks = []
+
+          gradle = Path("android/dvplayer/build.gradle.kts").read_text()
+          manifest = Path("android/dvplayer/src/main/AndroidManifest.xml").read_text()
+          activity = Path("android/dvplayer/src/main/java/com/stremio/dvplayer/ExternalPlayerActivity.kt").read_text()
+
+          def require(name, condition):
+              if not condition:
+                  raise SystemExit(f"sidecar verification failed: {name}")
+              print(f"PASS {name}")
+
+          require("application id", 'applicationId = "com.stremio.dvplayer"' in gradle)
+          require("VIEW intent", "android.intent.action.VIEW" in manifest)
+          require("video mime", 'android:mimeType="video/*"' in manifest)
+          require("no MAIN launcher", "android.intent.action.MAIN" not in manifest)
+          require("no LAUNCHER category", "android.intent.category.LAUNCHER" not in manifest)
+          require("returns position", 'putExtra("position"' in activity)
+          require("returns duration", 'putExtra("duration"' in activity)
+          require("returns end_by", 'putExtra("end_by"' in activity)
+          require("TrueHD passthrough", 'audio-spdif", "ac3,dts,eac3,truehd,dts-hd"' in activity)
+          require("certificate asset", Path("android/dvplayer/src/main/assets/cacert.pem").stat().st_size > 0)
+          require("armv7 libc++", Path("android/dvplayer/src/main/jniLibs/armeabi-v7a/libc++_shared.so").stat().st_size > 0)
+          require("arm64 libc++", Path("android/dvplayer/src/main/jniLibs/arm64-v8a/libc++_shared.so").stat().st_size > 0)
+          PY
 
       - name: Build player APK
         working-directory: android
