@@ -67,6 +67,28 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "platform-tools"
 
+      - name: Inject matching upstream stream server JNI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upstream-jni android/app/src/main/jniLibs/armeabi-v7a android/app/src/main/jniLibs/arm64-v8a
+
+          curl -fL --retry 3 --retry-delay 2             -o upstream-jni/StremioMobile-v1.2.4-armeabi-v7a-release.apk             https://github.com/stremio-native/stremio-android/releases/download/v1.2.4/StremioMobile-v1.2.4-armeabi-v7a-release.apk
+
+          curl -fL --retry 3 --retry-delay 2             -o upstream-jni/StremioMobile-v1.2.4-arm64-v8a-release.apk             https://github.com/stremio-native/stremio-android/releases/download/v1.2.4/StremioMobile-v1.2.4-arm64-v8a-release.apk
+
+          echo "519ab54a8a57e93c5a2f2a70cced18673063cffcb88cfdcd0ec6c9a7e5f5570e  upstream-jni/StremioMobile-v1.2.4-armeabi-v7a-release.apk" | sha256sum -c -
+          echo "3ffd96e6c6f0b23845f7ee6ab721d52ba1534055304959ed84c9589aac8bc97e  upstream-jni/StremioMobile-v1.2.4-arm64-v8a-release.apk" | sha256sum -c -
+
+          unzip -p upstream-jni/StremioMobile-v1.2.4-armeabi-v7a-release.apk             lib/armeabi-v7a/libstream_server.so             > android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+
+          unzip -p upstream-jni/StremioMobile-v1.2.4-arm64-v8a-release.apk             lib/arm64-v8a/libstream_server.so             > android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
+
+          test -s android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+          test -s android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
+          file android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+          file android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
+
       - name: Apply side-by-side playback recovery
         run: python3 patch-source/android-dvfix/apply_patch.py android
 
@@ -74,6 +96,9 @@ jobs:
         shell: bash
         run: |
           grep -q 'applicationId = "com.stremio.dvfix"' android/app/build.gradle.kts
+          grep -q 'val supportedAbis = listOf("armeabi-v7a", "arm64-v8a")' android/app/build.gradle.kts
+          test -s android/app/src/main/jniLibs/armeabi-v7a/libstream_server.so
+          test -s android/app/src/main/jniLibs/arm64-v8a/libstream_server.so
           grep -q 'videoFramePresent' android/app/src/main/java/com/stremio/mobile/player/Player.kt
           grep -q 'onRenderedFirstFrame' android/app/src/main/java/com/stremio/mobile/player/ExoStreamPlayer.kt
           grep -q 'recoverSameSourceToMpv' android/app/src/main/java/com/stremio/mobile/player/PlaybackManager.kt
@@ -97,17 +122,38 @@ jobs:
         working-directory: android
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
-      - name: Collect universal APK
+      - name: Collect Fire TV APK
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
           apk="$(find android/app/build/outputs/apk/debug -type f -name '*universal*debug*.apk' | head -n 1)"
           if [ -z "$apk" ]; then
             apk="$(find android/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           fi
           test -n "$apk"
-          cp "$apk" dist/STREMIO_DV_FIX_UNIVERSAL_DEBUG.apk
-          sha256sum dist/STREMIO_DV_FIX_UNIVERSAL_DEBUG.apk | tee dist/SHA256.txt
+          cp "$apk" dist/STREMIO_DV_FIX_FIRETV_DEBUG.apk
+
+          python3 - <<'PY'
+          import zipfile
+          apk = 'dist/STREMIO_DV_FIX_FIRETV_DEBUG.apk'
+          with zipfile.ZipFile(apk) as z:
+              names = set(z.namelist())
+              required = {
+                  'lib/armeabi-v7a/libstream_server.so',
+                  'lib/arm64-v8a/libstream_server.so',
+              }
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit(f'Missing stream server JNI in final APK: {missing}')
+              for name in sorted(required):
+                  info = z.getinfo(name)
+                  if info.file_size <= 0:
+                      raise SystemExit(f'Empty stream server JNI: {name}')
+                  print(name, info.file_size)
+          PY
+
+          sha256sum dist/STREMIO_DV_FIX_FIRETV_DEBUG.apk | tee dist/SHA256.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
