@@ -402,11 +402,17 @@ function WebOsVideo(options) {
     }
 
     function embeddedTracks(tracks, unsupported) {
-        return tracks.filter(function(track) {
-            return !unsupported.includes(track.codec || '');
-        }).map(function(track, index) {
-            return Object.assign(embeddedTrack(index, track.lang, track.label), { _trackNumber: track.id });
-        });
+        // Keep display IDs contiguous, but use indices from the unfiltered
+        // native track list when selecting a track through the WebOS service.
+        return tracks.reduce(function(result, track, nativeIndex) {
+            if (!unsupported.includes(track.codec || '')) {
+                result.push(Object.assign(embeddedTrack(result.length, track.lang, track.label), {
+                    nativeIndex: nativeIndex,
+                    _trackNumber: track.id
+                }));
+            }
+            return result;
+        }, []);
     }
 
     function markShowing(tracks, id) {
@@ -667,7 +673,10 @@ function WebOsVideo(options) {
 
     function failPendingSubtitlesTrack() {
         clearPendingSubtitlesTrack();
+        currentSubTrack = null;
+        textTracks = markShowing(textTracks, null);
         toggleSubtitles(false);
+        onPropChanged('subtitlesTracks');
         onPropChanged('selectedSubtitlesTrackId');
     }
 
@@ -813,8 +822,10 @@ function WebOsVideo(options) {
                     }
                 } else {
                     currentSubTrack = null;
-                    onPropChanged('selectedSubtitlesTrackId');
+                    textTracks = markShowing(textTracks, null);
                     toggleSubtitles(false);
+                    onPropChanged('subtitlesTracks');
+                    onPropChanged('selectedSubtitlesTrackId');
                 }
 
                 break;
