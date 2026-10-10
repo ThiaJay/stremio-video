@@ -22,6 +22,7 @@ test('WebOS subtitles stay off across native media sessions unless explicitly se
     let nextTimerId = 0;
     let poll = null;
     let videoElement = null;
+    let failNextSubtitleSelection = false;
 
     class Container {
         constructor() { this.children = []; this.style = {}; }
@@ -51,17 +52,35 @@ test('WebOS subtitles stay off across native media sessions unless explicitly se
             webOS: { service: { request(_service, options) {
                 requests.push({ method: options.method, parameters: options.parameters });
                 eventLog.push(options.method);
-                options.onSuccess?.({ configs: {} });
+                if (options.method === 'selectTrack' && options.parameters.type === 'text' &&
+                    failNextSubtitleSelection) {
+                    failNextSubtitleSelection = false;
+                    options.onFailure?.({ errorCode: 501, errorText: 'mocked subtitle selection failure' });
+                } else {
+                    options.onSuccess?.({ configs: {} });
+                }
             } } },
         };
         global.setInterval = (fn) => { poll = fn; return 123; };
         global.clearInterval = () => { poll = null; };
         global.setTimeout = (fn) => { const id = ++nextTimerId; timeouts.set(id, fn); return id; };
         global.clearTimeout = (id) => { timeouts.delete(id); };
-        require.cache[tracksPath].exports = (_url, callback) => callback({
-            subs: [{ id: 0, lang: 'eng', codec: 'subrip', label: 'English' }],
-            audio: [{ id: 0, lang: 'eng', codec: 'AAC', label: 'English AAC' }],
-        });
+        require.cache[tracksPath].exports = (sourceUrl, callback) => callback(
+            sourceUrl.endsWith('/media-three') ? {
+                // The native indexes must retain their positions when codecs are filtered.
+                subs: [
+                    { id: 0, lang: 'und', codec: 'HDMV/PGS', label: 'Unsupported PGS' },
+                    { id: 1, lang: 'eng', codec: 'subrip', label: 'English' },
+                ],
+                audio: [
+                    { id: 0, lang: 'eng', codec: 'DTS', label: 'Unsupported DTS' },
+                    { id: 1, lang: 'eng', codec: 'AAC', label: 'English AAC' },
+                ],
+            } : {
+                subs: [{ id: 0, lang: 'eng', codec: 'subrip', label: 'English' }],
+                audio: [{ id: 0, lang: 'eng', codec: 'AAC', label: 'English AAC' }],
+            }
+        );
         delete require.cache[require.resolve('../src/WebOsVideo/WebOsVideo')];
         const WebOsVideo = require('../src/WebOsVideo/WebOsVideo');
         const player = new WebOsVideo({ containerElement: new Container() });
@@ -107,6 +126,23 @@ test('WebOS subtitles stay off across native media sessions unless explicitly se
         assert.ok(requests.some(x => x.method === 'selectTrack' &&
             x.parameters.mediaId === 'media-one' && x.parameters.type === 'text'));
 
+        // Explicit Off must also clear the presentation mode, not just the selected ID.
+        player.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: null });
+        assert.equal(selection(), null);
+        assert.equal(tracks()[0].mode, 'disabled', 'turning subtitles off must clear showing mode');
+
+        // A failed native selectTrack must not leave a stale showing track in the UI.
+        player.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: 'EMBEDDED_0' });
+        for (const fn of [...timeouts.values()]) fn();
+        timeouts.clear();
+        assert.equal(selection(), 'EMBEDDED_0');
+        failNextSubtitleSelection = true;
+        player.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: 'EMBEDDED_0' });
+        for (const fn of [...timeouts.values()]) fn();
+        timeouts.clear();
+        assert.equal(selection(), null, 'native selection failure must disable subtitles');
+        assert.equal(tracks()[0].mode, 'disabled', 'native failure must clear stale showing mode');
+
         const before = requests.length;
         load('media-two');
         const newActions = requests.slice(before);
@@ -115,6 +151,25 @@ test('WebOS subtitles stay off across native media sessions unless explicitly se
         assert.deepEqual(newActions.find(x => x.method === 'setSubtitleEnable').parameters,
             { mediaId: 'media-two', enable: false });
         assert.equal(newActions.some(x => x.method === 'selectTrack'), false);
+
+        // Filtering a native track must not renumber its index passed to WebOS.
+        load('media-three');
+        assert.equal(tracks().length, 1, 'unsupported PGS subtitle is hidden');
+        assert.equal(tracks()[0].id, 'EMBEDDED_0', 'visible subtitle IDs remain contiguous');
+        player.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: 'EMBEDDED_0' });
+        for (const fn of [...timeouts.values()]) fn();
+        timeouts.clear();
+        const subtitleRequest = requests.filter(x => x.method === 'selectTrack' &&
+            x.parameters.mediaId === 'media-three' && x.parameters.type === 'text').at(-1);
+        assert.equal(subtitleRequest.parameters.index, 1,
+            'the native subtitle index must skip filtered PGS index zero');
+
+        player.dispatch({ type: 'setProp', propName: 'selectedAudioTrackId', propValue: 'EMBEDDED_0' });
+        const audioRequest = requests.filter(x => x.method === 'selectTrack' &&
+            x.parameters.mediaId === 'media-three' && x.parameters.type === 'audio').at(-1);
+        assert.equal(audioRequest.parameters.index, 1,
+            'the native audio index must skip filtered DTS index zero');
+
         player.dispatch({ type: 'command', commandName: 'destroy' });
         console.log('WebOS native start disabled, manual enable and next source reset PASS');
     } finally {
