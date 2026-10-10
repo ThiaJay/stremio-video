@@ -1,7 +1,7 @@
 name: MPV recovery engine contract
 on:
   push:
-    branches: [feat/av-sync-session-safety]
+    branches: [feat/av-sync-session-safety, integration/upstream-20261010]
     paths:
       - tests/mpv-engine-contract.py
       - .github/workflows/av-sync-engine-contract.yml

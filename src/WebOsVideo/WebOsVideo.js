@@ -241,8 +241,9 @@ function WebOsVideo(options) {
             } else if (mediaId !== previousMediaId) {
                 activeMediaId = mediaId;
                 clearMediaIdTimer();
-                finishSourceStartup();
+                // Apply the requested subtitle state before the video starts.
                 applyPendingSubtitlesToggle();
+                finishSourceStartup();
                 applyPendingSubtitlesTrack();
                 applyPendingAudioTrack();
                 return;
@@ -444,8 +445,9 @@ function WebOsVideo(options) {
                 }
                 textTracks = embeddedTracks(tracksData.subs, device.unsupportedSubs);
                 if (textTracks.length) {
-                    currentSubTrack = textTracks[0].id;
-                    textTracks = markShowing(textTracks, currentSubTrack);
+                    // Discovery is not an explicit subtitle selection.
+                    // Keep all tracks disabled until the player chooses one.
+                    textTracks = markShowing(textTracks, null);
                     onPropChanged('subtitlesTracks');
                     onPropChanged('selectedSubtitlesTrackId');
                 }
@@ -994,6 +996,12 @@ function WebOsVideo(options) {
                     }
                     previousMediaId = getUsableMediaId();
                     sourceStartupPending = true;
+                    // WebOS may retain the previous subtitle selection between
+                    // native media sessions. Clear it on every new source load.
+                    // A later explicit setProp selection can enable a track.
+                    disabledSubs = true;
+                    currentSubTrack = null;
+                    pendingSubtitlesEnabled = false;
                     stream = commandArgs.stream;
                     startTime = commandArgs.time;
 
