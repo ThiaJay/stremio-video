@@ -1,0 +1,107 @@
+name: Isolated Night Audio Fire TV hardware test artifact
+on:
+  push:
+    branches:
+      - feature/night-audio-firetv-test-20261012
+    paths:
+      - '.github/workflows/night-audio-firetv-test.yml'
+      - 'android-night-audio-reference/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-audio-firetv-exact-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-apk-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Retrieve exact test source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Compile and test without device
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
+          gradle -p android-night-audio-reference \
+            :processor:compileDebugJavaWithJavac \
+            :processor:testDebugUnitTest \
+            :processor:assembleDebug \
+            :test-app:assembleDebug --no-daemon
+      - name: Verify isolated APK, permissions, signature and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android-night-audio-reference/test-app/build/outputs/apk/debug/test-app-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$aapt" && test -x "$apksigner"
+          "$aapt" dump badging "$apk" > /tmp/night-audio-badging.txt
+          grep -F "package: name='org.nightaudio.proof.tv'" /tmp/night-audio-badging.txt
+          grep -F "versionName='0.1.0'" /tmp/night-audio-badging.txt
+          grep -F "sdkVersion:'23'" /tmp/night-audio-badging.txt
+          grep -F "targetSdkVersion:'35'" /tmp/night-audio-badging.txt
+          if "$aapt" dump permissions "$apk" | grep -F 'uses-permission:'; then
+            echo "STOP: APK declares permissions unexpectedly."
+            exit 1
+          fi
+          "$apksigner" verify --verbose --print-certs --min-sdk-version 30 "$apk" > /tmp/night-audio-signing.txt
+          grep -q 'Verifies' /tmp/night-audio-signing.txt
+          if unzip -Z1 "$apk" | grep -q '^lib/'; then
+            echo "STOP: Unexpected native libraries."
+            exit 1
+          fi
+          unzip -t "$apk" >/dev/null
+          mkdir -p hardware-test
+          cp "$apk" hardware-test/night-audio-proof-tv-0.1.0-debug.apk
+          cd hardware-test
+          sha256sum night-audio-proof-tv-0.1.0-debug.apk > APK-SHA256.txt
+          {
+            echo "SOURCE_REPOSITORY=ThiaJay/stremio-video"
+            echo "SOURCE_COMMIT=$GITHUB_SHA"
+            echo "SOURCE_BRANCH=$GITHUB_REF_NAME"
+            echo "GITHUB_RUN_ID=$GITHUB_RUN_ID"
+            echo "PACKAGE=org.nightaudio.proof.tv"
+            echo "VERSION=0.1.0"
+            echo "MIN_ANDROID_API=23"
+            echo "TARGET_ANDROID_API=35"
+            echo "PERMISSIONS=NONE"
+            echo "NATIVE_LIBRARIES=NONE"
+            echo "SIGNED=DEBUG_TEST_ONLY"
+            echo "DEPLOYED=NO"
+            echo "PRODUCTION_STREMIO_CHANGED=NO"
+          } > BUILD-PROVENANCE.txt
+          grep -E 'Signer #1 certificate SHA-256 digest:' /tmp/night-audio-signing.txt > SIGNER-SHA256.txt
+          printf '%s\n' 'Isolated synthetic-only audio comparison. Not Stremio, no login or network.' \
+            'For approved local physical test only. Verify SHA256, Android package, permissions and device.' \
+            'Default mode Off. Starts at application volume 20 percent only when Play is pressed.' \
+            'Do not publish, distribute, update or replace official Stremio.' > TEST-SAFETY.txt
+      - name: Short-lived test transfer, not a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: night-audio-aftkrt-test-${{ github.sha }}
+          path: hardware-test/
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+# There are no deploy, GitHub Release, Pages, production signing or TV installation steps.
