@@ -85,7 +85,7 @@ test('passthrough is never mistaken for decoded sound', () => {
     assert.deepEqual(audio.proposeMpvCommands(x, false), []);
 });
 test('unknown or unsupported audio capability fails closed', () => {
-    for (const backend of [undefined, { audioPath: 'unknown', canCompress: true }, { audioPath: 'pcm', canCompress: false }]) {
+    for (const backend of [null, { audioPath: 'unknown', canCompress: true }, { audioPath: 'pcm', canCompress: false }]) {
         const x = audio.resolveNightAudio(profile(), ctx('2026-10-12T12:00:00Z', backend));
         assert.equal(x.status, 'unavailable');
         assert.deepEqual(audio.proposeMpvCommands(x, false), []);
