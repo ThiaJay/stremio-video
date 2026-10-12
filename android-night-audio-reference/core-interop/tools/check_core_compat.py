@@ -13,7 +13,7 @@ errors=[]
 def must(ok, reason):
  if not ok: errors.append(reason)
 must("include ':processor', ':test-app', ':companion-tv', ':core-interop'" in settings, 'core_compat_module_not_isolated')
-must("includeGroup 'com.github.Stremio'" in settings and "url 'https://jitpack.io'" in settings, 'jitpack_not_group_scoped')
+must("includeGroup 'com.github.Stremio'" in settings and "includeGroup 'com.github.Stremio.stremio-core-kotlin'" in settings and "url 'https://jitpack.io'" in settings, 'jitpack_multimodule_groups_not_scoped')
 must("compileOnly 'com.github.Stremio:stremio-core-kotlin:1.15.0'" in build and "implementation 'com.github.Stremio" not in build, 'core_dependency_not_compile_only')
 must("compileOnly 'pro.streem.pbandk:pbandk-runtime:0.16.0'" in build, 'pb_runtime_not_compile_only')
 must('Core.getState(Field.CTX)' in src and 'Core.getState(Field.META_DETAILS)' in src, 'actual_core_reader_not_typed')
