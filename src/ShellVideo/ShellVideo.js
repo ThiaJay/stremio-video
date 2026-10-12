@@ -3,6 +3,7 @@ var cloneDeep = require('lodash.clonedeep');
 var deepFreeze = require('deep-freeze');
 var ERROR = require('../error');
 var AvSyncSession = require('./AvSyncSession');
+var NightAudioSession = require('../audio/MpvNightAudioSession').NightAudioSession;
 
 var SUBS_SCALE_FACTOR = 0.0066;
 var EOF_END_TOLERANCE = 60000;
@@ -33,6 +34,7 @@ var stremioToMPVProps = {
     'videoScale': null,
     'avSyncV2': null,
     'avSyncV2Ack': null,
+    'nightAudio': null,
 };
 
 function parseVersion(version) {
@@ -69,6 +71,13 @@ function ShellVideo(options) {
     var waitForMPVVersion = new Promise(function (resolve) {
         resolveMPVVersion = resolve;
     });
+    var nightAudioTimer = null;
+    var nightAudio = new NightAudioSession({
+        send: function(name, value) { ipc.send(name, value); },
+        changed: function(value) {
+            if (events && observedProps.nightAudio) events.emit('propChanged', 'nightAudio', value);
+        },
+    });
     command('unload');
 
     ipc.send('mpv-command', ['stop']);
@@ -101,6 +110,9 @@ function ShellVideo(options) {
 
     ipc.send('mpv-observe-prop', 'mpv-version');
     ipc.send('mpv-observe-prop', 'ffmpeg-version');
+    ipc.send('mpv-observe-prop', 'af');
+    ipc.send('mpv-observe-prop', 'audio-params');
+    ipc.send('mpv-observe-prop', 'audio-out-params');
 
     var events = new EventEmitter();
     var destroyed = false;
@@ -131,6 +143,7 @@ function ShellVideo(options) {
         if (!videoReadyEventsSupported && !props.loaded && durationReady && props['video-params'] && props['paused-for-cache'] === false) {
             props.loaded = true;
             setBackground(false);
+            nightAudio.setReady(!!stream && props.path === stream.url);
             onPropChanged('loaded');
         }
     }
@@ -330,6 +343,13 @@ function ShellVideo(options) {
             }
         }
 
+        if (['af', 'audio-params', 'audio-out-params', 'aid'].indexOf(args.name) !== -1) {
+            nightAudio.observe(args.name, args.data);
+        }
+        if (args.name === 'path') {
+            nightAudio.setReady(!!stream && props.loaded === true && props.path === stream.url);
+        }
+
         // Cap time update to update only when a second passes
         var current_time = args.name === 'time-pos' ? Math.floor(props['time-pos'] / 1000) : null;
         if((!current_time || last_time !== current_time)&& stremioProps[args.name]) {
@@ -358,11 +378,13 @@ function ShellVideo(options) {
         } else if (args.loadId === activeVideoReadyLoadId && !props.loaded) {
             props.loaded = true;
             setBackground(false);
+            nightAudio.setReady(!!stream && props.path === stream.url);
             onPropChanged('loaded');
         }
     });
 
     function getProp(propName) {
+        if (propName === 'nightAudio') return nightAudio.snapshot();
         if (propName === 'avSyncV2') return avSyncSession.snapshot();
         if (propName === 'avSyncV2Ack') return avSyncSession.lastAck();
         if (propName === 'hdrInfo') return props.hdrInfo || null;
@@ -518,8 +540,22 @@ function ShellVideo(options) {
             }
         }
     }
+    function updateNightAudioTimer() {
+        if (nightAudioTimer !== null) {
+            clearInterval(nightAudioTimer);
+            nightAudioTimer = null;
+        }
+        if (stream !== null && nightAudio.snapshot().when === 'scheduled') {
+            nightAudioTimer = setInterval(function() { nightAudio.tick(); }, 15000);
+        }
+    }
     function command(commandName, commandArgs) {
         switch (commandName) {
+            case 'setNightAudio': {
+                nightAudio.configure(commandArgs && commandArgs.profile);
+                updateNightAudioTimer();
+                break;
+            }
             case 'correctAvSyncV2': { avSyncSession.correct(commandArgs); break; }
             case 'load': {
                 command('unload');
@@ -529,6 +565,8 @@ function ShellVideo(options) {
                     waitForMPVVersion.then(function (mpvVersion) {
                         if (destroyed || avSyncRevision !== loadRevision) return;
                         stream = commandArgs.stream;
+                        nightAudio.begin();
+                        updateNightAudioTimer();
                         onPropChanged('stream');
 
                         assSubtitlesStylingEnabled = commandArgs.assSubtitlesStyling === true;
@@ -598,6 +636,11 @@ function ShellVideo(options) {
                 break;
             }
             case 'unload': {
+                if (nightAudioTimer !== null) {
+                    clearInterval(nightAudioTimer);
+                    nightAudioTimer = null;
+                }
+                nightAudio.end();
                 avSyncRevision += 1;
                 avSyncSession.close();
                 var wasASSSubtitlesStylingActive = props.assSubtitlesStylingActive === true;
@@ -691,7 +734,7 @@ ShellVideo.manifest = {
     name: 'ShellVideo',
     external: false,
     props: Object.keys(stremioToMPVProps),
-    commands: ['load', 'unload', 'destroy', 'correctAvSyncV2'],
+    commands: ['load', 'unload', 'destroy', 'correctAvSyncV2', 'setNightAudio'],
     events: [
         'propValue',
         'propChanged',
