@@ -2,7 +2,7 @@
 
 Status: isolated development proof only, **not installed, not released and not part of Stremio Android TV**.
 
-This is a standalone Media3 PCM16 `AudioProcessor` candidate for Foundation issue 65. Its permanent owner is a native Stremio Android/TV player adapter with the shared activation and profile contract in Core. It must **not** be represented as an installed Fire TV feature. The official Android TV client source and player wiring were not available when this proof was prepared.
+This is a standalone Media3 PCM16 `AudioProcessor` and separate Android TV listening-test app candidate for Foundation issue 65. Its permanent owner is a native Stremio Android/TV player adapter with the shared activation and profile contract in Core. It must **not** be represented as an installed Fire TV feature. The official Android TV client source and player wiring were not available when this proof was prepared. The independent APK is not a modified Stremio client, is not an official installer and is not approved for installation without a separate acceptance step.
 
 ## Safe scope
 
@@ -30,10 +30,10 @@ java -cp .classes org.stremio.nightaudio.reference.PcmDynamicsProcessorCheck
 For Android API and Media3 compile and unit tests with a configured SDK, use Gradle 8.11.1 and Java 17.
 
 ```sh
-gradle :processor:testDebugUnitTest :processor:assembleDebug
+gradle :processor:testDebugUnitTest :processor:assembleDebug :test-app:assembleDebug
 ```
 
-GitHub CI runs both paths without deploying or installing anything. `compileSdk 35` is an isolated reference choice rather than a claim that it matches the official Stremio Android TV application's current build.
+GitHub CI compiles both the processor and a separate Android TV debug test APK without deploying, installing or publishing a release. The proof app has a separate package identity, generates local audio after an explicit Play action, starts at 20% app volume, does not use any Stremio account and has no network permission. It displays observed PCM processing without claiming verified speaker routing. `compileSdk 35` is an isolated reference choice rather than a claim that it matches the official Stremio Android TV application's current build.
 
 ## Integration still required
 
@@ -41,6 +41,7 @@ GitHub CI runs both paths without deploying or installing anything. `compileSdk 
 2. Add this processor only to a host-owned `DefaultAudioSink` PCM processor chain, preserving existing processors and never forcing PCM for unsupported tracks. The host must produce real route and playback identifiers, not transient numeric Android device IDs or invented soundbar topology.
 3. Supply Core-compatible Off/Always/Scheduled and Automatic/Custom policy, overnight and daylight saving cases, per-route storage, manual override expiry, output switch handling and accessible in-player controls. The proof does not invent these facilities in a client whose source it cannot change.
 4. Confirm real codec transitions (stereo AAC, E-AC-3 5.1, passthrough DTS-HD/TrueHD), repeated seek/pause/resume, route changes, AV synchronisation, peak levels, CPU/battery cost and device-specific listening. If processing cannot be proven, report bypassed or unavailable.
-5. Complete Foundation security, privacy, exact artefact, recovery, usability and publication gates before any optional side-by-side test package. Do not replace the installed client, touch account state or change audio preferences without a separate authorised test.
+5. Perform optional user-approved testing of the separate debug APK only after hash, package-identity, no-permission and on-device safety review. Never replace official Stremio or import user credentials.
+6. Complete Foundation security, privacy, exact artefact, recovery, usability and publication gates before any optional side-by-side test package. Do not replace the installed client, touch account state or change audio preferences without a separate authorised test.
 
 This reference is not release-ready and is not a substitute for official Android TV source availability or real Fire TV acceptance.
