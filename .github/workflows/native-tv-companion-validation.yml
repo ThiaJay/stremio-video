@@ -51,6 +51,8 @@ jobs:
             :companion-tv:testDebugUnitTest \
             :companion-tv:assembleDebug \
             --no-daemon --stacktrace
+      - name: Run Android companion lint without suppressing errors
+        run: gradle -p android-night-audio-reference :companion-tv:lintDebug --no-daemon
       - name: Verify JVM test suite genuinely executed
         shell: bash
         run: |
