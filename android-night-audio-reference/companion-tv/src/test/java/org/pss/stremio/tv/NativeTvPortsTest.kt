@@ -76,4 +76,62 @@ class NativeTvPortsTest {
         assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
         assertEquals(1,account.sent)
     }
+
+    @Test fun finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement() {
+        var current=state
+        var reads=0
+        var nativeSeekCalls=0
+        val port=SnapshotBoundNativeSeekPort(
+            observe={
+                reads++
+                if(reads==4) current=current.copy(videoId="another")
+                current
+            },
+            applySeek={ nativeSeekCalls++;true }
+        )
+        val c=TvSkipCoordinator()
+        val a=NativeTvSkipActuator(c,Core(),port)
+        val focus=c.presentation(segment,state)!!.focusedIdentity
+        assertEquals(NativeSkipOutcome.SEEK_FAILED,a.manual(segment,focus,"ENTER"))
+        assertEquals(0,nativeSeekCalls)
+    }
+
+    @Test fun snapshotBoundSeekAppliesExactlyOnceForTheSelectedMedia() {
+        var current=state
+        val sent=mutableListOf<Long>()
+        val port=SnapshotBoundNativeSeekPort(observe={current},applySeek={sent.add(it);true})
+        val c=TvSkipCoordinator()
+        val a=NativeTvSkipActuator(c,Core(),port)
+        val focus=c.presentation(segment,state)!!.focusedIdentity
+        assertEquals(NativeSkipOutcome.APPLIED,a.manual(segment,focus,"ENTER"))
+        assertEquals(listOf(3000L),sent)
+        assertFalse(port.seekWithinSelectedVideo(4000L))
+        assertEquals(listOf(3000L),sent)
+    }
+
+    @Test fun latePlaybackOrNextEpisodePopupCannotSeekBackwards() {
+        var current=state
+        var reads=0
+        var nativeSeekCalls=0
+        val port=SnapshotBoundNativeSeekPort(
+            observe={
+                reads++
+                if(reads==4) current=current.copy(positionMs=4000)
+                current
+            },
+            applySeek={ nativeSeekCalls++;true }
+        )
+        val c=TvSkipCoordinator()
+        val focus=c.presentation(segment,state)!!.focusedIdentity
+        assertEquals(NativeSkipOutcome.SEEK_FAILED,NativeTvSkipActuator(c,Core(),port)
+            .manual(segment,focus,"ENTER"))
+        assertEquals(0,nativeSeekCalls)
+
+        // A direct final gate also rejects Next Episode overlay and an invalid target.
+        val port2=SnapshotBoundNativeSeekPort(observe={current.copy(nextVideoPopupOpen=true)},
+            applySeek={nativeSeekCalls++;true})
+        port2.snapshot()
+        assertFalse(port2.seekWithinSelectedVideo(5000L))
+        assertEquals(0,nativeSeekCalls)
+    }
 }
