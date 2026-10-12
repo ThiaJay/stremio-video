@@ -37,9 +37,10 @@ function scheduleMatches(schedule, instant) {
     if (!schedule || !Array.isArray(schedule.windows) || !schedule.windows.length) return false;
     const at = localMinute(instant, schedule.timeZone);
     if (at === null) return false;
-    return schedule.windows.some(({ start, end }) => {
-        const from = parseClock(start);
-        const to = parseClock(end);
+    return schedule.windows.some((window) => {
+        if (!window || typeof window !== 'object') return false;
+        const from = parseClock(window.start);
+        const to = parseClock(window.end);
         if (from === null || to === null || from === to) return false;
         return from < to ? at >= from && at < to : at >= from || at < to;
     });
@@ -118,7 +119,8 @@ function buildMpvFilter(strength) {
 
 function proposeMpvCommands(result, ownedFilterPresent) {
     if (!result || typeof result !== 'object') return [];
-    if (!result.requested) {
+    // A route or codec change must also remove a previously owned filter.
+    if (!result.requested || result.status === 'bypassed' || result.status === 'unavailable') {
         return ownedFilterPresent === true ? [['af', 'remove', FILTER_LABEL]] : [];
     }
     if (result.status !== 'ready') return [];
