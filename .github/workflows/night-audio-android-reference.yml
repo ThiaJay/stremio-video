@@ -1,0 +1,80 @@
+name: Isolated Android Night Audio reference validation
+on:
+  push:
+    branches:
+      - feature/night-audio-android-reference-20261012
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/night-audio-android-reference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-night-audio-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pure-dsp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test deterministic PCM without SDK or account access
+        run: |
+          set -eu
+          base=android-night-audio-reference/processor/src
+          mkdir -p /tmp/night-audio-classes
+          javac -d /tmp/night-audio-classes \
+            "$base/main/java/org/stremio/nightaudio/reference/PcmDynamicsProcessor.java" \
+            "$base/main/java/org/stremio/nightaudio/reference/NightAudioPlaybackGate.java" \
+            "$base/test/java/org/stremio/nightaudio/reference/PcmDynamicsProcessorCheck.java"
+          java -cp /tmp/night-audio-classes org.stremio.nightaudio.reference.PcmDynamicsProcessorCheck
+
+  media3-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Android processor and local TV sample app acceptance
+        run: |
+          sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
+          gradle -p android-night-audio-reference :processor:compileDebugJavaWithJavac :processor:testDebugUnitTest :processor:assembleDebug :test-app:assembleDebug --no-daemon
+      - name: Validate exact Android test APK without distributing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android-night-audio-reference/test-app/build/outputs/apk/debug/test-app-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$aapt"
+          "$aapt" dump badging "$apk" | grep -F "package: name='org.nightaudio.proof.tv'"
+          declared="$("$aapt" dump permissions "$apk")"
+          if printf '%s\n' "$declared" | grep -q 'uses-permission:'; then
+            printf '%s\n' "$declared" | grep 'uses-permission:' || true
+            echo 'Unexpected declared permission in isolated local test app'
+            exit 1
+          fi
+          unzip -t "$apk" >/dev/null
+          sha256sum "$apk"
+# No installation, APK upload, release, tokens or production Stremio access.
