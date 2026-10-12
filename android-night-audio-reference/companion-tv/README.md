@@ -4,7 +4,7 @@ This is a **separately packaged Android TV proof application**, `org.thiajay.str
 
 ## Currently implemented
 
-* An Android TV Leanback launcher activity with actual `Media3 ExoPlayer`, native TV focusable buttons, real seek commands and lifecycle release on stop/destroy.
+* An Android TV Leanback launcher activity with actual `Media3 ExoPlayer`, native TV focusable buttons, real seek commands and lifecycle release on stop/destroy. The source now also supplies a unique 320dp × 180dp, neutral Companion Lab launcher vector banner required by Android TV. It is not the official Stremio artwork.
 * A deterministic **offline 12-second PCM WAV** sample, generated only on the device after explicit activation. The intro, recap and credits ranges in this mode are **synthetic fixtures only**. They do not claim to identify timings in any actual television programme.
 * The exact previous `NativeTvBridge.kt` is reused without editing (SHA-256 `0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b`). The original 53-assertion offline regression is retained and executed as a JVM test, plus additional host Core-dispatch and source-switching tests.
 * `SnapshotBoundNativeSeekPort` now supplies a **one-use, final player-state lease** to close the gap between Core dismissal and the actual Media3 seek. It rechecks generation, canonical video identity, readiness, duration, native transition flags, Next Episode popup and whether playback already passed the intended target immediately before seeking. It must run on the host-owned single player/Looper thread; it is not an atomic cross-device account transaction. Regression tests deliberately switch the selected video after Core acceptance and verify that Media3 does not seek the wrong episode.
