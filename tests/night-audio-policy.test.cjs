@@ -127,3 +127,21 @@ test('policy decisions contain no media titles, URLs or identifiers', () => {
     assert.equal(JSON.stringify(x).includes('private-title'), false);
     assert.equal(Object.isFrozen(x), true);
 });
+
+test('malformed or missing windows fail closed without throwing', () => {
+    const schedule = { timeZone: 'Europe/London', windows: [null, false, {}, { start: '30:00', end: '07:00' }] };
+    assert.equal(audio.scheduleMatches(schedule, at('2026-10-12T23:00:00Z')), false);
+});
+test('changing from PCM to bitstream removes only the owned filter', () => {
+    const x = audio.resolveNightAudio(profile(), ctx('2026-10-12T12:00:00Z', { audioPath: 'bitstream', canCompress: true }));
+    assert.deepEqual(audio.proposeMpvCommands(x, true), [['af', 'remove', audio.FILTER_LABEL]]);
+});
+test('losing PCM processing also removes an old owned filter', () => {
+    const x = audio.resolveNightAudio(profile(), ctx('2026-10-12T12:00:00Z', { audioPath: 'unknown' }));
+    assert.deepEqual(audio.proposeMpvCommands(x, true), [['af', 'remove', audio.FILTER_LABEL]]);
+});
+test('confirmed active processing is not redundantly re-applied', () => {
+    const backend = { ...ready, applied: true, appliedStrength: 'balanced', appliedPlaybackId: 'sample-session' };
+    const x = audio.resolveNightAudio(profile(), ctx('2026-10-12T12:00:00Z', backend));
+    assert.deepEqual(audio.proposeMpvCommands(x, true), []);
+});
