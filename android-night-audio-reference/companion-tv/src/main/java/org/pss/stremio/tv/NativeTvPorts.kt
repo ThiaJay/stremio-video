@@ -14,6 +14,36 @@ interface NativeSeekPort {
     fun seekWithinSelectedVideo(ms: Long): Boolean
 }
 
+/**
+ * Host-owned final check before a Media3 seek. Every snapshot stores a one-use
+ * observation, and seek re-observes the actual player immediately before calling
+ * Media3. The host MUST call this adapter on its single player/Looper thread.
+ * It guards the narrow gap between Core dismissal and the actual seek, while
+ * retaining the original unmodified validated coordinator contract.
+ */
+class SnapshotBoundNativeSeekPort(
+    private val observe: () -> TvPlaybackState,
+    private val applySeek: (Long) -> Boolean
+) : NativeSeekPort {
+    private var latest: TvPlaybackState? = null
+
+    override fun snapshot(): TvPlaybackState = observe().also { latest = it }
+
+    override fun seekWithinSelectedVideo(ms: Long): Boolean {
+        val expected = latest ?: return false
+        latest = null // never reuse the permission after an attempted seek
+        val now = observe()
+        if (!expected.loaded || expected.videoId.isBlank() || expected.generation < 0 ||
+            now.generation != expected.generation || now.videoId != expected.videoId ||
+            now.durationMs != expected.durationMs || !now.loaded ||
+            now.buffering || now.seeking || now.switchingSource ||
+            now.nextVideoPopupOpen || now.menuOpen ||
+            ms <= 0L || ms >= now.durationMs ||
+            now.positionMs < 0L || now.positionMs >= ms) return false
+        return applySeek(ms)
+    }
+}
+
 enum class NativeSkipOutcome {
     APPLIED, NO_ACTION, CORE_REJECTED, PLAYBACK_CHANGED, SEEK_FAILED
 }
