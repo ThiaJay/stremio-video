@@ -60,4 +60,20 @@ jobs:
         run: |
           sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
           gradle -p android-night-audio-reference :processor:compileDebugJavaWithJavac :processor:testDebugUnitTest :processor:assembleDebug :test-app:assembleDebug --no-daemon
+      - name: Validate exact Android test APK without distributing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android-night-audio-reference/test-app/build/outputs/apk/debug/test-app-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -x "$aapt"
+          "$aapt" dump badging "$apk" | grep -F "package: name='org.nightaudio.proof.tv'"
+          declared="$("$aapt" dump permissions "$apk")"
+          if printf '%s\n' "$declared" | grep -q 'uses-permission:'; then
+            echo 'Unexpected declared permission in isolated local test app'
+            exit 1
+          fi
+          unzip -t "$apk" >/dev/null
+          sha256sum "$apk"
 # No installation, APK upload, release, tokens or production Stremio access.
