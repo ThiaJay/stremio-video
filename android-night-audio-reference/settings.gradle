@@ -10,7 +10,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url 'https://jitpack.io'
+            content { includeGroup 'com.github.Stremio' }
+        }
     }
 }
 rootProject.name = 'stremio-night-audio-android-reference'
-include ':processor', ':test-app', ':companion-tv'
+include ':processor', ':test-app', ':companion-tv', ':core-interop'
