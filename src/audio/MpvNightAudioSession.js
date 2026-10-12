@@ -117,6 +117,14 @@ function NightAudioSession(options) {
         }
         // Recalculate after timeout. Never re-add a command that just failed.
         const desired = choice.requested && canProcess && !failed;
+        if (pending && pending.action === 'add' && !desired) {
+            // Track, route or file changed whilst an add was in flight.
+            // Cancel the pending application before any further transition.
+            send('mpv-command', ['af', 'remove', Policy.FILTER_LABEL]);
+            pending = { action: 'remove', at: clock() };
+            confirmedGeneration = null;
+            confirmedStrength = null;
+        }
         if (!pending) {
             if (filterPresent && (!desired || !validOwned)) {
                 confirmedGeneration = null;
