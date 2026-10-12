@@ -256,12 +256,11 @@ function ShellVideo(options) {
             case 'paused-for-cache':
             case 'seeking':
             {
-                if (args.name === 'paused-for-cache') {
-                    props[args.name] = args.data;
-                    updateLoaded();
-                }
-                if(props.buffering !== args.data) {
-                    props.buffering = args.data;
+                props[args.name] = args.data;
+                if (args.name === 'paused-for-cache') updateLoaded();
+                var buffering = props['paused-for-cache'] === true || props.seeking === true;
+                if (props.buffering !== buffering) {
+                    props.buffering = buffering;
                     onPropChanged('buffering');
                 }
                 break;
@@ -384,6 +383,7 @@ function ShellVideo(options) {
     });
 
     function getProp(propName) {
+        if (propName === 'stream') return stream;
         if (propName === 'nightAudio') return nightAudio.snapshot();
         if (propName === 'avSyncV2') return avSyncSession.snapshot();
         if (propName === 'avSyncV2Ack') return avSyncSession.lastAck();
@@ -641,6 +641,7 @@ function ShellVideo(options) {
                     nightAudioTimer = null;
                 }
                 nightAudio.end();
+                stream = null;
                 avSyncRevision += 1;
                 avSyncSession.close();
                 var wasASSSubtitlesStylingActive = props.assSubtitlesStylingActive === true;
