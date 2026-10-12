@@ -80,6 +80,38 @@ jobs:
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed' 
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
+      - name: Enforce compile-only official Core SDK and no account/API writes
+        run: python3 android-night-audio-reference/core-interop/tools/check_core_compat.py
+      - name: Compile official Stremio Core read-only ABI and run isolated JVM tests
+        run: |
+          gradle -p android-night-audio-reference \
+            :core-interop:compileDebugKotlin \
+            :core-interop:testDebugUnitTest \
+            --no-daemon --stacktrace
+      - name: Require all read-only native Core session guards to execute
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('android-night-audio-reference/core-interop/build/test-results/testDebugUnitTest')
+          reports=list(root.glob('TEST-*.xml'))
+          assert reports, 'Read-only Core ABI JUnit results absent'
+          count=errors=failures=0
+          names=[]
+          for report in reports:
+              tree=ET.parse(report).getroot()
+              count+=int(tree.get('tests','0'))
+              errors+=int(tree.get('errors','0'))
+              failures+=int(tree.get('failures','0'))
+              names += [testcase.get('name','') for testcase in tree.findall('.//testcase')]
+          assert count>=8 and not errors and not failures,(count,errors,failures)
+          for required in ('accountSwitchOrEpochChangeFailsClosed',
+                           'newVideoWithSameMetadataFailsClosed',
+                           'noPlayableUrlIsInferredFromObservedProviderLists'):
+              assert required in names, 'Core safety test missing: '+required
+          print('Verified isolated official Core Kotlin interop JUnit:',count,'failures:',failures)
+          PY
       - name: Verify standalone package and no permissions or forbidden automatic source intake
         shell: bash
         run: |
