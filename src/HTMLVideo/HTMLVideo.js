@@ -824,6 +824,13 @@ function HTMLVideo(options) {
         }
     }
 
+    // MediaElementAudioSourceNode permanently binds to a particular media
+    // element. A new stream must get a new element if this one was captured.
+    // The ordinary HTMLVideo instance stays reusable if no capture occurred.
+    this.requiresFreshInstanceForLoad = function() {
+        return nightAudio.hasCapturedMediaElement();
+    };
+
     this.on = function(eventName, listener) {
         if (destroyed) {
             throw new Error('Video is destroyed');
