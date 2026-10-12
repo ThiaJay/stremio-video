@@ -1,0 +1,73 @@
+name: Isolated Fire TV companion Media3 build
+on:
+  push:
+    branches:
+      - feature/stremio-companion-tv-20261012
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/native-tv-companion-validation.yml'
+  pull_request:
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/native-tv-companion-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  companion-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install only required Android SDK components
+        run: sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
+      - name: Verify tested bridge source still matches original reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+      - name: Compile and run original + extended JVM test suite, then build Android APK
+        run: |
+          gradle -p android-night-audio-reference \
+            :processor:testDebugUnitTest \
+            :companion-tv:compileDebugKotlin \
+            :companion-tv:testDebugUnitTest \
+            :companion-tv:assembleDebug \
+            --no-daemon --stacktrace
+      - name: Verify standalone package and no permissions or forbidden automatic source intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android-night-audio-reference/companion-tv/build/outputs/apk/debug/companion-tv-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$aapt" dump badging "$apk" | grep -F "package: name='org.thiajay.stremiotvcompanion'"
+          "$aapt" dump badging "$apk" | grep -F "sdkVersion:'26'"
+          "$aapt" dump permissions "$apk" > /tmp/companion-permissions.txt
+          if grep -E 'uses-permission:' /tmp/companion-permissions.txt; then
+            echo 'Unreviewed Android permission. Refusing admission.'
+            exit 1
+          fi
+          if "$aapt" dump xmltree "$apk" AndroidManifest.xml | grep -Fq 'android.intent.action.VIEW'; then
+            echo 'External playback intent unexpectedly exposed in offline-only candidate.'
+            exit 1
+          fi
+          unzip -t "$apk" >/dev/null
+          sha256sum "$apk"
+          echo 'Android companion source and debug APK built; no upload, release, device or account action performed.'
+# Never upload debug APK, release assets, credentials, private data or the synthetic sample.
