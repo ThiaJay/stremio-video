@@ -30,7 +30,13 @@ function StremioVideo() {
                     platform.set(action.commandArgs.platform);
                 }
                 var Video = selectVideoImplementation(action.commandArgs, options);
-                if (video !== null && video.constructor !== Video) {
+                // A Web Audio MediaElementAudioSourceNode cannot be detached
+                // from its underlying element. When captured by Night Audio,
+                // replace that element before any later source can become
+                // cross-origin and potentially silent, even when DSP is Off.
+                if (video !== null && (video.constructor !== Video ||
+                    (typeof video.requiresFreshInstanceForLoad === 'function' &&
+                        video.requiresFreshInstanceForLoad()))) {
                     video.dispatch({ type: 'command', commandName: 'destroy' });
                     video = null;
                 }
