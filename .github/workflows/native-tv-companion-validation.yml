@@ -41,6 +41,8 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' '0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+      - name: Validate exact source contract and safety guard
+        run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK
         run: |
           gradle -p android-night-audio-reference \
@@ -49,6 +51,28 @@ jobs:
             :companion-tv:testDebugUnitTest \
             :companion-tv:assembleDebug \
             --no-daemon --stacktrace
+      - name: Verify JVM test suite genuinely executed
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('android-night-audio-reference/companion-tv/build/test-results/testDebugUnitTest')
+          docs=list(root.glob('TEST-*.xml'))
+          assert docs, 'No unit test result files produced'
+          tests=failures=errors=0
+          names=[]
+          for file in docs:
+              tree=ET.parse(file).getroot()
+              tests+=int(tree.get('tests',0))
+              failures+=int(tree.get('failures',0))
+              errors+=int(tree.get('errors',0))
+              names += [node.get('name','') for node in tree.findall('.//testcase')]
+          assert tests>=7 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
+          assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
+          print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
+          PY
       - name: Verify standalone package and no permissions or forbidden automatic source intake
         shell: bash
         run: |
