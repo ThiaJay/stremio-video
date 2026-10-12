@@ -71,6 +71,7 @@ jobs:
           "$aapt" dump badging "$apk" | grep -F "package: name='org.nightaudio.proof.tv'"
           declared="$("$aapt" dump permissions "$apk")"
           if printf '%s\n' "$declared" | grep -q 'uses-permission:'; then
+            printf '%s\n' "$declared" | grep 'uses-permission:' || true
             echo 'Unexpected declared permission in isolated local test app'
             exit 1
           fi
