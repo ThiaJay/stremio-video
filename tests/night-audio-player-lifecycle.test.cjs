@@ -1,12 +1,11 @@
 'use strict';
-const test = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 
 // These are actual StremioVideo dispatch tests with an isolated mock
 // implementation at the selector seam. No browser, account or stream request.
 const selectorPath = require.resolve('../src/StremioVideo/selectVideoImplementation');
-require(selectorPath);
-const originalSelector = require.cache[selectorPath].exports;
+const originalSelector = require.cache[selectorPath];
 const enginePath = require.resolve('../src/StremioVideo/StremioVideo');
 
 function fixture() {
@@ -29,13 +28,15 @@ function fixture() {
     FakeHTMLVideo.manifest = {
         name: 'HTMLVideo', external: false,
     };
-    require.cache[selectorPath].exports = () => FakeHTMLVideo;
+    require.cache[selectorPath] = {
+        id: selectorPath, filename: selectorPath, loaded: true,
+        exports: () => FakeHTMLVideo,
+    };
     delete require.cache[enginePath];
     const StremioVideo = require(enginePath);
     return { instances, StremioVideo };
 }
 
-try {
     test('an HTMLVideo implementation is reused when its media element was never captured', () => {
         const { instances, StremioVideo } = fixture();
         const player = new StremioVideo();
@@ -82,7 +83,8 @@ try {
         assert.equal(instances.length, 2);
         player.destroy();
     });
-} finally {
-    require.cache[selectorPath].exports = originalSelector;
+after(() => {
+    if (originalSelector) require.cache[selectorPath] = originalSelector;
+    else delete require.cache[selectorPath];
     delete require.cache[enginePath];
-}
+});
