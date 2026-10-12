@@ -92,3 +92,34 @@ test('real shell off does not alter codec routing or unrelated audio filters', a
         channel === 'mpv-set-prop' && ['audio-channels', 'audio-spdif'].includes(args[0])), false);
     h.shell.dispatch({ type: 'command', commandName: 'destroy' });
 });
+
+test('MPV stream property clears on unload preserving Web player identity', async () => {
+    const h = makeShell();
+    const streams = [];
+    h.shell.on('propChanged', (name, value) => {
+        if (name === 'stream') streams.push(value);
+    });
+    h.shell.dispatch({ type: 'observeProp', propName: 'stream' });
+    await h.load();
+    assert.equal(streams.at(-1).url, 'https://example.invalid/audio-fixture.mkv');
+    h.shell.dispatch({ type: 'command', commandName: 'unload' });
+    assert.equal(streams.at(-1), null);
+    h.shell.dispatch({ type: 'command', commandName: 'destroy' });
+});
+
+test('seeking and waiting together cannot falsely clear buffering in Web', async () => {
+    const h = makeShell();
+    const buffering = [];
+    h.shell.on('propChanged', (name, value) => {
+        if (name === 'buffering') buffering.push(value);
+    });
+    h.shell.dispatch({ type: 'observeProp', propName: 'buffering' });
+    await h.load();
+    h.event('paused-for-cache', true);
+    h.event('seeking', true);
+    h.event('paused-for-cache', false);
+    assert.equal(buffering.at(-1), true);
+    h.event('seeking', false);
+    assert.equal(buffering.at(-1), false);
+    h.shell.dispatch({ type: 'command', commandName: 'destroy' });
+});
