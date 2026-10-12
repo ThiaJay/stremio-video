@@ -6,6 +6,7 @@ var Color = require('color');
 var ERROR = require('../error');
 var getContentType = require('./getContentType');
 var HLS_CONFIG = require('./hlsConfig');
+var HtmlNightAudioSession = require('../audio/HtmlNightAudioSession').HtmlNightAudioSession;
 
 function HTMLVideo(options) {
     options = options || {};
@@ -32,9 +33,11 @@ function HTMLVideo(options) {
         onEnded();
     };
     videoElement.onpause = function() {
+        nightAudio.refresh();
         onPropChanged('paused');
     };
     videoElement.onplay = function() {
+        nightAudio.refresh();
         onPropChanged('paused');
     };
     videoElement.ontimeupdate = function() {
@@ -68,6 +71,7 @@ function HTMLVideo(options) {
         onPropChanged('buffered');
     };
     videoElement.onplaying = function() {
+        nightAudio.refresh();
         onPropChanged('time');
         onPropChanged('buffering');
         onPropChanged('buffered');
@@ -81,6 +85,7 @@ function HTMLVideo(options) {
         onPropChanged('buffered');
     };
     videoElement.onloadedmetadata = function() {
+        nightAudio.refresh();
         onPropChanged('loaded');
     };
     videoElement.onloadeddata = function() {
@@ -140,11 +145,22 @@ function HTMLVideo(options) {
         muted: false,
         playbackSpeed: false,
         videoScale: false,
-        fullscreen: false
+        fullscreen: false,
+        nightAudio: false
     };
+    // No effects are attached until a supported, verified decoded media path
+    // is actively playing. Unsupported URLs stay on their original audio path.
+    var nightAudio = new HtmlNightAudioSession({
+        videoElement: videoElement,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+        changed: function() { onPropChanged('nightAudio'); }
+    });
 
     function getProp(propName) {
         switch (propName) {
+            case 'nightAudio': {
+                return nightAudio.snapshot();
+            }
             case 'stream': {
                 return stream;
             }
@@ -637,10 +653,15 @@ function HTMLVideo(options) {
     }
     function command(commandName, commandArgs) {
         switch (commandName) {
+            case 'setNightAudio': {
+                nightAudio.configure(commandArgs && commandArgs.profile);
+                break;
+            }
             case 'load': {
                 command('unload');
                 if (commandArgs && commandArgs.stream && typeof commandArgs.stream.url === 'string') {
                     stream = commandArgs.stream;
+                    nightAudio.begin();
                     onPropChanged('stream');
                     onPropChanged('loaded');
                     videoElement.autoplay = typeof commandArgs.autoplay === 'boolean' ? commandArgs.autoplay : true;
@@ -729,6 +750,7 @@ function HTMLVideo(options) {
                 break;
             }
             case 'unload': {
+                nightAudio.end();
                 stream = null;
                 liveDetails = null;
                 Array.from(videoElement.textTracks).forEach(function(track) {
@@ -762,6 +784,7 @@ function HTMLVideo(options) {
             }
             case 'destroy': {
                 command('unload');
+                nightAudio.destroy();
                 destroyed = true;
                 onPropChanged('subtitlesOffset');
                 onPropChanged('subtitlesSize');
@@ -853,8 +876,8 @@ HTMLVideo.canPlayStream = function(stream) {
 HTMLVideo.manifest = {
     name: 'HTMLVideo',
     external: false,
-    props: ['stream', 'loaded', 'paused', 'time', 'duration', 'live', 'buffering', 'buffered', 'audioTracks', 'selectedAudioTrackId', 'subtitlesTracks', 'selectedSubtitlesTrackId', 'subtitlesOffset', 'subtitlesSize', 'subtitlesTextColor', 'subtitlesBackgroundColor', 'subtitlesOutlineColor', 'subtitlesOpacity', 'volume', 'muted', 'playbackSpeed', 'videoScale', 'fullscreen'],
-    commands: ['load', 'unload', 'destroy'],
+    props: ['stream', 'loaded', 'paused', 'time', 'duration', 'live', 'buffering', 'buffered', 'audioTracks', 'selectedAudioTrackId', 'subtitlesTracks', 'selectedSubtitlesTrackId', 'subtitlesOffset', 'subtitlesSize', 'subtitlesTextColor', 'subtitlesBackgroundColor', 'subtitlesOutlineColor', 'subtitlesOpacity', 'volume', 'muted', 'playbackSpeed', 'videoScale', 'fullscreen', 'nightAudio'],
+    commands: ['load', 'unload', 'destroy', 'setNightAudio'],
     events: ['propValue', 'propChanged', 'ended', 'error', 'subtitlesTrackLoaded', 'audioTrackLoaded']
 };
 
