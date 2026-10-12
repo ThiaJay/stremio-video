@@ -26,6 +26,7 @@ import org.pss.stremio.tv.CoreMessagePort
 import org.pss.stremio.tv.CoreSkipSegment
 import org.pss.stremio.tv.NativeSkipOutcome
 import org.pss.stremio.tv.NativeSeekPort
+import org.pss.stremio.tv.SnapshotBoundNativeSeekPort
 import org.pss.stremio.tv.NativeTvSkipActuator
 import org.pss.stremio.tv.SegmentIdentity
 import org.pss.stremio.tv.SkipKind
@@ -57,10 +58,12 @@ class CompanionTvActivity : Activity() {
     private var nightAudioName = "Off"
     private var errorMessage: String? = null
 
-    private val nativePlayer = object : NativeSeekPort {
-        override fun snapshot(): TvPlaybackState {
+    // The real Media3 seek must be guarded against the selected programme changing
+    // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
+    private val nativePlayer: NativeSeekPort = SnapshotBoundNativeSeekPort(
+        observe = {
             val duration = player.duration.takeIf { it in 1L..120_100L } ?: 0L
-            return TvPlaybackState(
+            TvPlaybackState(
                 generation = generation,
                 videoId = if (fixtureLoaded) FIXTURE_ID else "",
                 positionMs = player.currentPosition.coerceAtLeast(0L),
@@ -73,14 +76,12 @@ class CompanionTvActivity : Activity() {
                 menuOpen = false,
                 nextVideoPopupOpen = false
             )
-        }
-        override fun seekWithinSelectedVideo(ms: Long): Boolean {
-            val before = snapshot()
-            if (!before.loaded || before.videoId != FIXTURE_ID || ms !in 0L until before.durationMs) return false
+        },
+        applySeek = { ms ->
             player.seekTo(ms)
-            return true
+            true
         }
-    }
+    )
 
     // A SYNTHETIC fixture-only Core acknowledgement, not a signed-in Stremio reducer.
     private val fixtureCore = object : CoreMessagePort {
