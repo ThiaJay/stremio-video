@@ -14,6 +14,7 @@ ANDROID='{http://schemas.android.com/apk/res/android}'
 SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
 PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
+EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -38,6 +39,7 @@ if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
     fail.append('tested_bridge_modified')
 java_text=SOURCE.read_text()
 ports=PORTS.read_text()
+episode=EPISODE.read_text()
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -46,10 +48,14 @@ if 'TvSkipCoordinator' not in java_text or 'NightAudioMedia3Processor' not in ja
     fail.append('real_media3_bridge_or_pcm_missing')
 if 'player.seekTo(ms)' not in java_text or 'fun seekWithinSelectedVideo' not in ports:
     fail.append('same_media_seek_binding_missing')
+if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' not in episode:
+    fail.append('individual_episode_core_action_not_present')
+if 'issued.add(plan.fingerprint)' not in episode or 'port.currentSnapshot()' not in episode:
+    fail.append('episode_account_refresh_or_one_shot_not_enforced')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
     fail.append('watched_controls_not_fail_closed')
-if any(x in java_text+ports for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':17,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':19,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
