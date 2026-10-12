@@ -68,10 +68,14 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=11 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=17 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
+          assert 'secondVideoReadMustNotChangeEvenWhenIdentityIsStable' in names, 'Episode metadata race regression not executed'
+          assert 'dispatchedPayloadIsDeepDetachedFromMutableCoreObject' in names, 'Deep snapshot regression not executed'
+          assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
+          assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed' 
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Verify standalone package and no permissions or forbidden automatic source intake
