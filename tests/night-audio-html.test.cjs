@@ -61,11 +61,12 @@ function harness(overrides = {}) {
     return { session, media, events };
 }
 
-test('only explicitly same-origin HTTPS and origin-matching blob sources qualify', () => {
+test('only origin-matching blob media is eligible to avoid irreversible redirect capture', () => {
     for (const url of [
-        HOST + '/film.webm', 'blob:' + HOST + '/30ab', '/assets/video.mp4',
+        'blob:' + HOST + '/30ab', 'blob:' + HOST + '/synthetic-media',
     ]) assert.equal(safeDecodedSource(url, HOST), true, url);
     for (const url of [
+        HOST + '/film.webm', '/assets/video.mp4',
         'https://stream.example/film.mp4', 'blob:https://stream.example/30ab',
         'http://appassets.androidplatform.net/film.mp4',
         'file:///video.mp4', 'data:audio/wav;base64,AA', 'javascript:alert(1)',
@@ -80,6 +81,38 @@ test('off is inert, leaves browser volume and time unchanged and allocates no au
     assert.equal(FakeContext.instances.length, 0);
     assert.equal(media.volume, 0.47);
     assert.equal(media.currentTime, 12);
+    session.destroy();
+});
+
+test('irreversible media capture is signalled before an element can be reused', () => {
+    const { session } = harness();
+    assert.equal(session.hasCapturedMediaElement(), false);
+    session.begin();
+    session.configure({ when: 'always' });
+    assert.equal(session.snapshot().status, 'active');
+    assert.equal(session.hasCapturedMediaElement(), true);
+    session.configure({ when: 'off' });
+    session.end();
+    assert.equal(session.hasCapturedMediaElement(), true);
+    session.destroy();
+    assert.equal(session.hasCapturedMediaElement(), true);
+});
+
+test('when the browser media node connection fails capture still requires replacement', () => {
+    class CannotConnectMediaSource extends FakeNode {
+        connect() { throw new Error('Synthetic audio graph output rejected'); }
+    }
+    class BrokenSourceContext extends FakeContext {
+        constructor() {
+            super();
+            this.mediaSource = new CannotConnectMediaSource();
+        }
+    }
+    const { session } = harness({ config: { AudioContextCtor: BrokenSourceContext } });
+    session.begin();
+    session.configure({ when: 'always' });
+    assert.equal(session.snapshot().status, 'unavailable');
+    assert.equal(session.hasCapturedMediaElement(), true);
     session.destroy();
 });
 
