@@ -12,7 +12,10 @@ dependencyResolutionManagement {
         mavenCentral()
         maven {
             url 'https://jitpack.io'
-            content { includeGroup 'com.github.Stremio' }
+            content {
+                includeGroup 'com.github.Stremio'
+                includeGroup 'com.github.Stremio.stremio-core-kotlin'
+            }
         }
     }
 }
