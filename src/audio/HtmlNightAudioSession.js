@@ -10,8 +10,10 @@ function safeDecodedSource(rawUrl, origin) {
     try {
         const host = new URL(origin);
         const media = new URL(rawUrl, host.origin);
-        return host.protocol === 'https:' &&
-            (media.protocol === 'https:' || media.protocol === 'blob:') &&
+        // A same-origin URL may redirect to untrusted cross-origin media
+        // after capture. Only origin-matching blob media has a nonredirecting
+        // local media resource identity suitable for this guarded adapter.
+        return host.protocol === 'https:' && media.protocol === 'blob:' &&
             media.origin === host.origin;
     } catch (_) {
         return false;
@@ -33,6 +35,7 @@ function HtmlNightAudioSession(options) {
     let profile = { when: 'off' };
     let context = null;
     let source = null;
+    let everCaptured = false;
     let compressor = null;
     let outputTrim = null;
     let connectedThroughDSP = false;
@@ -98,6 +101,10 @@ function HtmlNightAudioSession(options) {
             const nextCompressor = context.createDynamicsCompressor();
             const nextOutput = context.createGain();
             const nextSource = context.createMediaElementSource(video);
+            // Browser media capture cannot be undone by disconnecting nodes.
+            // A future stream load must replace this video element, even if
+            // later DSP processing is switched off or the graph fails.
+            everCaptured = true;
             nextSource.connect(context.destination);
             source = nextSource;
             compressor = nextCompressor;
@@ -231,6 +238,10 @@ function HtmlNightAudioSession(options) {
 
     this.snapshot = function() {
         return published || this.refresh();
+    };
+
+    this.hasCapturedMediaElement = function() {
+        return everCaptured;
     };
 
     this.destroy = function() {
