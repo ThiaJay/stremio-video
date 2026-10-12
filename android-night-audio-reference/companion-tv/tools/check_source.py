@@ -52,10 +52,14 @@ if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' n
     fail.append('individual_episode_core_action_not_present')
 if 'issued.add(plan.fingerprint)' not in episode or 'port.currentSnapshot()' not in episode:
     fail.append('episode_account_refresh_or_one_shot_not_enforced')
+if 'videoFingerprint' not in episode or 'detached(secondSource)' not in episode:
+    fail.append('core_video_double_read_or_detached_payload_missing')
+if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
+    fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
     fail.append('watched_controls_not_fail_closed')
 if any(x in java_text+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':19,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':21,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
