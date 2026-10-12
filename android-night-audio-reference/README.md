@@ -33,7 +33,7 @@ For Android API and Media3 compile and unit tests with a configured SDK, use Gra
 gradle :processor:testDebugUnitTest :processor:assembleDebug :test-app:assembleDebug
 ```
 
-GitHub CI compiles both the processor and a separate Android TV debug test APK without deploying, installing or publishing a release. The proof app has a separate package identity, generates local audio after an explicit Play action, starts at 20% app volume, does not use any Stremio account and has no network permission. It displays observed PCM processing without claiming verified speaker routing. `compileSdk 35` is an isolated reference choice rather than a claim that it matches the official Stremio Android TV application's current build.
+GitHub CI compiles both the processor and a separate Android TV debug test APK without deploying, installing or publishing a release. The proof app has a separate package identity, generates local audio after an explicit Play action, starts at 20% app volume, does not use any Stremio account and has no network permission. It displays observed PCM processing without claiming verified speaker routing. `compileSdk 35` for the processor and `compileSdk 36` for the separate test app are isolated reference choices rather than a claim that it matches the official Stremio Android TV application's current build.
 
 ## Integration still required
 

@@ -58,6 +58,6 @@ jobs:
           gradle-version: '8.11.1'
       - name: Android processor and local TV sample app acceptance
         run: |
-          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+          sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
           gradle -p android-night-audio-reference :processor:compileDebugJavaWithJavac :processor:testDebugUnitTest :processor:assembleDebug :test-app:assembleDebug --no-daemon
 # No installation, APK upload, release, tokens or production Stremio access.
