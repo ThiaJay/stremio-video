@@ -55,5 +55,25 @@ fun main(){
     ok(watched.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)),"ready fake Core")
     ok(!watched.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)),"no duplicate watched")
     ok(account.sent==1,"exactly one fake dispatch")
+    // Final seek recheck must detect a source switch after the Core accepted dismissal.
+    var real=base
+    var leaseReads=0
+    var attempts=0
+    val leased=SnapshotBoundNativeSeekPort(
+        observe={ leaseReads++; if(leaseReads==4) real=base.copy(videoId="e2");real },
+        applySeek={ attempts++;true })
+    val c3=TvSkipCoordinator()
+    val f3=c3.presentation(skip,base)!!.focusedIdentity
+    ok(NativeTvSkipActuator(c3,FakeCore(),leased).manual(skip,f3,"ENTER") == NativeSkipOutcome.SEEK_FAILED,
+       "final seek observation rejects changed episode")
+    ok(attempts==0,"no wrong-episode native player command")
+    var same=base
+    val readyPort=SnapshotBoundNativeSeekPort(observe={same},applySeek={ attempts++;true })
+    val c4=TvSkipCoordinator()
+    val f4=c4.presentation(skip,same)!!.focusedIdentity
+    ok(NativeTvSkipActuator(c4,FakeCore(),readyPort).manual(skip,f4,"ENTER") == NativeSkipOutcome.APPLIED,
+       "stable native player can seek")
+    ok(attempts==1,"one guarded native seek")
+    ok(!readyPort.seekWithinSelectedVideo(4100),"final lease cannot be reused")
     println("PASS: $total Android TV host adapter offline safety checks")
 }
