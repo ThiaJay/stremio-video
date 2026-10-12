@@ -104,7 +104,6 @@ function NightAudioSession(options) {
         // Playback verification precedes all sound-changing operations.
         const canProcess = playing && playbackReady && isAudioSelected(selectedTrack) &&
             classifyAudio(currentAudio, outputAudio) === 'pcm' && observedFilters;
-        const desired = choice.requested && canProcess && !failed;
         const validOwned = filterPresent && confirmedGeneration === generation &&
             confirmedStrength === choice.strength;
 
@@ -116,6 +115,8 @@ function NightAudioSession(options) {
             }
             pending = null;
         }
+        // Recalculate after timeout. Never re-add a command that just failed.
+        const desired = choice.requested && canProcess && !failed;
         if (!pending) {
             if (filterPresent && (!desired || !validOwned)) {
                 confirmedGeneration = null;
