@@ -75,8 +75,10 @@ test('real shell does not apply a filter until source path matches', async () =>
     h.configure({ when: 'always' });
     await h.load();
     h.event('path', 'https://example.invalid/different.mp4');
-    assert.equal(h.state().status, 'checking');
+    assert.equal(h.state().status, 'removing');
+    assert.equal(h.recent('remove').length, 1);
     h.event('af', []);
+    assert.equal(h.state().status, 'checking');
     assert.equal(h.recent('add').length, 1);
     h.shell.dispatch({ type: 'command', commandName: 'destroy' });
 });
