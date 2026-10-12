@@ -25,6 +25,7 @@ if permission_names:fail.append('permissions_are_not_allowed:'+repr(permission_n
 app=manifest.find('application')
 if app is None:fail.append('missing_application')
 else:
+    if app.get(ANDROID+'banner') != '@drawable/companion_tv_banner':fail.append('leanback_banner_missing')
     if app.get(ANDROID+'allowBackup') != 'false':fail.append('backup_not_disabled')
     if app.get(ANDROID+'usesCleartextTraffic') != 'false':fail.append('cleartext_not_disabled')
     activities=app.findall('activity')
@@ -35,6 +36,18 @@ else:
         if any('android.intent.action.BOOT_COMPLETED' in (name or '') for name in names):fail.append('boot_receiver')
     if app.findall('service') or app.findall('receiver') or app.findall('provider'):
         fail.append('unexpected_background_component')
+BANNER=ROOT/'src/main/res/drawable/companion_tv_banner.xml'
+if not BANNER.is_file():
+    fail.append('native_tv_banner_resource_missing')
+else:
+    try:
+        b=ET.parse(BANNER).getroot()
+        if b.tag!='vector' and not b.tag.endswith('}vector'):
+            fail.append('native_tv_banner_not_vector')
+        if b.get(ANDROID+'width')!='320dp' or b.get(ANDROID+'height')!='180dp':
+            fail.append('native_tv_banner_wrong_dimensions')
+    except (ET.ParseError,OSError):
+        fail.append('native_tv_banner_invalid_xml')
 if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
     fail.append('tested_bridge_modified')
 java_text=SOURCE.read_text()
@@ -60,6 +73,6 @@ if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
     fail.append('watched_controls_not_fail_closed')
 if any(x in java_text+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':21,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':24,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
