@@ -181,6 +181,21 @@ class NativePlaybackRecoveryActuatorTest {
         assertEquals(emptyList<String>(), port.actions)
     }
 
+    @Test fun preparedLeaseCannotCrossActuatorInstanceOrBeReissued() {
+        val firstPort = FakePort(snapshot())
+        val first = NativePlaybackRecoveryActuator(firstPort)
+        val prepared = first.prepare(classification(), observation())!!
+        assertNull(first.prepare(classification(), observation()))
+
+        val secondPort = FakePort(snapshot())
+        val second = NativePlaybackRecoveryActuator(secondPort)
+        assertEquals(NativeRecoveryExecutionOutcome.REFUSED, second.execute(prepared))
+        assertEquals(emptyList<String>(), secondPort.actions)
+
+        assertEquals(NativeRecoveryExecutionOutcome.APPLIED, first.execute(prepared))
+        assertEquals(listOf("transcodeAudio"), firstPort.actions)
+    }
+
     @Test fun profileSevenConversionUsesSameOneShotLease() {
         val port = FakePort(snapshot())
         val actuator = NativePlaybackRecoveryActuator(port)

@@ -42,6 +42,7 @@ enum class NativeRecoveryExecutionOutcome {
 class NativePlaybackRecoveryActuator(
     private val port: NativePlaybackRecoveryPort
 ) {
+    private val issued = LinkedHashSet<String>()
     private val consumed = LinkedHashSet<String>()
 
     fun prepare(
@@ -57,7 +58,9 @@ class NativePlaybackRecoveryActuator(
             lease.recoveryContextId != observation.currentContextId
         ) return null
 
-        return PreparedNativeRecovery(plan, lease, token(plan, lease))
+        val token = token(plan, lease)
+        if (!issued.add(token)) return null
+        return PreparedNativeRecovery(plan, lease, token)
     }
 
     fun execute(prepared: PreparedNativeRecovery): NativeRecoveryExecutionOutcome {
@@ -65,6 +68,9 @@ class NativePlaybackRecoveryActuator(
             return NativeRecoveryExecutionOutcome.REFUSED
         }
         if (prepared.token != token(prepared.plan, prepared.lease)) {
+            return NativeRecoveryExecutionOutcome.REFUSED
+        }
+        if (prepared.token !in issued) {
             return NativeRecoveryExecutionOutcome.REFUSED
         }
 
