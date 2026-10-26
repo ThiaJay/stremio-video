@@ -258,6 +258,34 @@ class NativePlaybackRecoveryActuatorTest {
         assertEquals(listOf("transcodeAudio"), port.actions)
     }
 
+    @Test fun ownerThreadCloseRevokesOutstandingLeaseAndFutureUse() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())!!
+        assertEquals(true, actuator.close())
+        assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
+        assertNull(actuator.prepare(classification(), observation()))
+        assertEquals(false, actuator.close())
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
+    @Test fun foreignThreadCannotCloseOrRevokeOwnerLease() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())!!
+        val foreignClose = AtomicReference<Boolean?>()
+        Thread {
+            foreignClose.set(actuator.close())
+        }.apply {
+            start()
+            join()
+        }
+        assertEquals(false, foreignClose.get())
+        assertEquals(NativeRecoveryExecutionOutcome.APPLIED, actuator.execute(prepared))
+        assertEquals(listOf("transcodeAudio"), port.actions)
+        assertEquals(true, actuator.close())
+    }
+
     @Test fun profileSevenConversionUsesSameOneShotLease() {
         val port = FakePort(snapshot())
         val actuator = NativePlaybackRecoveryActuator(port)

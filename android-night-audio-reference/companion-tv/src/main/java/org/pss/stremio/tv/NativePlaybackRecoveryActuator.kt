@@ -43,15 +43,16 @@ enum class NativeRecoveryExecutionOutcome {
 class NativePlaybackRecoveryActuator(
     private val port: NativePlaybackRecoveryPort
 ) {
-    private val ownerThreadId = Thread.currentThread().id
+    private val ownerThread = Thread.currentThread()
     private val issued = LinkedHashSet<String>()
     private val consumed = LinkedHashSet<String>()
+    private var closed = false
 
     fun prepare(
         classification: ClassifiedStreamFailure?,
         observation: PlaybackHealthObservation?
     ): PreparedNativeRecovery? {
-        if (!onOwnerThread()) return null
+        if (!onOwnerThread() || closed) return null
         val plan = NativePlaybackRecoveryPolicy.plan(classification, observation)
         if (!trustedPlaybackPlan(plan)) return null
 
@@ -68,7 +69,7 @@ class NativePlaybackRecoveryActuator(
     }
 
     fun execute(prepared: PreparedNativeRecovery): NativeRecoveryExecutionOutcome {
-        if (!onOwnerThread()) return NativeRecoveryExecutionOutcome.REFUSED
+        if (!onOwnerThread() || closed) return NativeRecoveryExecutionOutcome.REFUSED
         if (!trustedPlaybackPlan(prepared.plan) ||
             !trustedSnapshot(prepared.lease) ||
             prepared.plan.action !in prepared.lease.supportedRecoveryActions
@@ -95,6 +96,15 @@ class NativePlaybackRecoveryActuator(
         } else {
             NativeRecoveryExecutionOutcome.EXECUTION_REJECTED
         }
+    }
+
+    /** Revokes every outstanding lease when the host-owned player is released. */
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        issued.clear()
+        consumed.clear()
+        return true
     }
 
     private fun trustedPlaybackPlan(plan: NativeRecoveryPlan): Boolean =
@@ -126,7 +136,7 @@ class NativePlaybackRecoveryActuator(
         value.length in 1..MAX_ID_LENGTH && ID.matches(value)
 
     private fun onOwnerThread(): Boolean =
-        Thread.currentThread().id == ownerThreadId
+        Thread.currentThread() === ownerThread
 
     private fun token(plan: NativeRecoveryPlan, lease: NativeRecoverySnapshot): String =
         listOf(
