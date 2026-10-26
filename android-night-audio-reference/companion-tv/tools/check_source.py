@@ -16,6 +16,8 @@ STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
 RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
+ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryActuator.kt'
+ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryActuatorTest.kt'
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
 PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
 EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
@@ -59,6 +61,8 @@ story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
 recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
+actuator=ACTUATOR.read_text() if ACTUATOR.is_file() else ''
+actuator_test=ACTUATOR_TEST.read_text() if ACTUATOR_TEST.is_file() else ''
 ports=PORTS.read_text()
 episode=EPISODE.read_text()
 gradle=BUILD.read_text()
@@ -99,8 +103,22 @@ if 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' not in recovery
     fail.append('terminal_composition_regression_missing')
 if 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' not in recovery_test:
     fail.append('dolby_vision_recovery_order_regression_missing')
-if any(x in java_text+story+recovery+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if 'class NativePlaybackRecoveryActuator' not in actuator or 'interface NativePlaybackRecoveryPort' not in actuator:
+    fail.append('native_recovery_actuator_boundary_missing')
+if 'val current = port.currentSnapshot()' not in actuator or 'current != prepared.lease' not in actuator:
+    fail.append('final_native_recovery_state_lease_missing')
+if actuator.find('consumed.add(prepared.token)') > actuator.find('port.executeRecovery(prepared.plan.action)'):
+    fail.append('native_recovery_lease_not_consumed_before_port_call')
+if 'watchedStateFingerprint' not in actuator or 'resumeStateFingerprint' not in actuator:
+    fail.append('account_state_fingerprint_lease_missing')
+if 'exactPlaybackPlanExecutesOnlyOnce' not in actuator_test or 'rejectedPortExecutionStillConsumesLease' not in actuator_test:
+    fail.append('native_recovery_one_shot_regressions_missing')
+if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'finalLeaseRejectsWatchedOrResumeFingerprintDrift' not in actuator_test:
+    fail.append('native_recovery_final_state_drift_regressions_missing')
+if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
+    fail.append('classifier_exclusive_actuator_regression_missing')
+if any(x in java_text+story+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':34,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':41,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
