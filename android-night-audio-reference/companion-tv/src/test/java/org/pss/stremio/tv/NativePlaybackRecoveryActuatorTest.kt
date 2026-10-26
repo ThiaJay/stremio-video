@@ -27,7 +27,11 @@ class NativePlaybackRecoveryActuatorTest {
         sourceId: String = "source-1",
         generation: Long = 1,
         watched: String = "a".repeat(64),
-        resume: String = "b".repeat(64)
+        resume: String = "b".repeat(64),
+        capabilities: Set<String> = setOf(
+            "transcodeAudio",
+            "convertDolbyVisionProfile7To8_1"
+        )
     ) = NativeRecoverySnapshot(
         recoveryContextId = context,
         videoId = videoId,
@@ -35,6 +39,7 @@ class NativePlaybackRecoveryActuatorTest {
         loadGeneration = generation,
         watchedStateFingerprint = watched,
         resumeStateFingerprint = resume,
+        supportedRecoveryActions = capabilities,
         loaded = true
     )
 
@@ -161,6 +166,35 @@ class NativePlaybackRecoveryActuatorTest {
         )
         for (state in invalid) {
             val actuator = NativePlaybackRecoveryActuator(FakePort(state))
+            assertNull(actuator.prepare(classification(), observation()))
+        }
+    }
+
+    @Test fun unadvertisedNativeCapabilityCannotPrepare() {
+        val actuator = NativePlaybackRecoveryActuator(FakePort(
+            snapshot(capabilities = setOf("switchPlaybackEngine"))
+        ))
+        assertNull(actuator.prepare(classification(), observation()))
+    }
+
+    @Test fun capabilityChangeBeforeExecutionRefuses() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())!!
+        port.snapshot = snapshot(capabilities = setOf("transcodeAudio"))
+        assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
+    @Test fun malformedCapabilitySetFailsClosed() {
+        for (capabilities in listOf(
+            emptySet(),
+            setOf("unreviewedRecoveryAction"),
+            setOf("transcodeAudio", "unreviewedRecoveryAction")
+        )) {
+            val actuator = NativePlaybackRecoveryActuator(FakePort(
+                snapshot(capabilities = capabilities)
+            ))
             assertNull(actuator.prepare(classification(), observation()))
         }
     }

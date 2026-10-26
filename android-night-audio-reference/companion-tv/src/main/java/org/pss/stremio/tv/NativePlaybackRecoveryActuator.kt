@@ -11,6 +11,7 @@ data class NativeRecoverySnapshot(
     val loadGeneration: Long,
     val watchedStateFingerprint: String,
     val resumeStateFingerprint: String,
+    val supportedRecoveryActions: Set<String>,
     val loaded: Boolean,
     val playerReleased: Boolean = false,
     val switchingSource: Boolean = false,
@@ -56,6 +57,7 @@ class NativePlaybackRecoveryActuator(
 
         val lease = port.currentSnapshot()
         if (!trustedSnapshot(lease) || observation == null) return null
+        if (plan.action !in lease.supportedRecoveryActions) return null
         if (lease.recoveryContextId != observation.recoveryContextId ||
             lease.recoveryContextId != observation.currentContextId
         ) return null
@@ -67,7 +69,10 @@ class NativePlaybackRecoveryActuator(
 
     fun execute(prepared: PreparedNativeRecovery): NativeRecoveryExecutionOutcome {
         if (!onOwnerThread()) return NativeRecoveryExecutionOutcome.REFUSED
-        if (!trustedPlaybackPlan(prepared.plan) || !trustedSnapshot(prepared.lease)) {
+        if (!trustedPlaybackPlan(prepared.plan) ||
+            !trustedSnapshot(prepared.lease) ||
+            prepared.plan.action !in prepared.lease.supportedRecoveryActions
+        ) {
             return NativeRecoveryExecutionOutcome.REFUSED
         }
         if (prepared.token != token(prepared.plan, prepared.lease)) {
@@ -109,6 +114,9 @@ class NativePlaybackRecoveryActuator(
             value.loadGeneration >= 0 &&
             FINGERPRINT.matches(value.watchedStateFingerprint) &&
             FINGERPRINT.matches(value.resumeStateFingerprint) &&
+            value.supportedRecoveryActions.isNotEmpty() &&
+            value.supportedRecoveryActions.size <= RECOVERY_ACTIONS.size &&
+            value.supportedRecoveryActions.all { it in RECOVERY_ACTIONS } &&
             value.loaded &&
             !value.playerReleased &&
             !value.switchingSource &&
@@ -128,7 +136,8 @@ class NativePlaybackRecoveryActuator(
             lease.sourceId,
             lease.loadGeneration.toString(),
             lease.watchedStateFingerprint,
-            lease.resumeStateFingerprint
+            lease.resumeStateFingerprint,
+            lease.supportedRecoveryActions.sorted().joinToString(",")
         ).joinToString("|")
 
     private companion object {

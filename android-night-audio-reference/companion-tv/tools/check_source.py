@@ -119,6 +119,12 @@ if 'ownerThreadId = Thread.currentThread().id' not in actuator or actuator.count
     fail.append('actuator_player_thread_ownership_missing')
 if 'preparationAndExecutionStayOnConstructionThread' not in actuator_test:
     fail.append('actuator_cross_thread_regression_missing')
+if 'supportedRecoveryActions' not in actuator or 'plan.action !in lease.supportedRecoveryActions' not in actuator:
+    fail.append('actuator_native_capability_binding_missing')
+if 'supportedRecoveryActions.sorted().joinToString(",")' not in actuator:
+    fail.append('actuator_capability_set_not_bound_to_lease_token')
+if any(name not in actuator_test for name in ['unadvertisedNativeCapabilityCannotPrepare','capabilityChangeBeforeExecutionRefuses','malformedCapabilitySetFailsClosed']):
+    fail.append('actuator_capability_regressions_missing')
 if 'exactPlaybackPlanExecutesOnlyOnce' not in actuator_test or 'rejectedPortExecutionStillConsumesLease' not in actuator_test:
     fail.append('native_recovery_one_shot_regressions_missing')
 if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'finalLeaseRejectsWatchedOrResumeFingerprintDrift' not in actuator_test:
@@ -127,6 +133,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':45,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':48,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
