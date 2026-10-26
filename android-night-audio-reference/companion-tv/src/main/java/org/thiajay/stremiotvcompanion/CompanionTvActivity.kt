@@ -51,6 +51,10 @@ class CompanionTvActivity : Activity() {
     private lateinit var controls: LinearLayout
     private val manualButtons = LinkedHashMap<SkipKind, Button>()
     private val watchedButtons = mutableListOf<Button>()
+    private lateinit var storyOrderToggle: Button
+    private lateinit var storyOrderSummary: TextView
+    private var storyOrderSelected = false
+    private var storyDemoCurrentId = STORY_CANONICAL.first().id
     private val skipCoordinator = TvSkipCoordinator()
     private var generation = 0L
     private var fixtureLoaded = false
@@ -164,6 +168,14 @@ class CompanionTvActivity : Activity() {
         button("Night Audio Balanced") { setNightAudio(PcmDynamicsProcessor.Strength.BALANCED, "Balanced") }
         button("Night Audio Strong") { setNightAudio(PcmDynamicsProcessor.Strength.STRONG, "Strong") }
         button("Stop playback and reset Night Audio") { stopFixture() }
+        small("Story Order below uses synthetic local metadata only. It cannot read a Stremio catalogue, start a stream or change watched state.")
+        storyOrderToggle = button("Presentation: Canonical") {
+            storyOrderSelected = !storyOrderSelected
+            updateStoryOrderDemo()
+        }
+        button("Next Story item (local metadata only)") { advanceStoryOrderDemo() }
+        storyOrderSummary = small("")
+        updateStoryOrderDemo()
         small("Stremio account and watched controls will activate only after a validated native Core session with isolated account evidence.")
         watchedButtons += button("Mark episode watched (unavailable)") { }
         watchedButtons += button("Mark season watched (unavailable)") { }
@@ -249,6 +261,48 @@ class CompanionTvActivity : Activity() {
         status.text = "$state  Skip mode $skipMode.  $dspStatus"
     }
 
+    private fun updateStoryOrderDemo(message: String? = null) {
+        val visible = StoryOrderContract.presentation(
+            STORY_CANONICAL,
+            STORY_HINTS,
+            storyOrderSelected
+        )
+        storyOrderToggle.text = if (storyOrderSelected) {
+            "Presentation: Story Order"
+        } else {
+            "Presentation: Canonical"
+        }
+        val sequence = visible.joinToString("  →  ") {
+            "${it.id} [S${it.season} E${it.episode ?: "?"}]"
+        }
+        storyOrderSummary.text = listOfNotNull(
+            message,
+            "Selected stable ID: $storyDemoCurrentId",
+            "Visible local sequence: $sequence",
+            "No player, account or watched-state binding."
+        ).joinToString("\n")
+    }
+
+    private fun advanceStoryOrderDemo() {
+        if (!storyOrderSelected) {
+            updateStoryOrderDemo("Story Order is not selected; existing continuation remains untouched.")
+            return
+        }
+        when (val decision = StoryOrderContract.next(
+            STORY_CANONICAL,
+            STORY_HINTS,
+            storyDemoCurrentId
+        )) {
+            is NextStoryDecision.UseCanonicalEpisode -> {
+                storyDemoCurrentId = decision.episode.id
+                updateStoryOrderDemo("Resolved the original canonical object by stable ID.")
+            }
+            is NextStoryDecision.UseExistingContinuation -> {
+                updateStoryOrderDemo("No Story Order override: ${decision.reason}.")
+            }
+        }
+    }
+
     private fun stopFixture() {
         player.stop()
         fixtureLoaded = false
@@ -309,5 +363,21 @@ class CompanionTvActivity : Activity() {
         super.onDestroy()
     }
 
-    companion object { private const val FIXTURE_ID = "local:synthetic-media:12s" }
+    companion object {
+        private const val FIXTURE_ID = "local:synthetic-media:12s"
+        private val STORY_CANONICAL = listOf(
+            CanonicalEpisode("local:story:1:1", 1, 1, "Episode one"),
+            CanonicalEpisode("local:story:0:2", 0, 2, "Narrative special"),
+            CanonicalEpisode("local:story:1:2", 1, 2, "Episode two"),
+            CanonicalEpisode("local:story:0:99", 0, 99, "Ancillary extra")
+        )
+        private val STORY_HINTS = StoryOrderHints(
+            storyOrderVersion = 1,
+            storyOrder = listOf(
+                "local:story:1:1",
+                "local:story:0:2",
+                "local:story:1:2"
+            )
+        )
+    }
 }
