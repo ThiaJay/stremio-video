@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicReference
 
 class NativePlaybackRecoveryActuatorTest {
     private class FakePort(
@@ -194,6 +195,33 @@ class NativePlaybackRecoveryActuatorTest {
 
         assertEquals(NativeRecoveryExecutionOutcome.APPLIED, first.execute(prepared))
         assertEquals(listOf("transcodeAudio"), firstPort.actions)
+    }
+
+    @Test fun preparationAndExecutionStayOnConstructionThread() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val foreignPreparation = AtomicReference<PreparedNativeRecovery?>()
+        Thread {
+            foreignPreparation.set(actuator.prepare(classification(), observation()))
+        }.apply {
+            start()
+            join()
+        }
+        assertNull(foreignPreparation.get())
+
+        val prepared = actuator.prepare(classification(), observation())!!
+        val foreignOutcome = AtomicReference<NativeRecoveryExecutionOutcome?>()
+        Thread {
+            foreignOutcome.set(actuator.execute(prepared))
+        }.apply {
+            start()
+            join()
+        }
+        assertEquals(NativeRecoveryExecutionOutcome.REFUSED, foreignOutcome.get())
+        assertEquals(emptyList<String>(), port.actions)
+
+        assertEquals(NativeRecoveryExecutionOutcome.APPLIED, actuator.execute(prepared))
+        assertEquals(listOf("transcodeAudio"), port.actions)
     }
 
     @Test fun profileSevenConversionUsesSameOneShotLease() {

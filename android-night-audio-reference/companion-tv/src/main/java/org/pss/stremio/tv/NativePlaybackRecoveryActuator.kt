@@ -42,6 +42,7 @@ enum class NativeRecoveryExecutionOutcome {
 class NativePlaybackRecoveryActuator(
     private val port: NativePlaybackRecoveryPort
 ) {
+    private val ownerThreadId = Thread.currentThread().id
     private val issued = LinkedHashSet<String>()
     private val consumed = LinkedHashSet<String>()
 
@@ -49,6 +50,7 @@ class NativePlaybackRecoveryActuator(
         classification: ClassifiedStreamFailure?,
         observation: PlaybackHealthObservation?
     ): PreparedNativeRecovery? {
+        if (!onOwnerThread()) return null
         val plan = NativePlaybackRecoveryPolicy.plan(classification, observation)
         if (!trustedPlaybackPlan(plan)) return null
 
@@ -64,6 +66,7 @@ class NativePlaybackRecoveryActuator(
     }
 
     fun execute(prepared: PreparedNativeRecovery): NativeRecoveryExecutionOutcome {
+        if (!onOwnerThread()) return NativeRecoveryExecutionOutcome.REFUSED
         if (!trustedPlaybackPlan(prepared.plan) || !trustedSnapshot(prepared.lease)) {
             return NativeRecoveryExecutionOutcome.REFUSED
         }
@@ -113,6 +116,9 @@ class NativePlaybackRecoveryActuator(
 
     private fun validId(value: String): Boolean =
         value.length in 1..MAX_ID_LENGTH && ID.matches(value)
+
+    private fun onOwnerThread(): Boolean =
+        Thread.currentThread().id == ownerThreadId
 
     private fun token(plan: NativeRecoveryPlan, lease: NativeRecoverySnapshot): String =
         listOf(
