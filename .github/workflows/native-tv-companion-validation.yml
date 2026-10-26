@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=27 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=39 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -82,6 +82,10 @@ jobs:
           assert 'missingRegularEpisodeFailsClosed' in names, 'Story Order completeness regression not executed'
           assert 'nextStoryUsesStableIdAndReturnsOriginalCanonicalObject' in names, 'Story Order continuation identity regression not executed'
           assert 'storyContinuationNeverOverridesInvalidUnknownOrTerminalState' in names, 'Story Order fail-closed continuation regression not executed'
+          assert 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' in names, 'Classification terminal-stop composition regression not executed'
+          assert 'retryableSourceClassificationExclusivelyOwnsItsSingleAttempt' in names, 'Classifier-exclusive retry regression not executed'
+          assert 'delegatedRecoveryRequiresExplicitLedgerAndMatchingContext' in names, 'Playback recovery ledger identity regression not executed'
+          assert 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' in names, 'Dolby Vision recovery order regression not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes

@@ -14,6 +14,8 @@ ANDROID='{http://schemas.android.com/apk/res/android}'
 SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
+RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
+RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
 PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
 EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
@@ -55,6 +57,8 @@ if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
 java_text=SOURCE.read_text()
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
+recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
+recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
 ports=PORTS.read_text()
 episode=EPISODE.read_text()
 gradle=BUILD.read_text()
@@ -85,8 +89,18 @@ if 'NextStoryDecision.UseExistingContinuation' not in story or 'byId[id]' not in
     fail.append('story_order_stable_identity_or_fail_closed_continuation_missing')
 if 'assertSame(narrativeSpecial' not in story_test or 'missingRegularEpisodeFailsClosed' not in story_test:
     fail.append('story_order_identity_regression_missing')
-if any(x in java_text+story+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if 'private val TERMINAL' not in recovery or 'private val RETRYABLE' not in recovery:
+    fail.append('classification_first_authority_sets_missing')
+if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
+    fail.append('exact_playback_delegation_missing')
+if 'observation?.attemptedRecoveries == null' not in recovery or 'recoveryContextId != value.currentContextId' not in recovery:
+    fail.append('bounded_context_ledger_gate_missing')
+if 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' not in recovery_test:
+    fail.append('terminal_composition_regression_missing')
+if 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' not in recovery_test:
+    fail.append('dolby_vision_recovery_order_regression_missing')
+if any(x in java_text+story+recovery+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':29,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':34,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
