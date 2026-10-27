@@ -188,7 +188,7 @@ class NativePlaybackRecoveryPolicyTest {
         )
         for (value in invalid) {
             assertEquals(
-                "stop_invalid_classification_contract",
+                "stop_and_report_sanitised_failure",
                 NativePlaybackRecoveryPolicy.plan(value, observation()).action
             )
         }
