@@ -142,9 +142,19 @@ if 'class NativeMedia3RetryActuator' not in media3_retry_actuator or 'interface 
 if ('NativeMedia3FailureIntake.sanitise(' not in media3_retry_actuator or
     'NativePlaybackRecoveryPolicy.plan(facts = facts, observation = null)' not in media3_retry_actuator):
     fail.append('media3_retry_not_composed_through_current_classifier_policy')
+snapshot_class=media3_retry_actuator[
+    media3_retry_actuator.find('data class NativeMedia3RetrySnapshot'):
+    media3_retry_actuator.find('interface NativeMedia3RetryPort')
+]
+if 'sameEpisodeRetryCount' in snapshot_class:
+    fail.append('media3_retry_snapshot_exposes_caller_controlled_attempt_count')
 if ('class NativeMedia3RetryBudget private constructor' not in media3_retry_actuator or
     'private val budget: NativeMedia3RetryBudget' not in media3_retry_actuator):
     fail.append('media3_episode_scoped_retry_budget_missing')
+if ('internal fun attemptCount(value: NativeMedia3RetrySnapshot): Int?' not in media3_retry_actuator or
+    'val sameEpisodeRetryCount = budget.attemptCount(lease) ?: return null' not in media3_retry_actuator or
+    'sameEpisodeRetryCount = sameEpisodeRetryCount' not in media3_retry_actuator):
+    fail.append('media3_retry_attempt_count_not_owned_by_shared_budget')
 if ('if (!budget.reserve(lease)) return null' not in media3_retry_actuator or
     '!budget.contains(prepared.lease)' not in media3_retry_actuator):
     fail.append('media3_retry_not_bound_to_shared_episode_budget')
@@ -176,11 +186,12 @@ if any(name not in media3_retry_actuator_test for name in [
     'finalSnapshotDriftRefusesAndBudgetStaysReserved',
     'episodeBudgetCannotResetThroughGenerationOrSourceChange',
     'terminalAndUnknownMedia3CodesNeverPrepare',
-    'episodeAdvanceExistingAttemptAndInvalidStateFailClosed',
+    'episodeAdvanceAndInvalidStateFailClosed',
     'preparedLeaseCannotCrossActuatorInstance',
     'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse',
     'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption',
     'sharedBudgetSurvivesActuatorCloseAndReplacement',
+    'retrySnapshotExposesNoCallerControlledAttemptCounter',
     'budgetIdentityThreadAndLifecycleFailClosed'
 ]):
     fail.append('media3_retry_actuator_regressions_missing')
@@ -243,6 +254,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':85,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':88,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)

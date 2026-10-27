@@ -11,7 +11,6 @@ data class NativeMedia3RetrySnapshot(
     val videoId: String,
     val sourceId: String,
     val loadGeneration: Long,
-    val sameEpisodeRetryCount: Int,
     val backendSwitchCount: Int = 0,
     val loaded: Boolean,
     val playerReleased: Boolean = false,
@@ -40,8 +39,9 @@ enum class NativeMedia3RetryOutcome {
 
 /**
  * Episode-scoped retry authority retained by the host across actuator and
- * player-adapter replacement. It has no reset operation: a new budget is
- * valid only for a genuinely new episode session.
+ * player-adapter replacement. It is the sole same-episode attempt counter and
+ * has no reset operation: a new budget is valid only for a genuinely new
+ * episode session.
  */
 class NativeMedia3RetryBudget private constructor(
     private val episodeSessionId: String,
@@ -50,6 +50,11 @@ class NativeMedia3RetryBudget private constructor(
     private val ownerThread = Thread.currentThread()
     private var reserved = false
     private var closed = false
+
+    internal fun attemptCount(value: NativeMedia3RetrySnapshot): Int? {
+        if (!onOwnerThread() || closed || !matches(value)) return null
+        return if (reserved) 1 else 0
+    }
 
     internal fun reserve(value: NativeMedia3RetrySnapshot): Boolean {
         if (!onOwnerThread() || closed || reserved || !matches(value)) return false
@@ -90,8 +95,9 @@ class NativeMedia3RetryBudget private constructor(
  * one immutable same-episode budget. Preparation reserves the episode budget,
  * so abandoning a lease, final-state drift or a rejected port call cannot mint
  * another attempt. The host must retain the budget across actuator or player
- * adapter replacement for the same episode session. No exception, URL,
- * credential, account state or raw log can cross this boundary.
+ * adapter replacement for the same episode session. The port cannot declare
+ * or reset the attempt count. No exception, URL, credential, account state or
+ * raw log can cross this boundary.
  */
 class NativeMedia3RetryActuator(
     private val port: NativeMedia3RetryPort,
@@ -106,10 +112,11 @@ class NativeMedia3RetryActuator(
         if (!onOwnerThread() || closed) return null
         val lease = snapshotOrNull() ?: return null
         if (!trustedSnapshot(lease)) return null
+        val sameEpisodeRetryCount = budget.attemptCount(lease) ?: return null
 
         val facts = NativeMedia3FailureIntake.sanitise(
             errorCode = errorCode,
-            sameEpisodeRetryCount = lease.sameEpisodeRetryCount,
+            sameEpisodeRetryCount = sameEpisodeRetryCount,
             backendSwitchCount = lease.backendSwitchCount,
             episodeAdvanced = lease.episodeAdvanced,
             userRequestedNextEpisode = lease.userRequestedNextEpisode
@@ -171,7 +178,6 @@ class NativeMedia3RetryActuator(
             validId(value.videoId) &&
             validId(value.sourceId) &&
             value.loadGeneration >= 0 &&
-            value.sameEpisodeRetryCount in 0..1 &&
             value.backendSwitchCount in 0..MAX_BACKEND_SWITCH_COUNT &&
             value.loaded &&
             !value.playerReleased &&
@@ -187,7 +193,6 @@ class NativeMedia3RetryActuator(
             episodeBudgetKey(value),
             value.sourceId,
             value.loadGeneration.toString(),
-            value.sameEpisodeRetryCount.toString(),
             value.backendSwitchCount.toString(),
             plan.category.orEmpty(),
             plan.action

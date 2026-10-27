@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=88 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=89 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -106,6 +106,7 @@ jobs:
           assert 'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse' in names, 'Media3 retry lifecycle regression not executed'
           assert 'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption' in names, 'Media3 retry exception-containment regression not executed'
           assert 'sharedBudgetSurvivesActuatorCloseAndReplacement' in names, 'Media3 retry shared-budget replacement regression not executed'
+          assert 'retrySnapshotExposesNoCallerControlledAttemptCounter' in names, 'Media3 retry caller-counter regression not executed'
           assert 'budgetIdentityThreadAndLifecycleFailClosed' in names, 'Media3 retry budget lifecycle regression not executed'
           assert 'policyExposesNoPreclassifiedDecisionParameter' in names, 'Policy raw-facts entry regression not executed'
           assert 'actuatorExposesNoPreclassifiedDecisionParameter' in names, 'Actuator raw-facts entry regression not executed'

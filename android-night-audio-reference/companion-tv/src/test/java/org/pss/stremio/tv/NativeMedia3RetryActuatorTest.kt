@@ -101,11 +101,10 @@ class NativeMedia3RetryActuatorTest {
         }
     }
 
-    @Test fun episodeAdvanceExistingAttemptAndInvalidStateFailClosed() {
+    @Test fun episodeAdvanceAndInvalidStateFailClosed() {
         val code = PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
         assertNull(actuator(Port(snapshot = snapshot().copy(episodeAdvanced = true))).prepare(code))
         assertNull(actuator(Port(snapshot = snapshot().copy(userRequestedNextEpisode = true))).prepare(code))
-        assertNull(actuator(Port(snapshot = snapshot().copy(sameEpisodeRetryCount = 1))).prepare(code))
         assertNull(actuator(Port(snapshot = snapshot().copy(backendSwitchCount = 2))).prepare(code))
         assertNull(actuator(Port(snapshot = snapshot().copy(switchingSource = true))).prepare(code))
         assertNull(actuator(Port(snapshot = snapshot().copy(sourceId = "bad source"))).prepare(code))
@@ -164,6 +163,22 @@ class NativeMedia3RetryActuatorTest {
         assertTrue(port.actions.isEmpty())
     }
 
+    @Test fun retrySnapshotExposesNoCallerControlledAttemptCounter() {
+        val forbidden = NativeMedia3RetrySnapshot::class.java.declaredMethods
+            .map { it.name }
+            .filter { it.contains("RetryCount", ignoreCase = true) }
+        assertTrue(forbidden.toString(), forbidden.isEmpty())
+
+        val port = Port()
+        val shared = episodeBudget(port.snapshot)
+        assertNotNull(actuator(port, shared).prepare(
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        ))
+        assertNull(actuator(port, shared).prepare(
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+        ))
+    }
+
     @Test fun budgetIdentityThreadAndLifecycleFailClosed() {
         val code = PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
         val port = Port()
@@ -195,7 +210,6 @@ class NativeMedia3RetryActuatorTest {
             videoId = "tt4803766:13:1",
             sourceId = "source-a",
             loadGeneration = 1,
-            sameEpisodeRetryCount = 0,
             loaded = true
         )
     }
