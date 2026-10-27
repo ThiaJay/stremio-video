@@ -70,12 +70,20 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=89 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=97 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
           assert 'secondVideoReadMustNotChangeEvenWhenIdentityIsStable' in names, 'Episode metadata race regression not executed'
           assert 'dispatchedPayloadIsDeepDetachedFromMutableCoreObject' in names, 'Deep snapshot regression not executed'
+          assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'
+          assert 'futureEpisodeSuppressesUnsafeSeasonActions' in names, 'TV title-action future-episode regression not executed'
+          assert 'focusAndRemoteConfirmationDispatchExactSeriesAction' in names, 'TV title-action remote-focus regression not executed'
+          assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'
+          assert 'accountDriftRefusesPresentedAction' in names, 'TV title-action account-drift regression not executed'
+          assert 'staleAndForgedActionsCannotExecute' in names, 'TV title-action issuance regression not executed'
+          assert 'ownerThreadAndCloseFailClosed' in names, 'TV title-action lifecycle regression not executed'
+          assert 'snapshotAndDispatchExceptionsFailClosed' in names, 'TV title-action exception regression not executed'
           assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
           assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'

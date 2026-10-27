@@ -27,6 +27,8 @@ ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryActua
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
 PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
 EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
+TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedMenu.kt'
+TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedMenuTest.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -77,6 +79,8 @@ actuator=ACTUATOR.read_text() if ACTUATOR.is_file() else ''
 actuator_test=ACTUATOR_TEST.read_text() if ACTUATOR_TEST.is_file() else ''
 ports=PORTS.read_text()
 episode=EPISODE.read_text()
+title_watched_menu=TITLE_WATCHED_MENU.read_text() if TITLE_WATCHED_MENU.is_file() else ''
+title_watched_menu_test=TITLE_WATCHED_MENU_TEST.read_text() if TITLE_WATCHED_MENU_TEST.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -91,6 +95,37 @@ if 'issued.add(plan.fingerprint)' not in episode or 'port.currentSnapshot()' not
     fail.append('episode_account_refresh_or_one_shot_not_enforced')
 if 'videoFingerprint' not in episode or 'detached(secondSource)' not in episode:
     fail.append('core_video_double_read_or_detached_payload_missing')
+if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
+    'class NativeTvTitleWatchedAction internal constructor' not in title_watched_menu):
+    fail.append('native_tv_title_watched_menu_missing')
+if ('val snapshot = snapshotOrNull() ?: return emptyList()' not in title_watched_menu or
+    'coordinator.prepare(snapshot, scope, watched)' not in title_watched_menu):
+    fail.append('title_watched_menu_not_built_from_one_fresh_core_snapshot')
+if ('issued.remove(action.actionId)' not in title_watched_menu or
+    'record.action !== action' not in title_watched_menu or
+    'account.currentSnapshot()' not in title_watched_menu):
+    fail.append('title_watched_menu_issuance_or_fresh_read_missing')
+if ('focusedActionId != action.actionId' not in title_watched_menu or
+    'remoteKey != "ENTER" && remoteKey != "DPAD_CENTER"' not in title_watched_menu or
+    'unwatchAcknowledged = unwatchAcknowledged' not in title_watched_menu):
+    fail.append('title_watched_remote_focus_or_unwatch_confirmation_missing')
+if ('Thread.currentThread() === ownerThread' not in title_watched_menu or
+    'private var closed = false' not in title_watched_menu or
+    'const val MAX_PRESENTED_ACTIONS = 4' not in title_watched_menu):
+    fail.append('title_watched_thread_lifecycle_or_bound_missing')
+if ('NativeTvTitleWatchedMenu(' in java_text or 'NativeTvTitleWatchedAction(' in java_text):
+    fail.append('title_watched_menu_wired_to_synthetic_activity')
+if any(name not in title_watched_menu_test for name in [
+    'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting',
+    'futureEpisodeSuppressesUnsafeSeasonActions',
+    'focusAndRemoteConfirmationDispatchExactSeriesAction',
+    'unwatchRequiresAcknowledgementAndPresentationIsOneShot',
+    'accountDriftRefusesPresentedAction',
+    'staleAndForgedActionsCannotExecute',
+    'ownerThreadAndCloseFailClosed',
+    'snapshotAndDispatchExceptionsFailClosed'
+]):
+    fail.append('native_tv_title_watched_menu_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
@@ -252,8 +287,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':88,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':96,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
