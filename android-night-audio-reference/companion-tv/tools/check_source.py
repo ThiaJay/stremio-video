@@ -41,6 +41,9 @@ ANDROID_TV_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/
 MOBILE_TITLE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetController.kt'
 MOBILE_TITLE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetControllerTest.kt'
 ANDROID_MOBILE_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileTitleWatchedWidgetPort.kt'
+TITLE_WATCHED_VIEW_PORT_RELAY=ROOT/'src/main/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelay.kt'
+TITLE_WATCHED_VIEW_PORT_RELAY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelayTest.kt'
+ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidTitleWatchedScreenOwners.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -105,6 +108,9 @@ android_tv_title_widget_port=ANDROID_TV_TITLE_WIDGET_PORT.read_text() if ANDROID
 mobile_title_widget_controller=MOBILE_TITLE_WIDGET_CONTROLLER.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER.is_file() else ''
 mobile_title_widget_controller_test=MOBILE_TITLE_WIDGET_CONTROLLER_TEST.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER_TEST.is_file() else ''
 android_mobile_title_widget_port=ANDROID_MOBILE_TITLE_WIDGET_PORT.read_text() if ANDROID_MOBILE_TITLE_WIDGET_PORT.is_file() else ''
+title_watched_view_port_relay=TITLE_WATCHED_VIEW_PORT_RELAY.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY.is_file() else ''
+title_watched_view_port_relay_test=TITLE_WATCHED_VIEW_PORT_RELAY_TEST.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY_TEST.is_file() else ''
+android_title_watched_screen_owners=ANDROID_TITLE_WATCHED_SCREEN_OWNERS.read_text() if ANDROID_TITLE_WATCHED_SCREEN_OWNERS.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -370,6 +376,57 @@ if any(name not in mobile_title_widget_controller_test for name in [
     'mobileWidgetOwnerThreadClearAndCloseFailClosed'
 ]):
     fail.append('native_mobile_title_widget_controller_regressions_missing')
+if ('class NativeMobileTitleWatchedViewPortRelay : NativeMobileTitleWatchedViewPort' not in title_watched_view_port_relay or
+    'class NativeTvTitleWatchedViewPortRelay : NativeTvTitleWatchedViewPort' not in title_watched_view_port_relay):
+    fail.append('mobile_or_tv_title_view_port_relay_missing')
+if (title_watched_view_port_relay.count('if (delegate != null || view === this) return poison()') != 2 or
+    title_watched_view_port_relay.count('delegate = view') != 2):
+    fail.append('title_view_port_relay_one_time_bind_missing')
+if (title_watched_view_port_relay.count('Thread.currentThread() === ownerThread') != 2 or
+    title_watched_view_port_relay.count('fun close(): Boolean') != 2):
+    fail.append('title_view_port_relay_thread_or_close_guard_missing')
+if (title_watched_view_port_relay.count('if (!accepted) return poison()') != 4 or
+    title_watched_view_port_relay.count('catch (_: Exception)') != 2 or
+    title_watched_view_port_relay.count('catch (_: LinkageError)') != 2):
+    fail.append('title_view_port_relay_rejection_or_exception_poison_missing')
+if ('class AndroidMobileTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners or
+    'class AndroidTvTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners):
+    fail.append('actual_android_title_screen_composition_owners_missing')
+if (android_title_watched_screen_owners.count('Looper.myLooper() !== Looper.getMainLooper()') != 2 or
+    android_title_watched_screen_owners.count('Thread.currentThread() === ownerThread') != 2):
+    fail.append('android_title_screen_main_owner_thread_gate_missing')
+if ('NativeMobileTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
+    'NativeTvTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
+    'private var ready = relay.bind(port)' not in android_title_watched_screen_owners):
+    fail.append('android_title_screen_host_widget_composition_missing')
+if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
+    android_title_watched_screen_owners.count('pendingOutcome = host.activate(') != 2):
+    fail.append('android_title_screen_one_outcome_mailbox_missing')
+if (android_title_watched_screen_owners.count('fun consumeOutcome()') != 2 or
+    android_title_watched_screen_owners.count('pendingOutcome = null') < 6):
+    fail.append('android_title_screen_outcome_consumption_missing')
+if (android_title_watched_screen_owners.count('val hostClosed = host.close()') != 2 or
+    android_title_watched_screen_owners.count('val relayClosed = relay.close()') != 2):
+    fail.append('android_title_screen_lifecycle_close_missing')
+if (any(name in java_text for name in [
+        'AndroidMobileTitleWatchedScreenOwner',
+        'AndroidTvTitleWatchedScreenOwner',
+        'NativeMobileTitleWatchedViewPortRelay',
+        'NativeTvTitleWatchedViewPortRelay'
+    ])):
+    fail.append('android_title_screen_owners_wired_to_synthetic_activity')
+if any(name not in title_watched_view_port_relay_test for name in [
+    'mobileRelayRefusesBeforeBindingAndDelegatesAfterBinding',
+    'mobileRelayCloseClearsAndPermanentlyRevokes',
+    'mobileRelayRejectingPortPermanentlyPoisons',
+    'mobileRelayThrowingPortPermanentlyPoisons',
+    'tvRelayRefusesBeforeBindingAndDelegatesAfterBinding',
+    'tvRelayCloseClearsAndPermanentlyRevokes',
+    'tvRelayRejectingPortPermanentlyPoisons',
+    'tvRelayThrowingPortPermanentlyPoisons',
+    'foreignThreadCannotTakeOverOrCloseEitherRelay'
+]):
+    fail.append('native_title_view_port_relay_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
@@ -531,9 +588,9 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':149,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':161,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
