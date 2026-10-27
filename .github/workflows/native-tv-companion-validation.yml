@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=76 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=86 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -95,6 +95,16 @@ jobs:
           assert 'parserSignalsStopWithoutInventingMatroskaEvidence' in names, 'Media3 parser intake regression not executed'
           assert 'decoderAudioAndDrmSignalsRemainTerminal' in names, 'Media3 terminal decoder intake regression not executed'
           assert 'unrequestedEpisodeAdvanceWinsBeforeRetryableTransport' in names, 'Media3 episode-stop precedence regression not executed'
+          assert 'firstTransportFailureExecutesOnceAndReservesEpisodeBudget' in names, 'Media3 retry execution regression not executed'
+          assert 'repeatedPreparationCannotMintAnotherAttemptBeforeOrAfterExecution' in names, 'Media3 retry issuance-budget regression not executed'
+          assert 'rejectedPortExecutionStillConsumesSameEpisodeBudget' in names, 'Media3 rejected retry one-shot regression not executed'
+          assert 'finalSnapshotDriftRefusesAndBudgetStaysReserved' in names, 'Media3 retry final-snapshot regression not executed'
+          assert 'episodeBudgetCannotResetThroughGenerationOrSourceChange' in names, 'Media3 episode-budget reset regression not executed'
+          assert 'terminalAndUnknownMedia3CodesNeverPrepare' in names, 'Media3 terminal intake actuation regression not executed'
+          assert 'episodeAdvanceExistingAttemptAndInvalidStateFailClosed' in names, 'Media3 retry invalid-state regression not executed'
+          assert 'preparedLeaseCannotCrossActuatorInstance' in names, 'Media3 retry cross-instance regression not executed'
+          assert 'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse' in names, 'Media3 retry lifecycle regression not executed'
+          assert 'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption' in names, 'Media3 retry exception-containment regression not executed'
           assert 'policyExposesNoPreclassifiedDecisionParameter' in names, 'Policy raw-facts entry regression not executed'
           assert 'actuatorExposesNoPreclassifiedDecisionParameter' in names, 'Actuator raw-facts entry regression not executed'
           assert 'retryableSourceClassificationExclusivelyOwnsItsSingleAttempt' in names, 'Classifier-exclusive retry regression not executed'

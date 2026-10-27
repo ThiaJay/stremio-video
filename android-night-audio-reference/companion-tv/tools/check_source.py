@@ -20,6 +20,8 @@ CLASSIFIER=ROOT/'src/main/java/org/pss/stremio/tv/NativeStreamFailureClassifier.
 CLASSIFIER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeStreamFailureClassifierTest.kt'
 MEDIA3_INTAKE=ROOT/'src/main/java/org/pss/stremio/tv/NativeMedia3FailureIntake.kt'
 MEDIA3_INTAKE_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMedia3FailureIntakeTest.kt'
+MEDIA3_RETRY_ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativeMedia3RetryActuator.kt'
+MEDIA3_RETRY_ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMedia3RetryActuatorTest.kt'
 ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryActuator.kt'
 ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryActuatorTest.kt'
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
@@ -69,6 +71,8 @@ classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
 classifier_test=CLASSIFIER_TEST.read_text() if CLASSIFIER_TEST.is_file() else ''
 media3_intake=MEDIA3_INTAKE.read_text() if MEDIA3_INTAKE.is_file() else ''
 media3_intake_test=MEDIA3_INTAKE_TEST.read_text() if MEDIA3_INTAKE_TEST.is_file() else ''
+media3_retry_actuator=MEDIA3_RETRY_ACTUATOR.read_text() if MEDIA3_RETRY_ACTUATOR.is_file() else ''
+media3_retry_actuator_test=MEDIA3_RETRY_ACTUATOR_TEST.read_text() if MEDIA3_RETRY_ACTUATOR_TEST.is_file() else ''
 actuator=ACTUATOR.read_text() if ACTUATOR.is_file() else ''
 actuator_test=ACTUATOR_TEST.read_text() if ACTUATOR_TEST.is_file() else ''
 ports=PORTS.read_text()
@@ -133,6 +137,48 @@ if 'NativeMedia3FailureIntake.classify(error.errorCode)' not in java_text:
     fail.append('media3_player_error_not_bound_to_sanitised_intake')
 if any(name not in media3_intake_test for name in ['networkSignalsMapToOneBoundedTransportRetry','genericHttpErrorNeverInventsResponseStatusOrCredentialFailure','parserSignalsStopWithoutInventingMatroskaEvidence','decoderAudioAndDrmSignalsRemainTerminal','unrequestedEpisodeAdvanceWinsBeforeRetryableTransport']):
     fail.append('media3_failure_intake_regressions_missing')
+if 'class NativeMedia3RetryActuator' not in media3_retry_actuator or 'interface NativeMedia3RetryPort' not in media3_retry_actuator:
+    fail.append('media3_retry_actuator_boundary_missing')
+if ('NativeMedia3FailureIntake.sanitise(' not in media3_retry_actuator or
+    'NativePlaybackRecoveryPolicy.plan(facts = facts, observation = null)' not in media3_retry_actuator):
+    fail.append('media3_retry_not_composed_through_current_classifier_policy')
+budget_body=media3_retry_actuator[
+    media3_retry_actuator.find('private fun episodeBudgetKey'):
+    media3_retry_actuator.find('private fun token')
+]
+if ('episodeSessionId' not in budget_body or 'videoId' not in budget_body or
+    'sourceId' in budget_body or 'loadGeneration' in budget_body):
+    fail.append('media3_retry_episode_budget_can_reset_on_source_or_generation')
+if ('val current = snapshotOrNull() ?: return NativeMedia3RetryOutcome.REFUSED' not in media3_retry_actuator or
+    'current != prepared.lease' not in media3_retry_actuator):
+    fail.append('media3_retry_final_state_lease_missing')
+if media3_retry_actuator.find('consumedTokens.add(prepared.token)') > media3_retry_actuator.find('executeOrFalse(prepared.plan.action)'):
+    fail.append('media3_retry_not_consumed_before_port_call')
+if ('ownerThread = Thread.currentThread()' not in media3_retry_actuator or
+    'Thread.currentThread() === ownerThread' not in media3_retry_actuator or
+    'fun close(): Boolean' not in media3_retry_actuator):
+    fail.append('media3_retry_thread_or_lifecycle_boundary_missing')
+if ('const val MAX_EPISODE_BUDGETS = 256' not in media3_retry_actuator or
+    'issuedEpisodeBudgets.size >= MAX_EPISODE_BUDGETS' not in media3_retry_actuator):
+    fail.append('media3_retry_budget_registry_unbounded')
+if (media3_retry_actuator.count('catch (_: Exception)') < 2 or
+    media3_retry_actuator.count('catch (_: LinkageError)') < 2):
+    fail.append('media3_retry_port_exception_boundary_missing')
+if any(name not in media3_retry_actuator_test for name in [
+    'firstTransportFailureExecutesOnceAndReservesEpisodeBudget',
+    'repeatedPreparationCannotMintAnotherAttemptBeforeOrAfterExecution',
+    'rejectedPortExecutionStillConsumesSameEpisodeBudget',
+    'finalSnapshotDriftRefusesAndBudgetStaysReserved',
+    'episodeBudgetCannotResetThroughGenerationOrSourceChange',
+    'terminalAndUnknownMedia3CodesNeverPrepare',
+    'episodeAdvanceExistingAttemptAndInvalidStateFailClosed',
+    'preparedLeaseCannotCrossActuatorInstance',
+    'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse',
+    'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption'
+]):
+    fail.append('media3_retry_actuator_regressions_missing')
+if 'NativeMedia3RetryActuator(' in java_text:
+    fail.append('media3_retry_actuator_wired_without_live_host_review')
 if 'class ClassifiedStreamFailure internal constructor' not in recovery or 'private val provenanceSeal: Any' not in recovery or 'data class ClassifiedStreamFailure' in recovery:
     fail.append('classifier_result_not_opaque_or_copy_safe')
 if 'NativeStreamFailureClassifier.isAuthentic(value)' not in recovery or 'value.wasIssuedBy(CLASSIFIER_SEAL)' not in classifier:
@@ -188,8 +234,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':71,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':81,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
