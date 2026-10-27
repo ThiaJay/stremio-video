@@ -39,17 +39,65 @@ enum class NativeMedia3RetryOutcome {
 }
 
 /**
+ * Episode-scoped retry authority retained by the host across actuator and
+ * player-adapter replacement. It has no reset operation: a new budget is
+ * valid only for a genuinely new episode session.
+ */
+class NativeMedia3RetryBudget private constructor(
+    private val episodeSessionId: String,
+    private val videoId: String
+) {
+    private val ownerThread = Thread.currentThread()
+    private var reserved = false
+    private var closed = false
+
+    internal fun reserve(value: NativeMedia3RetrySnapshot): Boolean {
+        if (!onOwnerThread() || closed || reserved || !matches(value)) return false
+        reserved = true
+        return true
+    }
+
+    internal fun contains(value: NativeMedia3RetrySnapshot): Boolean =
+        onOwnerThread() && !closed && reserved && matches(value)
+
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        return true
+    }
+
+    private fun matches(value: NativeMedia3RetrySnapshot): Boolean =
+        value.episodeSessionId == episodeSessionId && value.videoId == videoId
+
+    private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
+
+    companion object {
+        fun open(episodeSessionId: String, videoId: String): NativeMedia3RetryBudget? {
+            if (!validId(episodeSessionId) || !validId(videoId)) return null
+            return NativeMedia3RetryBudget(episodeSessionId, videoId)
+        }
+
+        private fun validId(value: String): Boolean =
+            value.length in 1..MAX_ID_LENGTH && ID.matches(value)
+
+        private const val MAX_ID_LENGTH = 160
+        private val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    }
+}
+
+/**
  * Binds the numeric-only Media3 intake to the classification-first policy and
  * one immutable same-episode budget. Preparation reserves the episode budget,
  * so abandoning a lease, final-state drift or a rejected port call cannot mint
- * another attempt. No exception, URL, credential, account state or raw log can
- * cross this boundary.
+ * another attempt. The host must retain the budget across actuator or player
+ * adapter replacement for the same episode session. No exception, URL,
+ * credential, account state or raw log can cross this boundary.
  */
 class NativeMedia3RetryActuator(
-    private val port: NativeMedia3RetryPort
+    private val port: NativeMedia3RetryPort,
+    private val budget: NativeMedia3RetryBudget
 ) {
     private val ownerThread = Thread.currentThread()
-    private val issuedEpisodeBudgets = LinkedHashSet<String>()
     private val issuedTokens = LinkedHashSet<String>()
     private val consumedTokens = LinkedHashSet<String>()
     private var closed = false
@@ -58,11 +106,6 @@ class NativeMedia3RetryActuator(
         if (!onOwnerThread() || closed) return null
         val lease = snapshotOrNull() ?: return null
         if (!trustedSnapshot(lease)) return null
-
-        val budgetKey = episodeBudgetKey(lease)
-        if (budgetKey in issuedEpisodeBudgets ||
-            issuedEpisodeBudgets.size >= MAX_EPISODE_BUDGETS
-        ) return null
 
         val facts = NativeMedia3FailureIntake.sanitise(
             errorCode = errorCode,
@@ -76,7 +119,7 @@ class NativeMedia3RetryActuator(
 
         val token = token(plan, lease)
         if (token in issuedTokens) return null
-        issuedEpisodeBudgets.add(budgetKey)
+        if (!budget.reserve(lease)) return null
         issuedTokens.add(token)
         return PreparedNativeMedia3Retry(plan = plan, lease = lease, token = token)
     }
@@ -87,7 +130,7 @@ class NativeMedia3RetryActuator(
             !trustedSnapshot(prepared.lease) ||
             prepared.token != token(prepared.plan, prepared.lease) ||
             prepared.token !in issuedTokens ||
-            episodeBudgetKey(prepared.lease) !in issuedEpisodeBudgets
+            !budget.contains(prepared.lease)
         ) return NativeMedia3RetryOutcome.REFUSED
 
         val current = snapshotOrNull() ?: return NativeMedia3RetryOutcome.REFUSED
@@ -107,7 +150,6 @@ class NativeMedia3RetryActuator(
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
         closed = true
-        issuedEpisodeBudgets.clear()
         issuedTokens.clear()
         consumedTokens.clear()
         return true
@@ -175,7 +217,6 @@ class NativeMedia3RetryActuator(
         }
 
     private companion object {
-        const val MAX_EPISODE_BUDGETS = 256
         const val MAX_BACKEND_SWITCH_COUNT = 2
         const val MAX_ID_LENGTH = 160
         val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
