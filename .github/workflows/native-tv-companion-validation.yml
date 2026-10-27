@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=133 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=141 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -120,6 +120,14 @@ jobs:
           assert 'staleAndForgedWidgetObjectsCannotActivate' in names, 'Android TV widget provenance regression not executed'
           assert 'malformedOrNonFocusableWidgetGenerationFailsClosed' in names, 'Android TV widget malformed-generation regression not executed'
           assert 'widgetOwnerThreadClearAndCloseFailClosed' in names, 'Android TV widget lifecycle regression not executed'
+          assert 'mobileWidgetControllerBuildsDisplayModelsWithoutActivation' in names, 'Android mobile widget generation regression not executed'
+          assert 'semanticMobileClickReturnsExactIntentAndRevokesGeneration' in names, 'Android mobile semantic click regression not executed'
+          assert 'nonSemanticMobileEventNeverActivatesAndRevokesGeneration' in names, 'Android mobile non-semantic refusal regression not executed'
+          assert 'mobileSelectionMismatchRevokesWidgetGeneration' in names, 'Android mobile selection mismatch regression not executed'
+          assert 'staleAndForgedMobileWidgetObjectsCannotActivate' in names, 'Android mobile widget provenance regression not executed'
+          assert 'malformedMobileWidgetGenerationFailsClosed' in names, 'Android mobile malformed-generation regression not executed'
+          assert 'mobileWidgetPreservesDestructiveAcknowledgementMetadata' in names, 'Android mobile acknowledgement metadata regression not executed'
+          assert 'mobileWidgetOwnerThreadClearAndCloseFailClosed' in names, 'Android mobile widget lifecycle regression not executed'
           assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
           assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'

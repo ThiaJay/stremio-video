@@ -38,6 +38,9 @@ TV_TITLE_HOST_BINDING_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleW
 TV_TITLE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedWidgetController.kt'
 TV_TITLE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedWidgetControllerTest.kt'
 ANDROID_TV_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidTvTitleWatchedWidgetPort.kt'
+MOBILE_TITLE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetController.kt'
+MOBILE_TITLE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetControllerTest.kt'
+ANDROID_MOBILE_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileTitleWatchedWidgetPort.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -99,6 +102,9 @@ tv_title_host_binding_test=TV_TITLE_HOST_BINDING_TEST.read_text() if TV_TITLE_HO
 tv_title_widget_controller=TV_TITLE_WIDGET_CONTROLLER.read_text() if TV_TITLE_WIDGET_CONTROLLER.is_file() else ''
 tv_title_widget_controller_test=TV_TITLE_WIDGET_CONTROLLER_TEST.read_text() if TV_TITLE_WIDGET_CONTROLLER_TEST.is_file() else ''
 android_tv_title_widget_port=ANDROID_TV_TITLE_WIDGET_PORT.read_text() if ANDROID_TV_TITLE_WIDGET_PORT.is_file() else ''
+mobile_title_widget_controller=MOBILE_TITLE_WIDGET_CONTROLLER.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER.is_file() else ''
+mobile_title_widget_controller_test=MOBILE_TITLE_WIDGET_CONTROLLER_TEST.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER_TEST.is_file() else ''
+android_mobile_title_widget_port=ANDROID_MOBILE_TITLE_WIDGET_PORT.read_text() if ANDROID_MOBILE_TITLE_WIDGET_PORT.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -313,6 +319,57 @@ if any(name not in tv_title_widget_controller_test for name in [
     'widgetOwnerThreadClearAndCloseFailClosed'
 ]):
     fail.append('native_tv_title_widget_controller_regressions_missing')
+if ('class NativeMobileTitleWatchedWidgetController' not in mobile_title_widget_controller or
+    'class NativeMobileTitleWatchedWidget internal constructor' not in mobile_title_widget_controller or
+    'data class NativeMobileTitleWatchedWidgetIntent' not in mobile_title_widget_controller):
+    fail.append('native_mobile_title_widget_controller_missing')
+if ('actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in mobile_title_widget_controller or
+    'actions.map { it.actionId }.toSet().size != actions.size' not in mobile_title_widget_controller or
+    'it.confirmation.isBlank()' not in mobile_title_widget_controller):
+    fail.append('mobile_widget_generation_validation_missing')
+if ('record.widget !== widget' not in mobile_title_widget_controller or
+    'widget.actionFor(controllerSeal)' not in mobile_title_widget_controller or
+    'selectedActionId != widget.actionId' not in mobile_title_widget_controller):
+    fail.append('mobile_widget_exact_object_or_selection_gate_missing')
+if ('semanticEvent != NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION' not in mobile_title_widget_controller):
+    fail.append('mobile_widget_semantic_activation_gate_missing')
+if ('val record = issued.remove(widget.actionId)' not in mobile_title_widget_controller or
+    mobile_title_widget_controller.find('issued.clear()', mobile_title_widget_controller.find('fun consume(')) >
+        mobile_title_widget_controller.find('widget.actionFor(controllerSeal)')):
+    fail.append('mobile_widget_generation_not_revoked_before_validation')
+if ('Thread.currentThread() === ownerThread' not in mobile_title_widget_controller or
+    'fun clear(): Boolean' not in mobile_title_widget_controller or
+    'fun close(): Boolean' not in mobile_title_widget_controller):
+    fail.append('mobile_widget_thread_or_lifecycle_guard_missing')
+if ('class AndroidMobileTitleWatchedWidgetPort' not in android_mobile_title_widget_port or
+    ': NativeMobileTitleWatchedViewPort' not in android_mobile_title_widget_port or
+    'private val controller = NativeMobileTitleWatchedWidgetController()' not in android_mobile_title_widget_port):
+    fail.append('actual_android_mobile_title_widget_port_missing')
+if ('Looper.myLooper() === Looper.getMainLooper()' not in android_mobile_title_widget_port or
+    'setOnClickListener' not in android_mobile_title_widget_port or
+    'setOnLongClickListener { true }' not in android_mobile_title_widget_port):
+    fail.append('android_mobile_widget_main_thread_or_semantic_click_gate_missing')
+if ('.setPositiveButton("Confirm")' not in android_mobile_title_widget_port or
+    '.setNegativeButton("Cancel")' not in android_mobile_title_widget_port or
+    '.setOnCancelListener { resolve(false) }' not in android_mobile_title_widget_port):
+    fail.append('android_mobile_unwatch_confirmation_or_cancel_gate_missing')
+if ('onActivation(action, selectedActionId, semanticEvent, acknowledged)' not in android_mobile_title_widget_port or
+    'setOnTouchListener' in android_mobile_title_widget_port):
+    fail.append('android_mobile_widget_exact_callback_or_raw_touch_gate_missing')
+if ('AndroidMobileTitleWatchedWidgetPort(' in java_text or
+    'NativeMobileTitleWatchedWidgetController(' in java_text):
+    fail.append('android_mobile_title_widget_port_wired_to_synthetic_activity')
+if any(name not in mobile_title_widget_controller_test for name in [
+    'mobileWidgetControllerBuildsDisplayModelsWithoutActivation',
+    'semanticMobileClickReturnsExactIntentAndRevokesGeneration',
+    'nonSemanticMobileEventNeverActivatesAndRevokesGeneration',
+    'mobileSelectionMismatchRevokesWidgetGeneration',
+    'staleAndForgedMobileWidgetObjectsCannotActivate',
+    'malformedMobileWidgetGenerationFailsClosed',
+    'mobileWidgetPreservesDestructiveAcknowledgementMetadata',
+    'mobileWidgetOwnerThreadClearAndCloseFailClosed'
+]):
+    fail.append('native_mobile_title_widget_controller_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
@@ -474,9 +531,9 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':137,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':149,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
