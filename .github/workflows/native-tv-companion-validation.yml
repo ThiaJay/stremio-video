@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=105 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=114 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -92,6 +92,15 @@ jobs:
           assert 'staleSelectedAndForgedMobileActionsFailClosed' in names, 'Mobile issuance provenance regression not executed'
           assert 'accountDriftAndRejectedDispatchFailClosedOnMobile' in names, 'Mobile account-drift regression not executed'
           assert 'mobileOwnerThreadAndCloseRevokeOutstandingActions' in names, 'Mobile lifecycle regression not executed'
+          assert 'hostRenderPublishesFourDisplayModelsWithoutWriting' in names, 'Mobile host render regression not executed'
+          assert 'exactSemanticViewActionDispatchesAndClearsWholeGeneration' in names, 'Mobile host semantic activation regression not executed'
+          assert 'rawPointerAndLongPressCallbacksNeverImplyHostConsent' in names, 'Mobile host pointer refusal regression not executed'
+          assert 'staleOrForgedViewObjectsRevokeCurrentPresentation' in names, 'Mobile host object provenance regression not executed'
+          assert 'unwatchAcknowledgementPassesOnlyThroughExactIssuedViewAction' in names, 'Mobile host unwatch acknowledgement regression not executed'
+          assert 'accountDriftAndRejectedDispatchClearHostPresentation' in names, 'Mobile host account drift regression not executed'
+          assert 'futureEpisodeFilteringSurvivesRealHostBoundary' in names, 'Mobile host future episode regression not executed'
+          assert 'rejectedOrThrowingViewPortPermanentlyPoisonsBinding' in names, 'Mobile host UI failure regression not executed'
+          assert 'hostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'Mobile host lifecycle regression not executed'
           assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
           assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'
