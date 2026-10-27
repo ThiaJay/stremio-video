@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=125 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=133 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -112,6 +112,14 @@ jobs:
           assert 'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding' in names, 'TV host UI failure regression not executed'
           assert 'clearFailureAfterAppliedTvActionClosesWithoutReplay' in names, 'TV host clear failure regression not executed'
           assert 'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'TV host lifecycle regression not executed'
+          assert 'widgetControllerBuildsFocusableModelsWithoutActivation' in names, 'Android TV widget generation regression not executed'
+          assert 'actionUpEnterReturnsExactIntentAndRevokesWidgetGeneration' in names, 'Android TV widget ENTER regression not executed'
+          assert 'actionUpDpadCenterReturnsExactIntent' in names, 'Android TV widget DPAD_CENTER regression not executed'
+          assert 'keyDownDoesNotConsumeWidgetGeneration' in names, 'Android TV widget key sequence regression not executed'
+          assert 'focusMismatchAndOtherRemoteKeyRevokeWidgetGeneration' in names, 'Android TV widget focus/key refusal regression not executed'
+          assert 'staleAndForgedWidgetObjectsCannotActivate' in names, 'Android TV widget provenance regression not executed'
+          assert 'malformedOrNonFocusableWidgetGenerationFailsClosed' in names, 'Android TV widget malformed-generation regression not executed'
+          assert 'widgetOwnerThreadClearAndCloseFailClosed' in names, 'Android TV widget lifecycle regression not executed'
           assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
           assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'
@@ -220,3 +228,4 @@ jobs:
           sha256sum "$apk"
           echo 'Android companion source and debug APK built; no upload, release, device or account action performed.'
 # Never upload debug APK, release assets, credentials, private data or the synthetic sample.
+
