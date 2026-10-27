@@ -20,11 +20,15 @@ data class SanitisedStreamFailureFacts(
 )
 
 object NativeStreamFailureClassifier {
+    private val CLASSIFIER_SEAL = Any()
     private val PROVIDERS = setOf("ready", "not_ready", "unknown")
     private val TRANSPORTS = setOf("none", "timeout", "tls", "connection", "reset", "unknown")
     private val CONTAINERS = setOf("none", "matroska_ebml", "unsupported", "unknown")
     private val DECODERS = setOf("none", "codec", "audio", "drm", "egl_bad_alloc", "unknown")
     private val BACKENDS = setOf("exoplayer", "vlc", "mpv", "unknown")
+
+    internal fun isAuthentic(value: ClassifiedStreamFailure): Boolean =
+        value.wasIssuedBy(CLASSIFIER_SEAL)
 
     fun classify(facts: SanitisedStreamFailureFacts? = null): ClassifiedStreamFailure {
         val value = facts ?: SanitisedStreamFailureFacts()
@@ -115,6 +119,7 @@ object NativeStreamFailureClassifier {
         preserveStreamIdentity = true,
         rawLogExportAllowed = false,
         retryAllowed = retryAllowed,
-        maxAdditionalAttempts = maxAdditionalAttempts
+        maxAdditionalAttempts = maxAdditionalAttempts,
+        provenanceSeal = CLASSIFIER_SEAL
     )
 }

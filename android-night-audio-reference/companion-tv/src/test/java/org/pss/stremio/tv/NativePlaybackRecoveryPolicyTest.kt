@@ -14,18 +14,59 @@ class NativePlaybackRecoveryPolicyTest {
         contractVersion: Int = 1,
         preserveWatchedState: Boolean = true,
         rawLogExportAllowed: Boolean = false
-    ) = ClassifiedStreamFailure(
-        contractVersion = contractVersion,
-        category = category,
-        action = action,
-        preserveEpisode = true,
-        preserveWatchedState = preserveWatchedState,
-        preserveProviderConfiguration = true,
-        preserveStreamIdentity = true,
-        rawLogExportAllowed = rawLogExportAllowed,
-        retryAllowed = retryAllowed,
-        maxAdditionalAttempts = maxAdditionalAttempts
-    )
+    ): ClassifiedStreamFailure {
+        val retryCount = if (retryAllowed && maxAdditionalAttempts == 1) 0 else 1
+        val facts = when ("$category:$action") {
+            "playback_health:delegate_to_bounded_playback_recovery" ->
+                SanitisedStreamFailureFacts(
+                    providerStatus = "ready",
+                    transportError = "none",
+                    containerError = "none",
+                    decoderError = "none",
+                    playbackHealthEligible = true
+                )
+            "matroska_parser:stop_with_actionable_container_error" ->
+                SanitisedStreamFailureFacts(transportError = "none", containerError = "matroska_ebml")
+            "backend_resource_exhaustion:release_player_and_stop" ->
+                SanitisedStreamFailureFacts(decoderError = "egl_bad_alloc")
+            "codec_or_audio_decoder:stop_with_actionable_decoder_error" ->
+                SanitisedStreamFailureFacts(decoderError = "codec")
+            "next_episode_navigation:stop_unrequested_episode" ->
+                SanitisedStreamFailureFacts(episodeAdvanced = true)
+            "upstream_http:retry_same_source" ->
+                SanitisedStreamFailureFacts(httpStatus = 503, sameEpisodeRetryCount = retryCount)
+            "http_transport:retry_same_transport_route" ->
+                SanitisedStreamFailureFacts(transportError = "timeout", sameEpisodeRetryCount = retryCount)
+            "provider_rate_limit:bounded_backoff" ->
+                SanitisedStreamFailureFacts(httpStatus = 429, sameEpisodeRetryCount = retryCount)
+            "drm:stop_with_actionable_decoder_error" ->
+                SanitisedStreamFailureFacts(decoderError = "drm")
+            else -> null
+        }
+        val generated = facts?.let(NativeStreamFailureClassifier::classify)
+        if (generated != null &&
+            contractVersion == 1 &&
+            preserveWatchedState &&
+            !rawLogExportAllowed &&
+            generated.category == category &&
+            generated.action == action &&
+            generated.retryAllowed == retryAllowed &&
+            generated.maxAdditionalAttempts == maxAdditionalAttempts
+        ) return generated
+        return ClassifiedStreamFailure(
+            contractVersion = contractVersion,
+            category = category,
+            action = action,
+            preserveEpisode = true,
+            preserveWatchedState = preserveWatchedState,
+            preserveProviderConfiguration = true,
+            preserveStreamIdentity = true,
+            rawLogExportAllowed = rawLogExportAllowed,
+            retryAllowed = retryAllowed,
+            maxAdditionalAttempts = maxAdditionalAttempts,
+            provenanceSeal = Any()
+        )
+    }
 
     private fun observation(
         history: List<String>? = emptyList(),
@@ -148,6 +189,26 @@ class NativePlaybackRecoveryPolicyTest {
                 ).action
             )
         }
+    }
+
+    @Test fun callerConstructedClassificationCannotBypassClassifier() {
+        val forged = ClassifiedStreamFailure(
+            contractVersion = 1,
+            category = "playback_health",
+            action = "delegate_to_bounded_playback_recovery",
+            preserveEpisode = true,
+            preserveWatchedState = true,
+            preserveProviderConfiguration = true,
+            preserveStreamIdentity = true,
+            rawLogExportAllowed = false,
+            retryAllowed = false,
+            maxAdditionalAttempts = 0,
+            provenanceSeal = Any()
+        )
+        assertEquals(
+            "stop_invalid_classification_contract",
+            NativePlaybackRecoveryPolicy.plan(forged, observation()).action
+        )
     }
 
     @Test fun wrongVersionArbitraryActionOrWeakenedPreservationFailsClosed() {

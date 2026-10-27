@@ -8,7 +8,7 @@ package org.pss.stremio.tv
  * A host must still bind a returned action to reviewed native capabilities and
  * perform a fresh player-state lease immediately before actuation.
  */
-data class ClassifiedStreamFailure(
+class ClassifiedStreamFailure internal constructor(
     val contractVersion: Int,
     val category: String,
     val action: String,
@@ -18,8 +18,11 @@ data class ClassifiedStreamFailure(
     val preserveStreamIdentity: Boolean,
     val rawLogExportAllowed: Boolean,
     val retryAllowed: Boolean,
-    val maxAdditionalAttempts: Int
-)
+    val maxAdditionalAttempts: Int,
+    private val provenanceSeal: Any
+) {
+    internal fun wasIssuedBy(expectedSeal: Any): Boolean = provenanceSeal === expectedSeal
+}
 
 data class PlaybackHealthObservation(
     val audioExpected: Boolean = false,
@@ -146,6 +149,7 @@ object NativePlaybackRecoveryPolicy {
 
     private fun trusted(value: ClassifiedStreamFailure?): Boolean =
         value != null &&
+            NativeStreamFailureClassifier.isAuthentic(value) &&
             value.contractVersion == 1 &&
             value.category.isNotBlank() &&
             value.action.isNotBlank() &&

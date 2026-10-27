@@ -20,6 +20,33 @@ class NativeStreamFailureClassifierTest {
         assertFalse(result.rawLogExportAllowed)
     }
 
+    @Test fun classifierAuthenticityCannotBeRecreatedFromMatchingFields() {
+        val authentic = classify(
+            SanitisedStreamFailureFacts(
+                providerStatus = "ready",
+                transportError = "none",
+                containerError = "none",
+                decoderError = "none",
+                playbackHealthEligible = true
+            )
+        )
+        val forged = ClassifiedStreamFailure(
+            contractVersion = authentic.contractVersion,
+            category = authentic.category,
+            action = authentic.action,
+            preserveEpisode = authentic.preserveEpisode,
+            preserveWatchedState = authentic.preserveWatchedState,
+            preserveProviderConfiguration = authentic.preserveProviderConfiguration,
+            preserveStreamIdentity = authentic.preserveStreamIdentity,
+            rawLogExportAllowed = authentic.rawLogExportAllowed,
+            retryAllowed = authentic.retryAllowed,
+            maxAdditionalAttempts = authentic.maxAdditionalAttempts,
+            provenanceSeal = Any()
+        )
+        assertTrue(NativeStreamFailureClassifier.isAuthentic(authentic))
+        assertFalse(NativeStreamFailureClassifier.isAuthentic(forged))
+    }
+
     @Test fun invalidSanitisedFactsFailClosed() {
         val invalid = listOf(
             SanitisedStreamFailureFacts(providerStatus = "ready "),

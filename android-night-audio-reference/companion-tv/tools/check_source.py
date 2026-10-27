@@ -119,6 +119,12 @@ if any(name not in classifier_test for name in ['invalidSanitisedFactsFailClosed
     fail.append('native_classifier_contract_regressions_missing')
 if 'classifierOutputComposesWithNativeBudgetWithoutParallelRetry' not in classifier_test or 'NativePlaybackRecoveryPolicy.plan' not in classifier_test:
     fail.append('native_classifier_policy_composition_regression_missing')
+if 'class ClassifiedStreamFailure internal constructor' not in recovery or 'private val provenanceSeal: Any' not in recovery or 'data class ClassifiedStreamFailure' in recovery:
+    fail.append('classifier_result_not_opaque_or_copy_safe')
+if 'NativeStreamFailureClassifier.isAuthentic(value)' not in recovery or 'value.wasIssuedBy(CLASSIFIER_SEAL)' not in classifier:
+    fail.append('classifier_authenticity_not_enforced')
+if any(name not in classifier_test+recovery_test+actuator_test for name in ['classifierAuthenticityCannotBeRecreatedFromMatchingFields','callerConstructedClassificationCannotBypassClassifier','forgedPlaybackDelegationCannotPrepare']):
+    fail.append('classifier_bypass_regressions_missing')
 if 'class NativePlaybackRecoveryActuator' not in actuator or 'interface NativePlaybackRecoveryPort' not in actuator:
     fail.append('native_recovery_actuator_boundary_missing')
 if 'val current = snapshotOrNull() ?: return NativeRecoveryExecutionOutcome.REFUSED' not in actuator or 'current != prepared.lease' not in actuator:
@@ -166,6 +172,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':61,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':64,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
