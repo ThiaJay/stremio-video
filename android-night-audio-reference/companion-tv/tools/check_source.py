@@ -105,9 +105,9 @@ if 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' not in recovery_test:
     fail.append('dolby_vision_recovery_order_regression_missing')
 if 'class NativePlaybackRecoveryActuator' not in actuator or 'interface NativePlaybackRecoveryPort' not in actuator:
     fail.append('native_recovery_actuator_boundary_missing')
-if 'val current = port.currentSnapshot()' not in actuator or 'current != prepared.lease' not in actuator:
+if 'val current = snapshotOrNull() ?: return NativeRecoveryExecutionOutcome.REFUSED' not in actuator or 'current != prepared.lease' not in actuator:
     fail.append('final_native_recovery_state_lease_missing')
-if actuator.find('consumed.add(prepared.token)') > actuator.find('port.executeRecovery(prepared.plan.action)'):
+if actuator.find('consumed.add(prepared.token)') > actuator.find('executeOrFalse(prepared.plan.action)'):
     fail.append('native_recovery_lease_not_consumed_before_port_call')
 if 'watchedStateFingerprint' not in actuator or 'resumeStateFingerprint' not in actuator:
     fail.append('account_state_fingerprint_lease_missing')
@@ -131,7 +131,8 @@ if 'private var closed = false' not in actuator or 'fun close(): Boolean' not in
     fail.append('actuator_lifecycle_revocation_missing')
 if any(name not in actuator_test for name in ['ownerThreadCloseRevokesOutstandingLeaseAndFutureUse','foreignThreadCannotCloseOrRevokeOwnerLease']):
     fail.append('actuator_lifecycle_regressions_missing')
-if 'private fun snapshotOrNull()' not in actuator or 'private fun executeOrFalse(action: String)' not in actuator:
+if ('private fun snapshotOrNull()' not in actuator or 'private fun executeOrFalse(action: String)' not in actuator or
+        actuator.count('catch (_: Exception)') < 2 or actuator.count('catch (_: LinkageError)') < 2):
     fail.append('actuator_port_exception_boundary_missing')
 if actuator.find('consumed.add(prepared.token)') > actuator.find('executeOrFalse(prepared.plan.action)'):
     fail.append('actuator_exception_path_not_consumed_before_call')
