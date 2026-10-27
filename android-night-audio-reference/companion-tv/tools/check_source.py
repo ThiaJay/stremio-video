@@ -29,6 +29,8 @@ PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
 EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
 TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedMenu.kt'
 TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedMenuTest.kt'
+MOBILE_TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedMenu.kt'
+MOBILE_TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedMenuTest.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -81,6 +83,8 @@ ports=PORTS.read_text()
 episode=EPISODE.read_text()
 title_watched_menu=TITLE_WATCHED_MENU.read_text() if TITLE_WATCHED_MENU.is_file() else ''
 title_watched_menu_test=TITLE_WATCHED_MENU_TEST.read_text() if TITLE_WATCHED_MENU_TEST.is_file() else ''
+mobile_title_watched_menu=MOBILE_TITLE_WATCHED_MENU.read_text() if MOBILE_TITLE_WATCHED_MENU.is_file() else ''
+mobile_title_watched_menu_test=MOBILE_TITLE_WATCHED_MENU_TEST.read_text() if MOBILE_TITLE_WATCHED_MENU_TEST.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -126,6 +130,36 @@ if any(name not in title_watched_menu_test for name in [
     'snapshotAndDispatchExceptionsFailClosed'
 ]):
     fail.append('native_tv_title_watched_menu_regressions_missing')
+if ('class NativeMobileTitleWatchedMenu' not in mobile_title_watched_menu or
+    'class NativeMobileTitleWatchedAction internal constructor' not in mobile_title_watched_menu):
+    fail.append('native_mobile_title_watched_menu_missing')
+if ('private val delegate = NativeTvTitleWatchedMenu(coordinator, account)' not in mobile_title_watched_menu or
+    'val delegated = delegate.present(seasonNumber)' not in mobile_title_watched_menu):
+    fail.append('mobile_title_watched_menu_bypasses_guarded_core_delegate')
+if ('const val SEMANTIC_ACTIVATION = "ACTIVATE"' not in mobile_title_watched_menu or
+    'semanticEvent != SEMANTIC_ACTIVATION' not in mobile_title_watched_menu or
+    'selectedActionId != action.actionId' not in mobile_title_watched_menu):
+    fail.append('mobile_semantic_accessibility_activation_gate_missing')
+if ('issued.remove(action.actionId)' not in mobile_title_watched_menu or
+    mobile_title_watched_menu.find('issued.remove(action.actionId)') > mobile_title_watched_menu.find('delegate.activate(')):
+    fail.append('mobile_title_action_not_consumed_before_core_delegate')
+if ('Thread.currentThread() === ownerThread' not in mobile_title_watched_menu or
+    'private var closed = false' not in mobile_title_watched_menu or
+    'return delegate.close()' not in mobile_title_watched_menu):
+    fail.append('mobile_title_thread_or_lifecycle_guard_missing')
+if ('NativeMobileTitleWatchedMenu(' in java_text or 'NativeMobileTitleWatchedAction(' in java_text):
+    fail.append('mobile_title_watched_menu_wired_to_synthetic_activity')
+if any(name not in mobile_title_watched_menu_test for name in [
+    'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting',
+    'semanticAccessibilityActivationDispatchesExactSeriesAction',
+    'rawPointerAndLongPressEventsNeverImplyConsent',
+    'mobileUnwatchRequiresAcknowledgementAndConsumesIssuance',
+    'futureEpisodeStillSuppressesUnsafeMobileSeasonActions',
+    'staleSelectedAndForgedMobileActionsFailClosed',
+    'accountDriftAndRejectedDispatchFailClosedOnMobile',
+    'mobileOwnerThreadAndCloseRevokeOutstandingActions'
+]):
+    fail.append('native_mobile_title_watched_menu_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
@@ -287,8 +321,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':96,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':104,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
