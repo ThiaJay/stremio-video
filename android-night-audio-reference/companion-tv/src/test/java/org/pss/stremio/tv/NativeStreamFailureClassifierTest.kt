@@ -125,23 +125,20 @@ class NativeStreamFailureClassifierTest {
     }
 
     @Test fun classifierOutputComposesWithNativeBudgetWithoutParallelRetry() {
-        val retry = classify(
+        val retryFacts =
             SanitisedStreamFailureFacts(httpStatus = 503, playbackHealthEligible = true)
-        )
-        val retryPlan = NativePlaybackRecoveryPolicy.plan(retry, playbackObservation())
+        val retryPlan = NativePlaybackRecoveryPolicy.plan(retryFacts, playbackObservation())
         assertEquals("stream_classifier", retryPlan.authority)
         assertEquals(1, retryPlan.classifierAttemptsGranted)
 
-        val delegated = classify(
-            SanitisedStreamFailureFacts(
-                providerStatus = "ready",
-                transportError = "none",
-                containerError = "none",
-                decoderError = "none",
-                playbackHealthEligible = true
-            )
+        val delegatedFacts = SanitisedStreamFailureFacts(
+            providerStatus = "ready",
+            transportError = "none",
+            containerError = "none",
+            decoderError = "none",
+            playbackHealthEligible = true
         )
-        val recoveryPlan = NativePlaybackRecoveryPolicy.plan(delegated, playbackObservation())
+        val recoveryPlan = NativePlaybackRecoveryPolicy.plan(delegatedFacts, playbackObservation())
         assertEquals("playback_health", recoveryPlan.authority)
         assertEquals("transcodeAudio", recoveryPlan.action)
         assertEquals(0, recoveryPlan.classifierAttemptsGranted)

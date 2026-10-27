@@ -54,48 +54,26 @@ class NativePlaybackRecoveryActuatorTest {
         action: String = "delegate_to_bounded_playback_recovery",
         retryAllowed: Boolean = false,
         attempts: Int = 0
-    ): ClassifiedStreamFailure {
-        val facts = when ("$category:$action") {
-            "playback_health:delegate_to_bounded_playback_recovery" ->
-                SanitisedStreamFailureFacts(
-                    providerStatus = "ready",
-                    transportError = "none",
-                    containerError = "none",
-                    decoderError = "none",
-                    playbackHealthEligible = true
-                )
-            "matroska_parser:stop_with_actionable_container_error" ->
-                SanitisedStreamFailureFacts(
-                    transportError = "none",
-                    containerError = "matroska_ebml"
-                )
-            "upstream_http:retry_same_source" ->
-                SanitisedStreamFailureFacts(
-                    httpStatus = 503,
-                    sameEpisodeRetryCount = if (retryAllowed && attempts == 1) 0 else 1
-                )
-            else -> null
-        }
-        val generated = facts?.let(NativeStreamFailureClassifier::classify)
-        if (generated != null &&
-            generated.category == category &&
-            generated.action == action &&
-            generated.retryAllowed == retryAllowed &&
-            generated.maxAdditionalAttempts == attempts
-        ) return generated
-        return ClassifiedStreamFailure(
-            contractVersion = 1,
-            category = category,
-            action = action,
-            preserveEpisode = true,
-            preserveWatchedState = true,
-            preserveProviderConfiguration = true,
-            preserveStreamIdentity = true,
-            rawLogExportAllowed = false,
-            retryAllowed = retryAllowed,
-            maxAdditionalAttempts = attempts,
-            provenanceSeal = Any()
-        )
+    ): SanitisedStreamFailureFacts = when ("$category:$action") {
+        "playback_health:delegate_to_bounded_playback_recovery" ->
+            SanitisedStreamFailureFacts(
+                providerStatus = "ready",
+                transportError = "none",
+                containerError = "none",
+                decoderError = "none",
+                playbackHealthEligible = true
+            )
+        "matroska_parser:stop_with_actionable_container_error" ->
+            SanitisedStreamFailureFacts(
+                transportError = "none",
+                containerError = "matroska_ebml"
+            )
+        "upstream_http:retry_same_source" ->
+            SanitisedStreamFailureFacts(
+                httpStatus = 503,
+                sameEpisodeRetryCount = if (retryAllowed && attempts == 1) 0 else 1
+            )
+        else -> SanitisedStreamFailureFacts(providerStatus = "invalid")
     }
 
     private fun observation(
@@ -404,21 +382,11 @@ class NativePlaybackRecoveryActuatorTest {
         ))
     }
 
-    @Test fun forgedPlaybackDelegationCannotPrepare() {
-        val actuator = NativePlaybackRecoveryActuator(FakePort(snapshot()))
-        val forged = ClassifiedStreamFailure(
-            contractVersion = 1,
-            category = "playback_health",
-            action = "delegate_to_bounded_playback_recovery",
-            preserveEpisode = true,
-            preserveWatchedState = true,
-            preserveProviderConfiguration = true,
-            preserveStreamIdentity = true,
-            rawLogExportAllowed = false,
-            retryAllowed = false,
-            maxAdditionalAttempts = 0,
-            provenanceSeal = Any()
-        )
-        assertNull(actuator.prepare(forged, observation()))
+    @Test fun actuatorExposesNoPreclassifiedDecisionParameter() {
+        val methods = NativePlaybackRecoveryActuator::class.java.methods
+            .filter { it.name == "prepare" && it.parameterCount == 2 }
+        assertEquals(1, methods.size)
+        assertEquals(SanitisedStreamFailureFacts::class.java, methods.single().parameterTypes[0])
+        assertEquals(PlaybackHealthObservation::class.java, methods.single().parameterTypes[1])
     }
 }

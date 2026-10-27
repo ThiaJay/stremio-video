@@ -14,9 +14,12 @@ class NativePlaybackRecoveryPolicyTest {
         contractVersion: Int = 1,
         preserveWatchedState: Boolean = true,
         rawLogExportAllowed: Boolean = false
-    ): ClassifiedStreamFailure {
+    ): SanitisedStreamFailureFacts {
         val retryCount = if (retryAllowed && maxAdditionalAttempts == 1) 0 else 1
-        val facts = when ("$category:$action") {
+        if (contractVersion != 1 || !preserveWatchedState || rawLogExportAllowed) {
+            return SanitisedStreamFailureFacts(providerStatus = "invalid")
+        }
+        return when ("$category:$action") {
             "playback_health:delegate_to_bounded_playback_recovery" ->
                 SanitisedStreamFailureFacts(
                     providerStatus = "ready",
@@ -41,31 +44,8 @@ class NativePlaybackRecoveryPolicyTest {
                 SanitisedStreamFailureFacts(httpStatus = 429, sameEpisodeRetryCount = retryCount)
             "drm:stop_with_actionable_decoder_error" ->
                 SanitisedStreamFailureFacts(decoderError = "drm")
-            else -> null
+            else -> SanitisedStreamFailureFacts(providerStatus = "invalid")
         }
-        val generated = facts?.let(NativeStreamFailureClassifier::classify)
-        if (generated != null &&
-            contractVersion == 1 &&
-            preserveWatchedState &&
-            !rawLogExportAllowed &&
-            generated.category == category &&
-            generated.action == action &&
-            generated.retryAllowed == retryAllowed &&
-            generated.maxAdditionalAttempts == maxAdditionalAttempts
-        ) return generated
-        return ClassifiedStreamFailure(
-            contractVersion = contractVersion,
-            category = category,
-            action = action,
-            preserveEpisode = true,
-            preserveWatchedState = preserveWatchedState,
-            preserveProviderConfiguration = true,
-            preserveStreamIdentity = true,
-            rawLogExportAllowed = rawLogExportAllowed,
-            retryAllowed = retryAllowed,
-            maxAdditionalAttempts = maxAdditionalAttempts,
-            provenanceSeal = Any()
-        )
     }
 
     private fun observation(
@@ -191,27 +171,15 @@ class NativePlaybackRecoveryPolicyTest {
         }
     }
 
-    @Test fun callerConstructedClassificationCannotBypassClassifier() {
-        val forged = ClassifiedStreamFailure(
-            contractVersion = 1,
-            category = "playback_health",
-            action = "delegate_to_bounded_playback_recovery",
-            preserveEpisode = true,
-            preserveWatchedState = true,
-            preserveProviderConfiguration = true,
-            preserveStreamIdentity = true,
-            rawLogExportAllowed = false,
-            retryAllowed = false,
-            maxAdditionalAttempts = 0,
-            provenanceSeal = Any()
-        )
-        assertEquals(
-            "stop_invalid_classification_contract",
-            NativePlaybackRecoveryPolicy.plan(forged, observation()).action
-        )
+    @Test fun policyExposesNoPreclassifiedDecisionParameter() {
+        val methods = NativePlaybackRecoveryPolicy::class.java.methods
+            .filter { it.name == "plan" && it.parameterCount == 2 }
+        assertEquals(1, methods.size)
+        assertEquals(SanitisedStreamFailureFacts::class.java, methods.single().parameterTypes[0])
+        assertTrue(methods.single().parameterTypes.none { it == ClassifiedStreamFailure::class.java })
     }
 
-    @Test fun wrongVersionArbitraryActionOrWeakenedPreservationFailsClosed() {
+    @Test fun invalidFactsCannotConstructARecoveryDecision() {
         val invalid = listOf(
             classification(contractVersion = 2),
             classification(action = "resetAccount"),

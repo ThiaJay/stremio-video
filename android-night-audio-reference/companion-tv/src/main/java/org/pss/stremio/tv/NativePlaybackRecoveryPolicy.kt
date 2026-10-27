@@ -96,9 +96,10 @@ object NativePlaybackRecoveryPolicy {
     )
 
     fun plan(
-        classification: ClassifiedStreamFailure?,
+        facts: SanitisedStreamFailureFacts?,
         observation: PlaybackHealthObservation?
     ): NativeRecoveryPlan {
+        val classification = NativeStreamFailureClassifier.classify(facts)
         if (!trusted(classification)) {
             return stop("stop_invalid_classification_contract")
         }

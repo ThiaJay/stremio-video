@@ -49,11 +49,11 @@ class NativePlaybackRecoveryActuator(
     private var closed = false
 
     fun prepare(
-        classification: ClassifiedStreamFailure?,
+        facts: SanitisedStreamFailureFacts?,
         observation: PlaybackHealthObservation?
     ): PreparedNativeRecovery? {
         if (!onOwnerThread() || closed) return null
-        val plan = NativePlaybackRecoveryPolicy.plan(classification, observation)
+        val plan = NativePlaybackRecoveryPolicy.plan(facts, observation)
         if (!trustedPlaybackPlan(plan)) return null
 
         val lease = snapshotOrNull() ?: return null
