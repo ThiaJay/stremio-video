@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=114 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=125 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -101,6 +101,17 @@ jobs:
           assert 'futureEpisodeFilteringSurvivesRealHostBoundary' in names, 'Mobile host future episode regression not executed'
           assert 'rejectedOrThrowingViewPortPermanentlyPoisonsBinding' in names, 'Mobile host UI failure regression not executed'
           assert 'hostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'Mobile host lifecycle regression not executed'
+          assert 'tvHostRenderPublishesFourFocusableModelsWithoutWriting' in names, 'TV host render regression not executed'
+          assert 'enterOnExactFocusedTvActionDispatchesAndClearsGeneration' in names, 'TV host ENTER regression not executed'
+          assert 'dpadCenterIsTheOnlyAlternateAcceptedTvConfirmation' in names, 'TV host DPAD_CENTER regression not executed'
+          assert 'focusMismatchAndOtherRemoteKeysFailClosedAndRevoke' in names, 'TV host focus/key refusal regression not executed'
+          assert 'staleOrForgedTvViewObjectsRevokeCurrentPresentation' in names, 'TV host object provenance regression not executed'
+          assert 'tvUnwatchRequiresAcknowledgementOnExactIssuedAction' in names, 'TV host unwatch acknowledgement regression not executed'
+          assert 'tvAccountDriftAndRejectedDispatchClearPresentation' in names, 'TV host account drift regression not executed'
+          assert 'futureEpisodeFilteringSurvivesTvHostBoundary' in names, 'TV host future episode regression not executed'
+          assert 'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding' in names, 'TV host UI failure regression not executed'
+          assert 'clearFailureAfterAppliedTvActionClosesWithoutReplay' in names, 'TV host clear failure regression not executed'
+          assert 'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'TV host lifecycle regression not executed'
           assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
           assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
           assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'

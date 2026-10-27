@@ -33,6 +33,8 @@ MOBILE_TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTit
 MOBILE_TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedMenuTest.kt'
 MOBILE_TITLE_HOST_BINDING=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedHostBinding.kt'
 MOBILE_TITLE_HOST_BINDING_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedHostBindingTest.kt'
+TV_TITLE_HOST_BINDING=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedHostBinding.kt'
+TV_TITLE_HOST_BINDING_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedHostBindingTest.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -89,6 +91,8 @@ mobile_title_watched_menu=MOBILE_TITLE_WATCHED_MENU.read_text() if MOBILE_TITLE_
 mobile_title_watched_menu_test=MOBILE_TITLE_WATCHED_MENU_TEST.read_text() if MOBILE_TITLE_WATCHED_MENU_TEST.is_file() else ''
 mobile_title_host_binding=MOBILE_TITLE_HOST_BINDING.read_text() if MOBILE_TITLE_HOST_BINDING.is_file() else ''
 mobile_title_host_binding_test=MOBILE_TITLE_HOST_BINDING_TEST.read_text() if MOBILE_TITLE_HOST_BINDING_TEST.is_file() else ''
+tv_title_host_binding=TV_TITLE_HOST_BINDING.read_text() if TV_TITLE_HOST_BINDING.is_file() else ''
+tv_title_host_binding_test=TV_TITLE_HOST_BINDING_TEST.read_text() if TV_TITLE_HOST_BINDING_TEST.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -203,6 +207,53 @@ if any(name not in mobile_title_host_binding_test for name in [
     'hostOwnerThreadAndCloseRevokeOutstandingCallbacks'
 ]):
     fail.append('native_mobile_title_host_binding_regressions_missing')
+if ('class NativeTvTitleWatchedHostBinding' not in tv_title_host_binding or
+    'interface NativeTvTitleWatchedViewPort' not in tv_title_host_binding or
+    'class NativeTvTitleWatchedViewAction internal constructor' not in tv_title_host_binding):
+    fail.append('native_tv_title_host_binding_missing')
+if ('private val menu = NativeTvTitleWatchedMenu(coordinator, account)' not in tv_title_host_binding or
+    'menu.activate(' not in tv_title_host_binding):
+    fail.append('tv_host_binding_bypasses_canonical_core_menu')
+if ('view.replaceTitleActions(viewActions.toList())' not in tv_title_host_binding or
+    'view.clearTitleActions()' not in tv_title_host_binding):
+    fail.append('tv_host_render_or_clear_port_missing')
+if ('record.viewAction === action' not in tv_title_host_binding or
+    'action.menuFor(bindingSeal)' not in tv_title_host_binding or
+    'focusedActionId == action.actionId' not in tv_title_host_binding):
+    fail.append('tv_host_exact_object_or_focus_gate_missing')
+if ('remoteKey = remoteKey' not in tv_title_host_binding or
+    'focusedActionId = focusedActionId' not in tv_title_host_binding):
+    fail.append('tv_host_remote_confirmation_not_delegated')
+if ('issued.remove(action.actionId)' not in tv_title_host_binding or
+    tv_title_host_binding.find('issued.remove(action.actionId)') > tv_title_host_binding.find('menu.activate(')):
+    fail.append('tv_host_action_not_consumed_before_core_menu')
+if ('revokeRenderedGeneration()' not in tv_title_host_binding or
+    'menu.present(lastSeasonNumber)' not in tv_title_host_binding):
+    fail.append('tv_host_generation_revocation_missing')
+if ('Thread.currentThread() === ownerThread' not in tv_title_host_binding or
+    'private var closed = false' not in tv_title_host_binding or
+    'val menuClosed = menu.close()' not in tv_title_host_binding):
+    fail.append('tv_host_thread_or_lifecycle_guard_missing')
+if ('val focusable: Boolean = true' not in tv_title_host_binding or
+    'val requiresAcknowledgement: Boolean = !watched' not in tv_title_host_binding):
+    fail.append('tv_host_focus_or_destructive_metadata_missing')
+if ('NativeTvTitleWatchedHostBinding(' in java_text or
+    'NativeTvTitleWatchedViewAction(' in java_text):
+    fail.append('tv_title_host_binding_wired_to_synthetic_activity')
+if any(name not in tv_title_host_binding_test for name in [
+    'tvHostRenderPublishesFourFocusableModelsWithoutWriting',
+    'enterOnExactFocusedTvActionDispatchesAndClearsGeneration',
+    'dpadCenterIsTheOnlyAlternateAcceptedTvConfirmation',
+    'focusMismatchAndOtherRemoteKeysFailClosedAndRevoke',
+    'staleOrForgedTvViewObjectsRevokeCurrentPresentation',
+    'tvUnwatchRequiresAcknowledgementOnExactIssuedAction',
+    'tvAccountDriftAndRejectedDispatchClearPresentation',
+    'futureEpisodeFilteringSurvivesTvHostBoundary',
+    'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding',
+    'clearFailureAfterAppliedTvActionClosesWithoutReplay',
+    'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks'
+]):
+    fail.append('native_tv_title_host_binding_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
 if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
@@ -364,8 +415,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':114,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':125,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
