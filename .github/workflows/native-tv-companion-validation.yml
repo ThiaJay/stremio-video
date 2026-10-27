@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=69 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=76 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -90,6 +90,11 @@ jobs:
           assert 'exactPlaybackDelegationOccursOnlyAfterClassificationClears' in names, 'Native classifier delegation-order regression not executed'
           assert 'classifierOutputComposesWithNativeBudgetWithoutParallelRetry' in names, 'Native classifier-policy composition regression not executed'
           assert 'classifierAuthenticityCannotBeRecreatedFromMatchingFields' in names, 'Classifier provenance-seal regression not executed'
+          assert 'networkSignalsMapToOneBoundedTransportRetry' in names, 'Media3 transport intake regression not executed'
+          assert 'genericHttpErrorNeverInventsResponseStatusOrCredentialFailure' in names, 'Media3 HTTP non-inference regression not executed'
+          assert 'parserSignalsStopWithoutInventingMatroskaEvidence' in names, 'Media3 parser intake regression not executed'
+          assert 'decoderAudioAndDrmSignalsRemainTerminal' in names, 'Media3 terminal decoder intake regression not executed'
+          assert 'unrequestedEpisodeAdvanceWinsBeforeRetryableTransport' in names, 'Media3 episode-stop precedence regression not executed'
           assert 'policyExposesNoPreclassifiedDecisionParameter' in names, 'Policy raw-facts entry regression not executed'
           assert 'actuatorExposesNoPreclassifiedDecisionParameter' in names, 'Actuator raw-facts entry regression not executed'
           assert 'retryableSourceClassificationExclusivelyOwnsItsSingleAttempt' in names, 'Classifier-exclusive retry regression not executed'

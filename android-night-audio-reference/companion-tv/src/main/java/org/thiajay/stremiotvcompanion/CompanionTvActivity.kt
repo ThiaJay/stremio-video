@@ -25,6 +25,7 @@ import androidx.media3.ui.PlayerView
 import org.pss.stremio.tv.CoreMessagePort
 import org.pss.stremio.tv.CoreSkipSegment
 import org.pss.stremio.tv.NativeSkipOutcome
+import org.pss.stremio.tv.NativeMedia3FailureIntake
 import org.pss.stremio.tv.NativeSeekPort
 import org.pss.stremio.tv.SnapshotBoundNativeSeekPort
 import org.pss.stremio.tv.NativeTvSkipActuator
@@ -120,7 +121,10 @@ class CompanionTvActivity : Activity() {
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) { updateUi() }
             override fun onPlayerError(error: PlaybackException) {
-                errorMessage = "The local synthetic clip could not be played."
+                val classification = NativeMedia3FailureIntake.classify(error.errorCode)
+                errorMessage =
+                    "Local synthetic playback stopped: ${classification.category}. " +
+                        "No automatic retry or source change."
                 dsp.request(null)
                 nightAudioName = "Off"
                 updateUi()
