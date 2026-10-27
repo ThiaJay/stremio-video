@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=56 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=59 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -97,6 +97,9 @@ jobs:
           assert 'malformedCapabilitySetFailsClosed' in names, 'Malformed native recovery capability regression not executed'
           assert 'ownerThreadCloseRevokesOutstandingLeaseAndFutureUse' in names, 'Owner-thread actuator lifecycle revocation regression not executed'
           assert 'foreignThreadCannotCloseOrRevokeOwnerLease' in names, 'Foreign-thread actuator close regression not executed'
+          assert 'throwingSnapshotDuringPreparationFailsClosed' in names, 'Preparation snapshot exception regression not executed'
+          assert 'throwingFinalSnapshotRefusesWithoutExecution' in names, 'Final snapshot exception regression not executed'
+          assert 'throwingPortExecutionConsumesLeaseAndFailsClosed' in names, 'Native execution exception one-shot regression not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes

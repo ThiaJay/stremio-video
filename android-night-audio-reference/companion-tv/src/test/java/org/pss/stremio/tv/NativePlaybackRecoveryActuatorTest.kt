@@ -12,11 +12,17 @@ class NativePlaybackRecoveryActuatorTest {
         var accept: Boolean = true
     ) : NativePlaybackRecoveryPort {
         val actions = ArrayList<String>()
+        var snapshotFailure: Throwable? = null
+        var executionFailure: Throwable? = null
 
-        override fun currentSnapshot(): NativeRecoverySnapshot = snapshot
+        override fun currentSnapshot(): NativeRecoverySnapshot {
+            snapshotFailure?.let { throw it }
+            return snapshot
+        }
 
         override fun executeRecovery(action: String): Boolean {
             actions += action
+            executionFailure?.let { throw it }
             return accept
         }
     }
@@ -149,6 +155,40 @@ class NativePlaybackRecoveryActuatorTest {
             actuator.execute(prepared)
         )
         port.accept = true
+        assertEquals(
+            NativeRecoveryExecutionOutcome.ALREADY_CONSUMED,
+            actuator.execute(prepared)
+        )
+        assertEquals(listOf("transcodeAudio"), port.actions)
+    }
+
+    @Test fun throwingSnapshotDuringPreparationFailsClosed() {
+        val port = FakePort(snapshot())
+        port.snapshotFailure = IllegalStateException("released host")
+        val actuator = NativePlaybackRecoveryActuator(port)
+        assertNull(actuator.prepare(classification(), observation()))
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
+    @Test fun throwingFinalSnapshotRefusesWithoutExecution() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())!!
+        port.snapshotFailure = LinkageError("incompatible host adapter")
+        assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
+    @Test fun throwingPortExecutionConsumesLeaseAndFailsClosed() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())!!
+        port.executionFailure = IllegalStateException("released host")
+        assertEquals(
+            NativeRecoveryExecutionOutcome.EXECUTION_REJECTED,
+            actuator.execute(prepared)
+        )
+        port.executionFailure = null
         assertEquals(
             NativeRecoveryExecutionOutcome.ALREADY_CONSUMED,
             actuator.execute(prepared)

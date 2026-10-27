@@ -56,7 +56,7 @@ class NativePlaybackRecoveryActuator(
         val plan = NativePlaybackRecoveryPolicy.plan(classification, observation)
         if (!trustedPlaybackPlan(plan)) return null
 
-        val lease = port.currentSnapshot()
+        val lease = snapshotOrNull() ?: return null
         if (!trustedSnapshot(lease) || observation == null) return null
         if (plan.action !in lease.supportedRecoveryActions) return null
         if (lease.recoveryContextId != observation.recoveryContextId ||
@@ -83,7 +83,7 @@ class NativePlaybackRecoveryActuator(
             return NativeRecoveryExecutionOutcome.REFUSED
         }
 
-        val current = port.currentSnapshot()
+        val current = snapshotOrNull() ?: return NativeRecoveryExecutionOutcome.REFUSED
         if (!trustedSnapshot(current) || current != prepared.lease) {
             return NativeRecoveryExecutionOutcome.REFUSED
         }
@@ -91,7 +91,7 @@ class NativePlaybackRecoveryActuator(
             return NativeRecoveryExecutionOutcome.ALREADY_CONSUMED
         }
 
-        return if (port.executeRecovery(prepared.plan.action)) {
+        return if (executeOrFalse(prepared.plan.action)) {
             NativeRecoveryExecutionOutcome.APPLIED
         } else {
             NativeRecoveryExecutionOutcome.EXECUTION_REJECTED
@@ -137,6 +137,24 @@ class NativePlaybackRecoveryActuator(
 
     private fun onOwnerThread(): Boolean =
         Thread.currentThread() === ownerThread
+
+    private fun snapshotOrNull(): NativeRecoverySnapshot? =
+        try {
+            port.currentSnapshot()
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+
+    private fun executeOrFalse(action: String): Boolean =
+        try {
+            port.executeRecovery(action)
+        } catch (_: Exception) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
 
     private fun token(plan: NativeRecoveryPlan, lease: NativeRecoverySnapshot): String =
         listOf(
