@@ -63,6 +63,7 @@ class NativePlaybackRecoveryActuator(
             lease.recoveryContextId != observation.currentContextId
         ) return null
 
+        if (issued.size >= MAX_ISSUED_LEASES) return null
         val token = token(plan, lease)
         if (!issued.add(token)) return null
         return PreparedNativeRecovery(plan, lease, token)
@@ -170,6 +171,7 @@ class NativePlaybackRecoveryActuator(
 
     private companion object {
         const val MAX_ID_LENGTH = 160
+        const val MAX_ISSUED_LEASES = 256
         val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
         val FINGERPRINT = Regex("^[0-9a-f]{64}$")
         val RECOVERY_ACTIONS = setOf(

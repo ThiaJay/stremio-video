@@ -131,6 +131,10 @@ if 'private var closed = false' not in actuator or 'fun close(): Boolean' not in
     fail.append('actuator_lifecycle_revocation_missing')
 if any(name not in actuator_test for name in ['ownerThreadCloseRevokesOutstandingLeaseAndFutureUse','foreignThreadCannotCloseOrRevokeOwnerLease']):
     fail.append('actuator_lifecycle_regressions_missing')
+if 'const val MAX_ISSUED_LEASES = 256' not in actuator or 'issued.size >= MAX_ISSUED_LEASES' not in actuator:
+    fail.append('actuator_issued_lease_resource_cap_missing')
+if 'issuedLeaseSetIsBoundedWithoutReplayEviction' not in actuator_test:
+    fail.append('actuator_issued_lease_resource_cap_regression_missing')
 if ('private fun snapshotOrNull()' not in actuator or 'private fun executeOrFalse(action: String)' not in actuator or
         actuator.count('catch (_: Exception)') < 2 or actuator.count('catch (_: LinkageError)') < 2):
     fail.append('actuator_port_exception_boundary_missing')
@@ -146,6 +150,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+recovery+actuator+ports+episode for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':53,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':55,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)

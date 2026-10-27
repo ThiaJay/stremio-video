@@ -271,6 +271,21 @@ class NativePlaybackRecoveryActuatorTest {
         assertEquals(listOf("transcodeAudio"), firstPort.actions)
     }
 
+    @Test fun issuedLeaseSetIsBoundedWithoutReplayEviction() {
+        val port = FakePort(snapshot())
+        val actuator = NativePlaybackRecoveryActuator(port)
+        repeat(256) { index ->
+            val context = "video-1:source-1:generation-$index"
+            port.snapshot = snapshot(context = context, generation = index.toLong())
+            assertNotNull(actuator.prepare(classification(), observation(context = context)))
+        }
+
+        val overflowContext = "video-1:source-1:generation-256"
+        port.snapshot = snapshot(context = overflowContext, generation = 256)
+        assertNull(actuator.prepare(classification(), observation(context = overflowContext)))
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
     @Test fun preparationAndExecutionStayOnConstructionThread() {
         val port = FakePort(snapshot())
         val actuator = NativePlaybackRecoveryActuator(port)
