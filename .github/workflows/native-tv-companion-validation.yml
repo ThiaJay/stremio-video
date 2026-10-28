@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=164 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=165 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -93,6 +93,7 @@ jobs:
           assert 'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall' in names, 'Canonical adapter lease regression not executed'
           assert 'dispatchBindsHostCallToObservedSessionEpoch' in names, 'Canonical adapter atomic session epoch regression not executed'
           assert 'sessionEpochDriftFailsClosed' in names, 'Canonical adapter epoch regression not executed'
+          assert 'closedAdapterNeverTouchesHostCallbacks' in names, 'Canonical adapter closed-host isolation regression not executed'
           assert 'foreignThreadAndCloseRejectAllOperations' in names, 'Canonical adapter lifecycle regression not executed'
           assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'

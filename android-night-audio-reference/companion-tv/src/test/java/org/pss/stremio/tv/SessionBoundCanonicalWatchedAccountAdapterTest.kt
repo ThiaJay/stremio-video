@@ -35,13 +35,18 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         var throwDispatch = false
         var incrementEpochOnDispatch = false
         var epochSequence = ArrayDeque<Long>()
+        var epochReads = 0
+        var observeCalls = 0
         val sent = mutableListOf<Map<String, Any>>()
         val dispatchedEpochs = mutableListOf<Long>()
 
-        override fun sessionEpoch(): Long =
-            if (epochSequence.isEmpty()) epoch else epochSequence.removeFirst()
+        override fun sessionEpoch(): Long {
+            epochReads += 1
+            return if (epochSequence.isEmpty()) epoch else epochSequence.removeFirst()
+        }
 
         override fun observe(): CanonicalWatchedAccountObservation? {
+            observeCalls += 1
             if (throwObserve) throw IllegalStateException("bounded test")
             return CanonicalWatchedAccountObservation(observedEpoch, value, watchedIds)
         }
@@ -157,6 +162,19 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         host.incrementEpochOnDispatch = true
         assertFalse(adapter.dispatch(seriesCommand()))
         assertEquals(1, host.sent.size)
+    }
+
+    @Test fun closedAdapterNeverTouchesHostCallbacks() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        assertTrue(adapter.close())
+
+        assertNull(adapter.currentSnapshot())
+        assertNull(adapter.currentWatchedState())
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.epochReads)
+        assertEquals(0, host.observeCalls)
+        assertEquals(0, host.dispatchedEpochs.size)
     }
 
     @Test fun foreignThreadAndCloseRejectAllOperations() {

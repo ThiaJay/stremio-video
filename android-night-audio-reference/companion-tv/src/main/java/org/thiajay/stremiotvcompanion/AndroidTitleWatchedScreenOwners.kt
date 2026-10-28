@@ -2,6 +2,7 @@ package org.thiajay.stremiotvcompanion
 
 import android.os.Looper
 import android.view.ViewGroup
+import org.pss.stremio.tv.CanonicalWatchedAccountHostPort
 import org.pss.stremio.tv.CanonicalWatchedStatePort
 import org.pss.stremio.tv.NativeMobileTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome
@@ -11,6 +12,7 @@ import org.pss.stremio.tv.NativeTvTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeTvTitleWatchedOutcome
 import org.pss.stremio.tv.NativeTvTitleWatchedViewAction
 import org.pss.stremio.tv.NativeTvTitleWatchedViewPortRelay
+import org.pss.stremio.tv.SessionBoundCanonicalWatchedAccountAdapter
 import org.pss.stremio.tv.TvWatchedCoordinator
 
 /**
@@ -24,7 +26,8 @@ import org.pss.stremio.tv.TvWatchedCoordinator
 class AndroidMobileTitleWatchedScreenOwner private constructor(
     container: ViewGroup,
     coordinator: TvWatchedCoordinator,
-    account: CanonicalWatchedStatePort
+    account: CanonicalWatchedStatePort,
+    private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?
 ) {
     companion object {
         fun create(
@@ -33,7 +36,22 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
             account: CanonicalWatchedStatePort
         ): AndroidMobileTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val owner = AndroidMobileTitleWatchedScreenOwner(container, coordinator, account)
+            val owner = AndroidMobileTitleWatchedScreenOwner(
+                container, coordinator, account, ownedAccount = null
+            )
+            return if (owner.ready) owner else null
+        }
+
+        fun create(
+            container: ViewGroup,
+            coordinator: TvWatchedCoordinator,
+            accountHost: CanonicalWatchedAccountHostPort
+        ): AndroidMobileTitleWatchedScreenOwner? {
+            if (Looper.myLooper() !== Looper.getMainLooper()) return null
+            val account = SessionBoundCanonicalWatchedAccountAdapter(accountHost)
+            val owner = AndroidMobileTitleWatchedScreenOwner(
+                container, coordinator, account, ownedAccount = account
+            )
             return if (owner.ready) owner else null
         }
     }
@@ -47,7 +65,16 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
     )
     private var pendingOutcome: NativeMobileTitleWatchedOutcome? = null
     private var ready = relay.bind(port)
-    private var closed = !ready
+    private var closed = false
+
+    init {
+        if (!ready) {
+            host.close()
+            relay.close()
+            ownedAccount?.close()
+            closed = true
+        }
+    }
 
     fun render(seasonNumber: Int?): Boolean {
         if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) return false
@@ -68,7 +95,8 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        return hostClosed && relayClosed
+        val accountClosed = ownedAccount?.close() ?: true
+        return hostClosed && relayClosed && accountClosed
     }
 
     private fun onActivation(
@@ -96,6 +124,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
+        ownedAccount?.close()
     }
 
     private fun onMainOwnerThread(): Boolean =
@@ -107,7 +136,8 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
 class AndroidTvTitleWatchedScreenOwner private constructor(
     container: ViewGroup,
     coordinator: TvWatchedCoordinator,
-    account: CanonicalWatchedStatePort
+    account: CanonicalWatchedStatePort,
+    private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?
 ) {
     companion object {
         fun create(
@@ -116,7 +146,22 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
             account: CanonicalWatchedStatePort
         ): AndroidTvTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val owner = AndroidTvTitleWatchedScreenOwner(container, coordinator, account)
+            val owner = AndroidTvTitleWatchedScreenOwner(
+                container, coordinator, account, ownedAccount = null
+            )
+            return if (owner.ready) owner else null
+        }
+
+        fun create(
+            container: ViewGroup,
+            coordinator: TvWatchedCoordinator,
+            accountHost: CanonicalWatchedAccountHostPort
+        ): AndroidTvTitleWatchedScreenOwner? {
+            if (Looper.myLooper() !== Looper.getMainLooper()) return null
+            val account = SessionBoundCanonicalWatchedAccountAdapter(accountHost)
+            val owner = AndroidTvTitleWatchedScreenOwner(
+                container, coordinator, account, ownedAccount = account
+            )
             return if (owner.ready) owner else null
         }
     }
@@ -130,7 +175,16 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
     )
     private var pendingOutcome: NativeTvTitleWatchedOutcome? = null
     private var ready = relay.bind(port)
-    private var closed = !ready
+    private var closed = false
+
+    init {
+        if (!ready) {
+            host.close()
+            relay.close()
+            ownedAccount?.close()
+            closed = true
+        }
+    }
 
     fun render(seasonNumber: Int?): Boolean {
         if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) return false
@@ -151,7 +205,8 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        return hostClosed && relayClosed
+        val accountClosed = ownedAccount?.close() ?: true
+        return hostClosed && relayClosed && accountClosed
     }
 
     private fun onActivation(
@@ -179,6 +234,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
+        ownedAccount?.close()
     }
 
     private fun onMainOwnerThread(): Boolean =
