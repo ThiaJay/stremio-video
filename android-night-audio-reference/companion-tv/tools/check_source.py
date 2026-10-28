@@ -44,6 +44,8 @@ ANDROID_MOBILE_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompan
 TITLE_WATCHED_VIEW_PORT_RELAY=ROOT/'src/main/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelay.kt'
 TITLE_WATCHED_VIEW_PORT_RELAY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelayTest.kt'
 ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidTitleWatchedScreenOwners.kt'
+CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
+CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
 BUILD=ROOT/'build.gradle'
 CHECKSUM='0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b'
 
@@ -111,6 +113,8 @@ android_mobile_title_widget_port=ANDROID_MOBILE_TITLE_WIDGET_PORT.read_text() if
 title_watched_view_port_relay=TITLE_WATCHED_VIEW_PORT_RELAY.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY.is_file() else ''
 title_watched_view_port_relay_test=TITLE_WATCHED_VIEW_PORT_RELAY_TEST.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY_TEST.is_file() else ''
 android_title_watched_screen_owners=ANDROID_TITLE_WATCHED_SCREEN_OWNERS.read_text() if ANDROID_TITLE_WATCHED_SCREEN_OWNERS.is_file() else ''
+canonical_watched_account_adapter=CANONICAL_WATCHED_ACCOUNT_ADAPTER.read_text() if CANONICAL_WATCHED_ACCOUNT_ADAPTER.is_file() else ''
+canonical_watched_account_adapter_test=CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST.read_text() if CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST.is_file() else ''
 gradle=BUILD.read_text()
 if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
 if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
@@ -428,6 +432,53 @@ if ('import org.pss.stremio.tv.CanonicalWatchedStatePort' not in android_title_w
     android_title_watched_screen_owners.count('account: CanonicalWatchedStatePort') != 4 or
     'account: StremioAccountPort' in android_title_watched_screen_owners):
     fail.append('android_title_screen_canonical_readback_port_not_mandatory')
+if ('class SessionBoundCanonicalWatchedAccountAdapter' not in canonical_watched_account_adapter or
+    ': CanonicalWatchedStatePort' not in canonical_watched_account_adapter or
+    'interface CanonicalWatchedAccountHostPort' not in canonical_watched_account_adapter):
+    fail.append('session_bound_canonical_watched_account_adapter_missing')
+if ('val before = host.sessionEpoch()' not in canonical_watched_account_adapter or
+    'raw.sessionEpoch != before' not in canonical_watched_account_adapter or
+    'val after = host.sessionEpoch()' not in canonical_watched_account_adapter or
+    'after != before' not in canonical_watched_account_adapter):
+    fail.append('canonical_account_epoch_sandwich_missing')
+if ('raw.videos.map' not in canonical_watched_account_adapter or
+    'raw.storyOrder?.toList()' not in canonical_watched_account_adapter or
+    'raw.watchedVideoIds.toList()' not in canonical_watched_account_adapter):
+    fail.append('canonical_account_host_collections_not_detached')
+if ('message.keys != setOf("action", "args")' not in canonical_watched_account_adapter or
+    '"MarkAsWatched"' not in canonical_watched_account_adapter or
+    '"MarkSeasonAsWatched"' not in canonical_watched_account_adapter or
+    'else -> return null' not in canonical_watched_account_adapter):
+    fail.append('canonical_account_dispatch_not_narrowly_allowlisted')
+adapter_dispatch = canonical_watched_account_adapter[
+    canonical_watched_account_adapter.find('override fun dispatch('):
+    canonical_watched_account_adapter.find('fun close(): Boolean')
+]
+if ('latestIdentity = null' not in adapter_dispatch or
+    adapter_dispatch.find('latestIdentity = null') >
+        adapter_dispatch.find('host.dispatchTitleWatched(expected.sessionEpoch, command)')):
+    fail.append('canonical_account_lease_not_consumed_before_dispatch')
+if ('expectedSessionEpoch: Long' not in canonical_watched_account_adapter or
+    'host.dispatchTitleWatched(expected.sessionEpoch, command)' not in canonical_watched_account_adapter):
+    fail.append('canonical_account_atomic_session_epoch_dispatch_missing')
+if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
+    'fun close(): Boolean' not in canonical_watched_account_adapter or
+    'private var closed = false' not in canonical_watched_account_adapter):
+    fail.append('canonical_account_owner_thread_or_close_missing')
+if ('SessionBoundCanonicalWatchedAccountAdapter(' in java_text or
+    'CanonicalWatchedAccountHostPort' in java_text):
+    fail.append('canonical_account_adapter_wired_to_synthetic_activity')
+if any(name not in canonical_watched_account_adapter_test for name in [
+    'detachesSnapshotAndWatchedIdsFromHostCollections',
+    'watchedReadbackRequiresMatchingObservedSnapshot',
+    'dispatchAcceptsOnlyExactTitleWatchedCommands',
+    'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall',
+    'dispatchBindsHostCallToObservedSessionEpoch',
+    'sessionEpochDriftFailsClosed',
+    'foreignThreadAndCloseRejectAllOperations',
+    'throwingHostCollectionsAndCallbacksFailClosed'
+]):
+    fail.append('canonical_account_adapter_regressions_missing')
 if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
     android_title_watched_screen_owners.count('pendingOutcome = host.activate(') != 2):
     fail.append('android_title_screen_one_outcome_mailbox_missing')
@@ -617,9 +668,9 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':176,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':185,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

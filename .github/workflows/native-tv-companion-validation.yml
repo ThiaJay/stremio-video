@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=156 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=164 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -87,6 +87,14 @@ jobs:
           assert 'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches' in names, 'TV canonical watched readback gate regression not executed'
           assert 'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration' in names, 'TV malformed watched readback regression not executed'
           assert 'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping' in names, 'TV throwing watched readback regression not executed'
+          assert 'detachesSnapshotAndWatchedIdsFromHostCollections' in names, 'Canonical adapter detachment regression not executed'
+          assert 'watchedReadbackRequiresMatchingObservedSnapshot' in names, 'Canonical adapter snapshot binding regression not executed'
+          assert 'dispatchAcceptsOnlyExactTitleWatchedCommands' in names, 'Canonical adapter command allowlist regression not executed'
+          assert 'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall' in names, 'Canonical adapter lease regression not executed'
+          assert 'dispatchBindsHostCallToObservedSessionEpoch' in names, 'Canonical adapter atomic session epoch regression not executed'
+          assert 'sessionEpochDriftFailsClosed' in names, 'Canonical adapter epoch regression not executed'
+          assert 'foreignThreadAndCloseRejectAllOperations' in names, 'Canonical adapter lifecycle regression not executed'
+          assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
           assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'
           assert 'rawPointerAndLongPressEventsNeverImplyConsent' in names, 'Mobile raw-pointer refusal regression not executed'
