@@ -20,6 +20,7 @@ class NativeMobileTitleWatchedAction internal constructor(
 
 enum class NativeMobileTitleWatchedOutcome {
     APPLIED,
+    DISPATCHED_PENDING_READBACK,
     REFUSED
 }
 
@@ -99,6 +100,8 @@ class NativeMobileTitleWatchedMenu(
             )
         ) {
             NativeTvTitleWatchedOutcome.APPLIED -> NativeMobileTitleWatchedOutcome.APPLIED
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK ->
+                NativeMobileTitleWatchedOutcome.DISPATCHED_PENDING_READBACK
             NativeTvTitleWatchedOutcome.REFUSED -> NativeMobileTitleWatchedOutcome.REFUSED
         }
     }

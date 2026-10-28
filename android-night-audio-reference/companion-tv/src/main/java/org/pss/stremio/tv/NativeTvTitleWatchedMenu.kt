@@ -18,7 +18,26 @@ class NativeTvTitleWatchedAction internal constructor(
 
 enum class NativeTvTitleWatchedOutcome {
     APPLIED,
+    DISPATCHED_PENDING_READBACK,
     REFUSED
+}
+
+/**
+ * Canonical watched state from the same ready Core account/library item as
+ * [SeriesAccountSnapshot]. A dispatch acknowledgement is not enough: a real
+ * client must expose this readback before another title-action generation can
+ * be rendered.
+ */
+data class CanonicalWatchedStateReadback(
+    val accountFingerprint: String,
+    val libraryItemFingerprint: String,
+    val seriesId: String,
+    val watchedVideoIds: List<String>
+)
+
+/** Optional stronger account boundary required only after an accepted write. */
+interface CanonicalWatchedStatePort : StremioAccountPort {
+    fun currentWatchedState(): CanonicalWatchedStateReadback?
 }
 
 /**
@@ -43,15 +62,19 @@ class NativeTvTitleWatchedMenu(
         val plan: WatchedPlan
     )
 
+    private data class PendingReadback(val plan: WatchedPlan)
+
     private val ownerThread = Thread.currentThread()
     private val menuSeal = Any()
     private val issued = LinkedHashMap<String, IssuedAction>()
+    private var pendingReadback: PendingReadback? = null
     private var closed = false
 
     fun present(seasonNumber: Int?): List<NativeTvTitleWatchedAction> {
         if (!onOwnerThread() || closed) return emptyList()
         issued.clear()
         val snapshot = snapshotOrNull() ?: return emptyList()
+        if (!confirmPendingReadback(snapshot)) return emptyList()
         val requests = buildList {
             add(WatchedScope.Series to true)
             add(WatchedScope.Series to false)
@@ -135,17 +158,19 @@ class NativeTvTitleWatchedMenu(
             null
         } ?: return NativeTvTitleWatchedOutcome.REFUSED
 
-        return if (dispatchOrFalse(command.coreAction)) {
+        if (!dispatchOrFalse(command.coreAction)) return NativeTvTitleWatchedOutcome.REFUSED
+        pendingReadback = PendingReadback(record.plan)
+        val postDispatch = snapshotOrNull()
+        return if (postDispatch != null && confirmPendingReadback(postDispatch)) {
             NativeTvTitleWatchedOutcome.APPLIED
-        } else {
-            NativeTvTitleWatchedOutcome.REFUSED
-        }
+        } else NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK
     }
 
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
         closed = true
         issued.clear()
+        pendingReadback = null
         return true
     }
 
@@ -165,5 +190,43 @@ class NativeTvTitleWatchedMenu(
         false
     } catch (_: LinkageError) {
         false
+    }
+
+    private fun confirmPendingReadback(snapshot: SeriesAccountSnapshot): Boolean {
+        val pending = pendingReadback ?: return true
+        val currentPlan = try {
+            coordinator.prepare(snapshot, pending.plan.scope, pending.plan.watched)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        } ?: return false
+        if (currentPlan.selectedIds != pending.plan.selectedIds) return false
+
+        val state = watchedStateOrNull() ?: return false
+        if (state.accountFingerprint != snapshot.accountFingerprint ||
+            state.libraryItemFingerprint != snapshot.libraryItemFingerprint ||
+            state.seriesId != snapshot.seriesId ||
+            state.watchedVideoIds.any { it.isBlank() } ||
+            state.watchedVideoIds.size != state.watchedVideoIds.toSet().size
+        ) return false
+
+        val watchedIds = state.watchedVideoIds.toSet()
+        val confirmed = if (pending.plan.watched) {
+            pending.plan.selectedIds.all { it in watchedIds }
+        } else {
+            pending.plan.selectedIds.none { it in watchedIds }
+        }
+        if (!confirmed) return false
+        pendingReadback = null
+        return true
+    }
+
+    private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
+        (account as? CanonicalWatchedStatePort)?.currentWatchedState()
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
     }
 }

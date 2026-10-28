@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=150 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=155 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -84,6 +84,8 @@ jobs:
           assert 'staleAndForgedActionsCannotExecute' in names, 'TV title-action issuance regression not executed'
           assert 'ownerThreadAndCloseFailClosed' in names, 'TV title-action lifecycle regression not executed'
           assert 'snapshotAndDispatchExceptionsFailClosed' in names, 'TV title-action exception regression not executed'
+          assert 'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches' in names, 'TV canonical watched readback gate regression not executed'
+          assert 'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration' in names, 'TV malformed watched readback regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
           assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'
           assert 'rawPointerAndLongPressEventsNeverImplyConsent' in names, 'Mobile raw-pointer refusal regression not executed'
@@ -92,6 +94,7 @@ jobs:
           assert 'staleSelectedAndForgedMobileActionsFailClosed' in names, 'Mobile issuance provenance regression not executed'
           assert 'accountDriftAndRejectedDispatchFailClosedOnMobile' in names, 'Mobile account-drift regression not executed'
           assert 'mobileOwnerThreadAndCloseRevokeOutstandingActions' in names, 'Mobile lifecycle regression not executed'
+          assert 'mobileAcceptedDispatchCannotReissueBeforeCanonicalReadback' in names, 'Mobile canonical watched readback gate regression not executed'
           assert 'hostRenderPublishesFourDisplayModelsWithoutWriting' in names, 'Mobile host render regression not executed'
           assert 'exactSemanticViewActionDispatchesAndClearsWholeGeneration' in names, 'Mobile host semantic activation regression not executed'
           assert 'rawPointerAndLongPressCallbacksNeverImplyHostConsent' in names, 'Mobile host pointer refusal regression not executed'
@@ -101,6 +104,7 @@ jobs:
           assert 'futureEpisodeFilteringSurvivesRealHostBoundary' in names, 'Mobile host future episode regression not executed'
           assert 'rejectedOrThrowingViewPortPermanentlyPoisonsBinding' in names, 'Mobile host UI failure regression not executed'
           assert 'hostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'Mobile host lifecycle regression not executed'
+          assert 'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback' in names, 'Mobile host watched readback hold regression not executed'
           assert 'tvHostRenderPublishesFourFocusableModelsWithoutWriting' in names, 'TV host render regression not executed'
           assert 'enterOnExactFocusedTvActionDispatchesAndClearsGeneration' in names, 'TV host ENTER regression not executed'
           assert 'dpadCenterIsTheOnlyAlternateAcceptedTvConfirmation' in names, 'TV host DPAD_CENTER regression not executed'
@@ -112,6 +116,7 @@ jobs:
           assert 'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding' in names, 'TV host UI failure regression not executed'
           assert 'clearFailureAfterAppliedTvActionClosesWithoutReplay' in names, 'TV host clear failure regression not executed'
           assert 'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'TV host lifecycle regression not executed'
+          assert 'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback' in names, 'TV host watched readback hold regression not executed'
           assert 'widgetControllerBuildsFocusableModelsWithoutActivation' in names, 'Android TV widget generation regression not executed'
           assert 'actionUpEnterReturnsExactIntentAndRevokesWidgetGeneration' in names, 'Android TV widget ENTER regression not executed'
           assert 'actionUpDpadCenterReturnsExactIntent' in names, 'Android TV widget DPAD_CENTER regression not executed'

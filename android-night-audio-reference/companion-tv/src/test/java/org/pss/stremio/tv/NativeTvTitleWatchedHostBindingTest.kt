@@ -25,16 +25,37 @@ class NativeTvTitleWatchedHostBindingTest {
         now = Instant.parse("2026-10-27T20:00:00Z")
     )
 
-    private class Account(var value: SeriesAccountSnapshot?) : StremioAccountPort {
+    private class Account(var value: SeriesAccountSnapshot?) : CanonicalWatchedStatePort {
         val sent = mutableListOf<Map<String, Any>>()
+        val watchedIds = linkedSetOf<String>()
         var rejectDispatch = false
+        var applyDispatchToReadback = true
 
         override fun currentSnapshot(): SeriesAccountSnapshot? = value
 
         override fun dispatch(message: Map<String, Any>): Boolean {
             if (rejectDispatch) return false
             sent.add(message)
+            if (applyDispatchToReadback) {
+                val inner = message["args"] as Map<*, *>
+                val watched = when (inner["action"]) {
+                    "MarkAsWatched" -> inner["args"] as Boolean
+                    "MarkSeasonAsWatched" -> (inner["args"] as List<*>)[1] as Boolean
+                    else -> return false
+                }
+                val ids = value?.videos?.map { it.id }.orEmpty()
+                if (watched) watchedIds.addAll(ids) else watchedIds.removeAll(ids.toSet())
+            }
             return true
+        }
+
+        override fun currentWatchedState(): CanonicalWatchedStateReadback? = value?.let {
+            CanonicalWatchedStateReadback(
+                accountFingerprint = it.accountFingerprint,
+                libraryItemFingerprint = it.libraryItemFingerprint,
+                seriesId = it.seriesId,
+                watchedVideoIds = watchedIds.toList()
+            )
         }
     }
 
@@ -344,5 +365,29 @@ class NativeTvTitleWatchedHostBindingTest {
         assertFalse(binding.render(1))
         assertFalse(binding.close())
         assertEquals(0, account.sent.size)
+    }
+
+    @Test fun tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val view = View()
+        val binding = NativeTvTitleWatchedHostBinding(
+            TvWatchedCoordinator(),
+            account,
+            view
+        )
+        assertTrue(binding.render(1))
+        val selected = action(view, WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            binding.activate(selected, selected.actionId, "ENTER")
+        )
+        assertTrue(view.actions.isEmpty())
+        assertFalse(binding.render(1))
+
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        assertTrue(binding.render(1))
+        assertEquals(4, view.actions.size)
+        assertEquals(1, account.sent.size)
     }
 }

@@ -25,10 +25,13 @@ class NativeTvTitleWatchedMenuTest {
         now = Instant.parse("2026-10-27T12:00:00Z")
     )
 
-    private class Account(var value: SeriesAccountSnapshot?) : StremioAccountPort {
+    private class Account(var value: SeriesAccountSnapshot?) : CanonicalWatchedStatePort {
         val sent = mutableListOf<Map<String, Any>>()
+        val watchedIds = linkedSetOf<String>()
         var throwOnRead = false
         var throwOnDispatch = false
+        var applyDispatchToReadback = true
+        var readbackOverride: CanonicalWatchedStateReadback? = null
 
         override fun currentSnapshot(): SeriesAccountSnapshot? {
             if (throwOnRead) throw IllegalStateException("bounded test")
@@ -38,7 +41,27 @@ class NativeTvTitleWatchedMenuTest {
         override fun dispatch(message: Map<String, Any>): Boolean {
             if (throwOnDispatch) throw IllegalStateException("bounded test")
             sent.add(message)
+            if (applyDispatchToReadback) {
+                val inner = message["args"] as Map<*, *>
+                val watched = when (inner["action"]) {
+                    "MarkAsWatched" -> inner["args"] as Boolean
+                    "MarkSeasonAsWatched" -> (inner["args"] as List<*>)[1] as Boolean
+                    else -> return false
+                }
+                val ids = value?.videos?.map { it.id }.orEmpty()
+                if (watched) watchedIds.addAll(ids) else watchedIds.removeAll(ids.toSet())
+            }
             return true
+        }
+
+        override fun currentWatchedState(): CanonicalWatchedStateReadback? =
+            readbackOverride ?: value?.let {
+            CanonicalWatchedStateReadback(
+                accountFingerprint = it.accountFingerprint,
+                libraryItemFingerprint = it.libraryItemFingerprint,
+                seriesId = it.seriesId,
+                watchedVideoIds = watchedIds.toList()
+            )
         }
     }
 
@@ -191,5 +214,54 @@ class NativeTvTitleWatchedMenuTest {
             NativeTvTitleWatchedOutcome.REFUSED,
             menu.activate(selected, selected.actionId, "ENTER")
         )
+    }
+
+    @Test fun acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        assertEquals(1, account.sent.size)
+        assertTrue(menu.present(1).isEmpty())
+
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
+
+    @Test fun mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+
+        val ids = account.value!!.videos.map { it.id }
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = "c".repeat(64),
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = ids
+        )
+        assertTrue(menu.present(1).isEmpty())
+
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = account.value!!.accountFingerprint,
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = ids + ids.first()
+        )
+        assertTrue(menu.present(1).isEmpty())
+
+        account.readbackOverride = null
+        account.watchedIds.addAll(ids)
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
     }
 }

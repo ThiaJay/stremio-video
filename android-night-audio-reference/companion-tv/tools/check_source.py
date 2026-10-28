@@ -143,6 +143,12 @@ if ('Thread.currentThread() === ownerThread' not in title_watched_menu or
     'private var closed = false' not in title_watched_menu or
     'const val MAX_PRESENTED_ACTIONS = 4' not in title_watched_menu):
     fail.append('title_watched_thread_lifecycle_or_bound_missing')
+if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watched_menu or
+    'DISPATCHED_PENDING_READBACK' not in title_watched_menu or
+    'private var pendingReadback: PendingReadback? = null' not in title_watched_menu or
+    'if (!confirmPendingReadback(snapshot)) return emptyList()' not in title_watched_menu or
+    'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
+    fail.append('title_watched_canonical_post_write_readback_gate_missing')
 if ('NativeTvTitleWatchedMenu(' in java_text or 'NativeTvTitleWatchedAction(' in java_text):
     fail.append('title_watched_menu_wired_to_synthetic_activity')
 if any(name not in title_watched_menu_test for name in [
@@ -153,7 +159,9 @@ if any(name not in title_watched_menu_test for name in [
     'accountDriftRefusesPresentedAction',
     'staleAndForgedActionsCannotExecute',
     'ownerThreadAndCloseFailClosed',
-    'snapshotAndDispatchExceptionsFailClosed'
+    'snapshotAndDispatchExceptionsFailClosed',
+    'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches',
+    'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration'
 ]):
     fail.append('native_tv_title_watched_menu_regressions_missing')
 if ('class NativeMobileTitleWatchedMenu' not in mobile_title_watched_menu or
@@ -183,7 +191,8 @@ if any(name not in mobile_title_watched_menu_test for name in [
     'futureEpisodeStillSuppressesUnsafeMobileSeasonActions',
     'staleSelectedAndForgedMobileActionsFailClosed',
     'accountDriftAndRejectedDispatchFailClosedOnMobile',
-    'mobileOwnerThreadAndCloseRevokeOutstandingActions'
+    'mobileOwnerThreadAndCloseRevokeOutstandingActions',
+    'mobileAcceptedDispatchCannotReissueBeforeCanonicalReadback'
 ]):
     fail.append('native_mobile_title_watched_menu_regressions_missing')
 if ('class NativeMobileTitleWatchedHostBinding' not in mobile_title_host_binding or
@@ -222,7 +231,8 @@ if any(name not in mobile_title_host_binding_test for name in [
     'accountDriftAndRejectedDispatchClearHostPresentation',
     'futureEpisodeFilteringSurvivesRealHostBoundary',
     'rejectedOrThrowingViewPortPermanentlyPoisonsBinding',
-    'hostOwnerThreadAndCloseRevokeOutstandingCallbacks'
+    'hostOwnerThreadAndCloseRevokeOutstandingCallbacks',
+    'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback'
 ]):
     fail.append('native_mobile_title_host_binding_regressions_missing')
 if ('class NativeTvTitleWatchedHostBinding' not in tv_title_host_binding or
@@ -269,7 +279,8 @@ if any(name not in tv_title_host_binding_test for name in [
     'futureEpisodeFilteringSurvivesTvHostBoundary',
     'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding',
     'clearFailureAfterAppliedTvActionClosesWithoutReplay',
-    'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks'
+    'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks',
+    'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback'
 ]):
     fail.append('native_tv_title_host_binding_regressions_missing')
 if ('class NativeTvTitleWatchedWidgetController' not in tv_title_widget_controller or
@@ -590,7 +601,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':161,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':171,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

@@ -25,16 +25,37 @@ class NativeMobileTitleWatchedMenuTest {
         now = Instant.parse("2026-10-27T18:00:00Z")
     )
 
-    private class Account(var value: SeriesAccountSnapshot?) : StremioAccountPort {
+    private class Account(var value: SeriesAccountSnapshot?) : CanonicalWatchedStatePort {
         val sent = mutableListOf<Map<String, Any>>()
+        val watchedIds = linkedSetOf<String>()
         var rejectDispatch = false
+        var applyDispatchToReadback = true
 
         override fun currentSnapshot(): SeriesAccountSnapshot? = value
 
         override fun dispatch(message: Map<String, Any>): Boolean {
             if (rejectDispatch) return false
             sent.add(message)
+            if (applyDispatchToReadback) {
+                val inner = message["args"] as Map<*, *>
+                val watched = when (inner["action"]) {
+                    "MarkAsWatched" -> inner["args"] as Boolean
+                    "MarkSeasonAsWatched" -> (inner["args"] as List<*>)[1] as Boolean
+                    else -> return false
+                }
+                val ids = value?.videos?.map { it.id }.orEmpty()
+                if (watched) watchedIds.addAll(ids) else watchedIds.removeAll(ids.toSet())
+            }
             return true
+        }
+
+        override fun currentWatchedState(): CanonicalWatchedStateReadback? = value?.let {
+            CanonicalWatchedStateReadback(
+                accountFingerprint = it.accountFingerprint,
+                libraryItemFingerprint = it.libraryItemFingerprint,
+                seriesId = it.seriesId,
+                watchedVideoIds = watchedIds.toList()
+            )
         }
     }
 
@@ -209,5 +230,25 @@ class NativeMobileTitleWatchedMenuTest {
         assertTrue(menu.present(1).isEmpty())
         assertFalse(menu.close())
         assertEquals(0, account.sent.size)
+    }
+
+    @Test fun mobileAcceptedDispatchCannotReissueBeforeCanonicalReadback() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeMobileTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeMobileTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(
+                selected,
+                selected.actionId,
+                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+            )
+        )
+        assertTrue(menu.present(1).isEmpty())
+
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
     }
 }
