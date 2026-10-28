@@ -484,6 +484,8 @@ if any(name not in canonical_watched_account_adapter_test for name in [
     'externalScreenConstructionFailuresAreContainedWithoutOwnership',
     'foreignThreadCloseRevokesWithoutHostAccess',
     'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes',
+    'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess',
+    'externalScreenAccountLeaseNeverOwnsCallerPort',
     'throwingHostCollectionsAndCallbacksFailClosed'
 ]):
     fail.append('canonical_account_adapter_regressions_missing')
@@ -510,20 +512,34 @@ if ('internal object CanonicalWatchedScreenConstructionBoundary' not in
     'catch (_: Exception)' not in canonical_watched_account_adapter or
     'catch (_: LinkageError)' not in canonical_watched_account_adapter):
     fail.append('android_title_screen_construction_failure_boundary_missing')
+if ('class CanonicalWatchedScreenOwnedAccountLease' not in
+        canonical_watched_account_adapter or
+    'private val revoked = AtomicBoolean(false)' not in
+        canonical_watched_account_adapter or
+    'if (!revoked.compareAndSet(false, true)) return true' not in
+        canonical_watched_account_adapter):
+    fail.append('android_title_screen_owned_account_revocation_lease_missing')
 if android_title_watched_screen_owners.count(
         'private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?'
     ) != 2:
     fail.append('android_title_screen_owned_adapter_not_retained')
 if (android_title_watched_screen_owners.count('if (!ready) {') != 2 or
-    android_title_watched_screen_owners.count('ownedAccount?.close()') != 6):
+    android_title_watched_screen_owners.count(
+        'private val ownedAccountLease = CanonicalWatchedScreenOwnedAccountLease(ownedAccount)'
+    ) != 2 or
+    android_title_watched_screen_owners.count('ownedAccountLease.revoke()') != 8):
     fail.append('android_title_screen_owned_adapter_failure_or_close_missing')
 if (android_title_watched_screen_owners.count(
-        'val accountClosed = ownedAccount?.close() ?: true'
+        'val accountClosed = ownedAccountLease.revoke()'
     ) != 2 or
     android_title_watched_screen_owners.count(
         'return hostClosed && relayClosed && accountClosed'
     ) != 2):
     fail.append('android_title_screen_close_does_not_revoke_owned_adapter')
+if android_title_watched_screen_owners.count(
+        'if (!onMainOwnerThread()) {\n            ownedAccountLease.revoke()'
+    ) != 2:
+    fail.append('android_title_screen_foreign_teardown_does_not_revoke_owned_adapter')
 if (any(name in java_text for name in [
         'AndroidMobileTitleWatchedScreenOwner',
         'AndroidTvTitleWatchedScreenOwner',

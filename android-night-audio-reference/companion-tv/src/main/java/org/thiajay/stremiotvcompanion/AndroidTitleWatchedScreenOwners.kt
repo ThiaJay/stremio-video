@@ -4,6 +4,7 @@ import android.os.Looper
 import android.view.ViewGroup
 import org.pss.stremio.tv.CanonicalWatchedAccountHostPort
 import org.pss.stremio.tv.CanonicalWatchedScreenConstructionBoundary
+import org.pss.stremio.tv.CanonicalWatchedScreenOwnedAccountLease
 import org.pss.stremio.tv.CanonicalWatchedStatePort
 import org.pss.stremio.tv.NativeMobileTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome
@@ -61,6 +62,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
     }
 
     private val ownerThread = Thread.currentThread()
+    private val ownedAccountLease = CanonicalWatchedScreenOwnedAccountLease(ownedAccount)
     private val relay = NativeMobileTitleWatchedViewPortRelay()
     private val host = NativeMobileTitleWatchedHostBinding(coordinator, account, relay)
     private val port = AndroidMobileTitleWatchedWidgetPort(
@@ -75,7 +77,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         if (!ready) {
             host.close()
             relay.close()
-            ownedAccount?.close()
+            ownedAccountLease.revoke()
             closed = true
         }
     }
@@ -93,13 +95,17 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
     }
 
     fun close(): Boolean {
-        if (!onMainOwnerThread() || closed) return false
+        if (!onMainOwnerThread()) {
+            ownedAccountLease.revoke()
+            return false
+        }
+        if (closed) return false
         closed = true
         ready = false
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        val accountClosed = ownedAccount?.close() ?: true
+        val accountClosed = ownedAccountLease.revoke()
         return hostClosed && relayClosed && accountClosed
     }
 
@@ -128,7 +134,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
-        ownedAccount?.close()
+        ownedAccountLease.revoke()
     }
 
     private fun onMainOwnerThread(): Boolean =
@@ -174,6 +180,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
     }
 
     private val ownerThread = Thread.currentThread()
+    private val ownedAccountLease = CanonicalWatchedScreenOwnedAccountLease(ownedAccount)
     private val relay = NativeTvTitleWatchedViewPortRelay()
     private val host = NativeTvTitleWatchedHostBinding(coordinator, account, relay)
     private val port = AndroidTvTitleWatchedWidgetPort(
@@ -188,7 +195,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         if (!ready) {
             host.close()
             relay.close()
-            ownedAccount?.close()
+            ownedAccountLease.revoke()
             closed = true
         }
     }
@@ -206,13 +213,17 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
     }
 
     fun close(): Boolean {
-        if (!onMainOwnerThread() || closed) return false
+        if (!onMainOwnerThread()) {
+            ownedAccountLease.revoke()
+            return false
+        }
+        if (closed) return false
         closed = true
         ready = false
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        val accountClosed = ownedAccount?.close() ?: true
+        val accountClosed = ownedAccountLease.revoke()
         return hostClosed && relayClosed && accountClosed
     }
 
@@ -241,7 +252,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
-        ownedAccount?.close()
+        ownedAccountLease.revoke()
     }
 
     private fun onMainOwnerThread(): Boolean =

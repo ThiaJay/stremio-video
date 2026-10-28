@@ -1,5 +1,7 @@
 package org.pss.stremio.tv
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 /**
  * One host observation from an already authenticated private client session.
  *
@@ -60,6 +62,32 @@ internal object CanonicalWatchedScreenConstructionBoundary {
         null
     } catch (_: LinkageError) {
         null
+    }
+}
+
+/**
+ * Idempotent account-only revocation held by an Android screen owner.
+ *
+ * A foreign host teardown may use this lease to revoke only the adapter the
+ * screen created itself. Android view, relay and menu cleanup remains on the
+ * screen's main owner thread. A caller-supplied canonical port is represented
+ * by a null adapter and is never closed by this lease.
+ */
+internal class CanonicalWatchedScreenOwnedAccountLease(
+    private val account: SessionBoundCanonicalWatchedAccountAdapter?
+) {
+    private val revoked = AtomicBoolean(false)
+
+    fun revoke(): Boolean {
+        if (!revoked.compareAndSet(false, true)) return true
+        return try {
+            account?.close()
+            true
+        } catch (_: Exception) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
     }
 }
 

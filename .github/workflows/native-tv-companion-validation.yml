@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=169 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=171 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -99,6 +99,8 @@ jobs:
           assert 'externalScreenConstructionFailuresAreContainedWithoutOwnership' in names, 'External screen construction containment regression not executed'
           assert 'foreignThreadCloseRevokesWithoutHostAccess' in names, 'Canonical adapter asynchronous close regression not executed'
           assert 'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes' in names, 'Canonical adapter in-flight close serialization regression not executed'
+          assert 'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess' in names, 'Screen-owned account foreign teardown regression not executed'
+          assert 'externalScreenAccountLeaseNeverOwnsCallerPort' in names, 'External account ownership regression not executed'
           assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
           assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'
