@@ -330,8 +330,11 @@ if ('confirmableIntent !== intent' not in tv_title_widget_controller or
     '!confirmation.issuedBy(confirmationSeal)' not in tv_title_widget_controller or
     'fun invalidateConfirmation(): Boolean' not in tv_title_widget_controller):
     fail.append('tv_widget_confirmation_exact_lease_missing')
-if (tv_title_widget_controller.count('pendingConfirmation = null') < 5 or
-    tv_title_widget_controller.count('confirmableIntent = null') < 6):
+if (tv_title_widget_controller.count('pendingConfirmation = null') != 5 or
+    tv_title_widget_controller.count('confirmableIntent = null') != 5 or
+    tv_title_widget_controller.count(
+        'confirmableIntent = null\n        pendingConfirmation = null'
+    ) != 4):
     fail.append('tv_widget_confirmation_lifecycle_revocation_missing')
 if ('class AndroidTvTitleWatchedWidgetPort' not in android_tv_title_widget_port or
     ': NativeTvTitleWatchedViewPort' not in android_tv_title_widget_port or
@@ -403,8 +406,11 @@ if ('confirmableIntent !== intent' not in mobile_title_widget_controller or
     '!confirmation.issuedBy(confirmationSeal)' not in mobile_title_widget_controller or
     'fun invalidateConfirmation(): Boolean' not in mobile_title_widget_controller):
     fail.append('mobile_widget_confirmation_exact_lease_missing')
-if (mobile_title_widget_controller.count('pendingConfirmation = null') < 5 or
-    mobile_title_widget_controller.count('confirmableIntent = null') < 6):
+if (mobile_title_widget_controller.count('pendingConfirmation = null') != 5 or
+    mobile_title_widget_controller.count('confirmableIntent = null') != 5 or
+    mobile_title_widget_controller.count(
+        'confirmableIntent = null\n        pendingConfirmation = null'
+    ) != 4):
     fail.append('mobile_widget_confirmation_lifecycle_revocation_missing')
 if ('class AndroidMobileTitleWatchedWidgetPort' not in android_mobile_title_widget_port or
     ': NativeMobileTitleWatchedViewPort' not in android_mobile_title_widget_port or
