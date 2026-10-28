@@ -51,7 +51,7 @@ interface CanonicalWatchedStatePort : StremioAccountPort {
  */
 class NativeTvTitleWatchedMenu(
     private val coordinator: TvWatchedCoordinator,
-    private val account: StremioAccountPort
+    private val account: CanonicalWatchedStatePort
 ) {
     companion object {
         const val MAX_PRESENTED_ACTIONS = 4
@@ -223,8 +223,7 @@ class NativeTvTitleWatchedMenu(
     }
 
     private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
-        val state = (account as? CanonicalWatchedStatePort)?.currentWatchedState()
-            ?: return null
+        val state = account.currentWatchedState() ?: return null
         state.copy(watchedVideoIds = state.watchedVideoIds.toList())
     } catch (_: Exception) {
         null

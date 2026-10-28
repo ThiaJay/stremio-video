@@ -34,7 +34,7 @@ enum class NativeMobileTitleWatchedOutcome {
  */
 class NativeMobileTitleWatchedMenu(
     coordinator: TvWatchedCoordinator,
-    account: StremioAccountPort
+    account: CanonicalWatchedStatePort
 ) {
     companion object {
         const val SEMANTIC_ACTIVATION = "ACTIVATE"

@@ -39,7 +39,7 @@ interface NativeTvTitleWatchedViewPort {
  */
 class NativeTvTitleWatchedHostBinding(
     coordinator: TvWatchedCoordinator,
-    account: StremioAccountPort,
+    account: CanonicalWatchedStatePort,
     private val view: NativeTvTitleWatchedViewPort
 ) {
     private data class IssuedViewAction(
