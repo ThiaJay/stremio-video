@@ -421,7 +421,7 @@ if (title_watched_view_port_relay.count('if (!accepted) return poison()') != 4 o
 if ('class AndroidMobileTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners or
     'class AndroidTvTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners):
     fail.append('actual_android_title_screen_composition_owners_missing')
-if (android_title_watched_screen_owners.count('Looper.myLooper() !== Looper.getMainLooper()') != 2 or
+if (android_title_watched_screen_owners.count('Looper.myLooper() !== Looper.getMainLooper()') != 4 or
     android_title_watched_screen_owners.count('Thread.currentThread() === ownerThread') != 2):
     fail.append('android_title_screen_main_owner_thread_gate_missing')
 if ('NativeMobileTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
