@@ -10,6 +10,7 @@ import org.pss.stremio.tv.NativeMobileTitleWatchedViewAction
 import org.pss.stremio.tv.NativeMobileTitleWatchedViewPort
 import org.pss.stremio.tv.NativeMobileTitleWatchedWidget
 import org.pss.stremio.tv.NativeMobileTitleWatchedWidgetController
+import org.pss.stremio.tv.NativeMobileTitleWatchedWidgetIntent
 
 /**
  * Actual Android mobile Button implementation of the title-action view port.
@@ -32,12 +33,16 @@ class AndroidMobileTitleWatchedWidgetPort(
     private val ownerThread = Thread.currentThread()
     private val controller = NativeMobileTitleWatchedWidgetController()
     private val ownedViews = ArrayList<View>()
+    private var activeConfirmationDialog: AlertDialog? = null
     private var closed = false
 
     override fun replaceTitleActions(
         actions: List<NativeMobileTitleWatchedViewAction>
     ): Boolean {
         if (!onMainOwnerThread() || closed) return false
+        if (!controller.invalidateConfirmation() || !dismissActiveConfirmation()) {
+            return poison()
+        }
         val widgets = controller.replace(actions) ?: return false
         val candidateViews = try {
             widgets.map { widget -> createButton(widget) }
@@ -65,9 +70,13 @@ class AndroidMobileTitleWatchedWidgetPort(
 
     override fun clearTitleActions(): Boolean {
         if (!onMainOwnerThread() || closed) return false
+        val confirmationInvalidated = controller.invalidateConfirmation()
+        val confirmationDismissed = dismissActiveConfirmation()
         val controllerCleared = controller.clear()
         val viewsCleared = removeOwnedViews()
-        if (!controllerCleared || !viewsCleared) return poison()
+        if (!confirmationInvalidated || !confirmationDismissed ||
+            !controllerCleared || !viewsCleared
+        ) return poison()
         return true
     }
 
@@ -93,7 +102,7 @@ class AndroidMobileTitleWatchedWidgetPort(
                     return@setOnClickListener
                 }
                 if (widget.requiresAcknowledgement) {
-                    showUnwatchConfirmation(widget, intent.action)
+                    showUnwatchConfirmation(widget, intent)
                 } else {
                     deliver(
                         intent.action,
@@ -107,30 +116,43 @@ class AndroidMobileTitleWatchedWidgetPort(
 
     private fun showUnwatchConfirmation(
         widget: NativeMobileTitleWatchedWidget,
-        action: NativeMobileTitleWatchedViewAction
+        intent: NativeMobileTitleWatchedWidgetIntent
     ) {
+        val confirmation = controller.beginConfirmation(intent) ?: run {
+            poison()
+            return
+        }
         var resolved = false
         fun resolve(acknowledged: Boolean) {
             if (resolved) return
             resolved = true
-            deliver(
-                action,
-                widget.actionId,
-                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION,
+            val result = controller.resolveConfirmation(
+                confirmation,
                 acknowledged
+            ) ?: return
+            activeConfirmationDialog = null
+            deliver(
+                result.intent.action,
+                result.intent.selectedActionId,
+                result.intent.semanticEvent,
+                result.acknowledged
             )
         }
         try {
-            AlertDialog.Builder(container.context)
+            val dialog = AlertDialog.Builder(container.context)
                 .setTitle(widget.label)
                 .setMessage(widget.confirmation)
                 .setPositiveButton("Confirm") { _, _ -> resolve(true) }
                 .setNegativeButton("Cancel") { _, _ -> resolve(false) }
                 .setOnCancelListener { resolve(false) }
-                .show()
+                .create()
+            activeConfirmationDialog = dialog
+            dialog.show()
         } catch (_: Exception) {
+            activeConfirmationDialog = null
             resolve(false)
         } catch (_: LinkageError) {
+            activeConfirmationDialog = null
             resolve(false)
         }
     }
@@ -160,11 +182,25 @@ class AndroidMobileTitleWatchedWidgetPort(
         false
     }
 
+    private fun dismissActiveConfirmation(): Boolean {
+        val dialog = activeConfirmationDialog ?: return true
+        activeConfirmationDialog = null
+        return try {
+            dialog.dismiss()
+            true
+        } catch (_: Exception) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
+
     private fun poison(): Boolean {
         if (!closed) {
             closed = true
             controller.close()
         }
+        dismissActiveConfirmation()
         removeOwnedViews()
         return false
     }

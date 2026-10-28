@@ -163,4 +163,102 @@ class NativeMobileTitleWatchedWidgetControllerTest {
         assertFalse(controller.clear())
         assertFalse(controller.close())
     }
+
+    @Test fun destructiveMobileConfirmationLeaseReturnsExactIntentOnce() {
+        val controller = NativeMobileTitleWatchedWidgetController()
+        val widget = controller.replace(
+            listOf(action("series-unwatched", watched = false))
+        )!!.single()
+        val intent = controller.consume(
+            widget,
+            widget.actionId,
+            NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+        )!!
+        val confirmation = controller.beginConfirmation(intent)!!
+
+        val result = controller.resolveConfirmation(confirmation, true)!!
+        assertSame(intent, result.intent)
+        assertTrue(result.acknowledged)
+        assertNull(controller.resolveConfirmation(confirmation, true))
+        assertNull(controller.beginConfirmation(intent))
+    }
+
+    @Test fun mobileReplacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease() {
+        val controller = NativeMobileTitleWatchedWidgetController()
+        val oldWidget = controller.replace(
+            listOf(action("old-unwatched", watched = false))
+        )!!.single()
+        val oldIntent = controller.consume(
+            oldWidget,
+            oldWidget.actionId,
+            NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+        )!!
+        val oldConfirmation = controller.beginConfirmation(oldIntent)!!
+
+        val currentWidget = controller.replace(
+            listOf(action("current-unwatched", watched = false))
+        )!!.single()
+        val currentIntent = controller.consume(
+            currentWidget,
+            currentWidget.actionId,
+            NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+        )!!
+        val currentConfirmation = controller.beginConfirmation(currentIntent)!!
+
+        assertNull(controller.resolveConfirmation(oldConfirmation, true))
+        val currentResult = controller.resolveConfirmation(currentConfirmation, false)!!
+        assertSame(currentIntent, currentResult.intent)
+        assertFalse(currentResult.acknowledged)
+    }
+
+    @Test fun forgedAndForeignMobileConfirmationCallbacksPreserveOwnerLease() {
+        val controller = NativeMobileTitleWatchedWidgetController()
+        val widget = controller.replace(
+            listOf(action("series-unwatched", watched = false))
+        )!!.single()
+        val intent = controller.consume(
+            widget,
+            widget.actionId,
+            NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+        )!!
+        val confirmation = controller.beginConfirmation(intent)!!
+        val forged = NativeMobileTitleWatchedConfirmation(intent, Any())
+        assertNull(controller.resolveConfirmation(forged, true))
+
+        val foreignResolution =
+            AtomicReference<NativeMobileTitleWatchedConfirmationResult?>()
+        val foreignInvalidation = AtomicReference<Boolean>()
+        val thread = Thread {
+            foreignResolution.set(controller.resolveConfirmation(confirmation, true))
+            foreignInvalidation.set(controller.invalidateConfirmation())
+        }
+        thread.start()
+        thread.join()
+
+        assertNull(foreignResolution.get())
+        assertFalse(foreignInvalidation.get())
+        assertNotNull(controller.resolveConfirmation(confirmation, false))
+    }
+
+    @Test fun mobileClearAndCloseRevokePendingConfirmations() {
+        val controller = NativeMobileTitleWatchedWidgetController()
+        fun pending(id: String): NativeMobileTitleWatchedConfirmation {
+            val widget = controller.replace(listOf(action(id, watched = false)))!!.single()
+            val intent = controller.consume(
+                widget,
+                widget.actionId,
+                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+            )!!
+            return controller.beginConfirmation(intent)!!
+        }
+
+        val cleared = pending("clear-unwatched")
+        assertTrue(controller.clear())
+        assertNull(controller.resolveConfirmation(cleared, true))
+
+        val closed = pending("close-unwatched")
+        assertTrue(controller.close())
+        assertNull(controller.resolveConfirmation(closed, true))
+        assertFalse(controller.invalidateConfirmation())
+    }
 }

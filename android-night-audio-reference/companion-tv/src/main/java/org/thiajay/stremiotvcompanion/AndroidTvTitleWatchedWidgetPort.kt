@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import org.pss.stremio.tv.NativeTvTitleWatchedViewAction
 import org.pss.stremio.tv.NativeTvTitleWatchedViewPort
+import org.pss.stremio.tv.NativeTvTitleWatchedWidgetIntent
 import org.pss.stremio.tv.NativeTvTitleWatchedWidget
 import org.pss.stremio.tv.NativeTvTitleWatchedWidgetController
 
@@ -31,12 +32,16 @@ class AndroidTvTitleWatchedWidgetPort(
     private val ownerThread = Thread.currentThread()
     private val controller = NativeTvTitleWatchedWidgetController()
     private val ownedViews = ArrayList<View>()
+    private var activeConfirmationDialog: AlertDialog? = null
     private var closed = false
 
     override fun replaceTitleActions(
         actions: List<NativeTvTitleWatchedViewAction>
     ): Boolean {
         if (!onMainOwnerThread() || closed) return false
+        if (!controller.invalidateConfirmation() || !dismissActiveConfirmation()) {
+            return poison()
+        }
         val widgets = controller.replace(actions) ?: return false
         val candidateViews = try {
             widgets.map { widget -> createButton(widget) }
@@ -64,9 +69,13 @@ class AndroidTvTitleWatchedWidgetPort(
 
     override fun clearTitleActions(): Boolean {
         if (!onMainOwnerThread() || closed) return false
+        val confirmationInvalidated = controller.invalidateConfirmation()
+        val confirmationDismissed = dismissActiveConfirmation()
         val controllerCleared = controller.clear()
         val viewsCleared = removeOwnedViews()
-        if (!controllerCleared || !viewsCleared) return poison()
+        if (!confirmationInvalidated || !confirmationDismissed ||
+            !controllerCleared || !viewsCleared
+        ) return poison()
         return true
     }
 
@@ -105,7 +114,7 @@ class AndroidTvTitleWatchedWidgetPort(
                     return@setOnKeyListener true
                 }
                 if (widget.requiresAcknowledgement) {
-                    showUnwatchConfirmation(widget, intent.action, intent.remoteKey)
+                    showUnwatchConfirmation(widget, intent)
                 } else {
                     deliver(intent.action, intent.focusedActionId, intent.remoteKey, false)
                 }
@@ -115,26 +124,43 @@ class AndroidTvTitleWatchedWidgetPort(
 
     private fun showUnwatchConfirmation(
         widget: NativeTvTitleWatchedWidget,
-        action: NativeTvTitleWatchedViewAction,
-        remoteKey: String
+        intent: NativeTvTitleWatchedWidgetIntent
     ) {
+        val confirmation = controller.beginConfirmation(intent) ?: run {
+            poison()
+            return
+        }
         var resolved = false
         fun resolve(acknowledged: Boolean) {
             if (resolved) return
             resolved = true
-            deliver(action, widget.actionId, remoteKey, acknowledged)
+            val result = controller.resolveConfirmation(
+                confirmation,
+                acknowledged
+            ) ?: return
+            activeConfirmationDialog = null
+            deliver(
+                result.intent.action,
+                result.intent.focusedActionId,
+                result.intent.remoteKey,
+                result.acknowledged
+            )
         }
         try {
-            AlertDialog.Builder(container.context)
+            val dialog = AlertDialog.Builder(container.context)
                 .setTitle(widget.label)
                 .setMessage(widget.confirmation)
                 .setPositiveButton("Confirm") { _, _ -> resolve(true) }
                 .setNegativeButton("Cancel") { _, _ -> resolve(false) }
                 .setOnCancelListener { resolve(false) }
-                .show()
+                .create()
+            activeConfirmationDialog = dialog
+            dialog.show()
         } catch (_: Exception) {
+            activeConfirmationDialog = null
             resolve(false)
         } catch (_: LinkageError) {
+            activeConfirmationDialog = null
             resolve(false)
         }
     }
@@ -164,11 +190,25 @@ class AndroidTvTitleWatchedWidgetPort(
         false
     }
 
+    private fun dismissActiveConfirmation(): Boolean {
+        val dialog = activeConfirmationDialog ?: return true
+        activeConfirmationDialog = null
+        return try {
+            dialog.dismiss()
+            true
+        } catch (_: Exception) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
+
     private fun poison(): Boolean {
         if (!closed) {
             closed = true
             controller.close()
         }
+        dismissActiveConfirmation()
         removeOwnedViews()
         return false
     }

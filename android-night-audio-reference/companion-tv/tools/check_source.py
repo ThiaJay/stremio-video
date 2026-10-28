@@ -303,7 +303,8 @@ if any(name not in tv_title_host_binding_test for name in [
     fail.append('native_tv_title_host_binding_regressions_missing')
 if ('class NativeTvTitleWatchedWidgetController' not in tv_title_widget_controller or
     'class NativeTvTitleWatchedWidget internal constructor' not in tv_title_widget_controller or
-    'data class NativeTvTitleWatchedWidgetIntent' not in tv_title_widget_controller):
+    'class NativeTvTitleWatchedWidgetIntent internal constructor' not in tv_title_widget_controller or
+    'class NativeTvTitleWatchedConfirmation internal constructor' not in tv_title_widget_controller):
     fail.append('native_tv_title_widget_controller_missing')
 if ('actions.size > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in tv_title_widget_controller or
     'actions.map { it.actionId }.toSet().size != actions.size' not in tv_title_widget_controller or
@@ -324,6 +325,14 @@ if ('Thread.currentThread() === ownerThread' not in tv_title_widget_controller o
     'fun clear(): Boolean' not in tv_title_widget_controller or
     'fun close(): Boolean' not in tv_title_widget_controller):
     fail.append('tv_widget_thread_or_lifecycle_guard_missing')
+if ('confirmableIntent !== intent' not in tv_title_widget_controller or
+    'pendingConfirmation !== confirmation' not in tv_title_widget_controller or
+    '!confirmation.issuedBy(confirmationSeal)' not in tv_title_widget_controller or
+    'fun invalidateConfirmation(): Boolean' not in tv_title_widget_controller):
+    fail.append('tv_widget_confirmation_exact_lease_missing')
+if (tv_title_widget_controller.count('pendingConfirmation = null') < 5 or
+    tv_title_widget_controller.count('confirmableIntent = null') < 6):
+    fail.append('tv_widget_confirmation_lifecycle_revocation_missing')
 if ('class AndroidTvTitleWatchedWidgetPort' not in android_tv_title_widget_port or
     ': NativeTvTitleWatchedViewPort' not in android_tv_title_widget_port or
     'private val controller = NativeTvTitleWatchedWidgetController()' not in android_tv_title_widget_port):
@@ -337,9 +346,17 @@ if ('.setPositiveButton("Confirm")' not in android_tv_title_widget_port or
     '.setNegativeButton("Cancel")' not in android_tv_title_widget_port or
     '.setOnCancelListener { resolve(false) }' not in android_tv_title_widget_port):
     fail.append('android_tv_unwatch_confirmation_or_cancel_gate_missing')
-if ('onActivation(action, focusedActionId, remoteKey, acknowledged)' not in android_tv_title_widget_port or
+if ('result.intent.action' not in android_tv_title_widget_port or
+    'result.intent.focusedActionId' not in android_tv_title_widget_port or
+    'result.intent.remoteKey' not in android_tv_title_widget_port or
     'setOnClickListener' in android_tv_title_widget_port):
     fail.append('android_tv_widget_exact_callback_or_remote_only_gate_missing')
+if ('activeConfirmationDialog' not in android_tv_title_widget_port or
+    'controller.invalidateConfirmation()' not in android_tv_title_widget_port or
+    'controller.beginConfirmation(intent)' not in android_tv_title_widget_port or
+    'controller.resolveConfirmation(' not in android_tv_title_widget_port or
+    'dialog.dismiss()' not in android_tv_title_widget_port):
+    fail.append('android_tv_stale_confirmation_dialog_gate_missing')
 if ('AndroidTvTitleWatchedWidgetPort(' in java_text or
     'NativeTvTitleWatchedWidgetController(' in java_text):
     fail.append('android_tv_title_widget_port_wired_to_synthetic_activity')
@@ -351,12 +368,17 @@ if any(name not in tv_title_widget_controller_test for name in [
     'focusMismatchAndOtherRemoteKeyRevokeWidgetGeneration',
     'staleAndForgedWidgetObjectsCannotActivate',
     'malformedOrNonFocusableWidgetGenerationFailsClosed',
-    'widgetOwnerThreadClearAndCloseFailClosed'
+    'widgetOwnerThreadClearAndCloseFailClosed',
+    'destructiveConfirmationLeaseReturnsExactIntentOnce',
+    'replacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease',
+    'forgedAndForeignConfirmationCallbacksPreserveOwnerLease',
+    'clearAndCloseRevokePendingConfirmations'
 ]):
     fail.append('native_tv_title_widget_controller_regressions_missing')
 if ('class NativeMobileTitleWatchedWidgetController' not in mobile_title_widget_controller or
     'class NativeMobileTitleWatchedWidget internal constructor' not in mobile_title_widget_controller or
-    'data class NativeMobileTitleWatchedWidgetIntent' not in mobile_title_widget_controller):
+    'class NativeMobileTitleWatchedWidgetIntent internal constructor' not in mobile_title_widget_controller or
+    'class NativeMobileTitleWatchedConfirmation internal constructor' not in mobile_title_widget_controller):
     fail.append('native_mobile_title_widget_controller_missing')
 if ('actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in mobile_title_widget_controller or
     'actions.map { it.actionId }.toSet().size != actions.size' not in mobile_title_widget_controller or
@@ -376,6 +398,14 @@ if ('Thread.currentThread() === ownerThread' not in mobile_title_widget_controll
     'fun clear(): Boolean' not in mobile_title_widget_controller or
     'fun close(): Boolean' not in mobile_title_widget_controller):
     fail.append('mobile_widget_thread_or_lifecycle_guard_missing')
+if ('confirmableIntent !== intent' not in mobile_title_widget_controller or
+    'pendingConfirmation !== confirmation' not in mobile_title_widget_controller or
+    '!confirmation.issuedBy(confirmationSeal)' not in mobile_title_widget_controller or
+    'fun invalidateConfirmation(): Boolean' not in mobile_title_widget_controller):
+    fail.append('mobile_widget_confirmation_exact_lease_missing')
+if (mobile_title_widget_controller.count('pendingConfirmation = null') < 5 or
+    mobile_title_widget_controller.count('confirmableIntent = null') < 6):
+    fail.append('mobile_widget_confirmation_lifecycle_revocation_missing')
 if ('class AndroidMobileTitleWatchedWidgetPort' not in android_mobile_title_widget_port or
     ': NativeMobileTitleWatchedViewPort' not in android_mobile_title_widget_port or
     'private val controller = NativeMobileTitleWatchedWidgetController()' not in android_mobile_title_widget_port):
@@ -388,9 +418,17 @@ if ('.setPositiveButton("Confirm")' not in android_mobile_title_widget_port or
     '.setNegativeButton("Cancel")' not in android_mobile_title_widget_port or
     '.setOnCancelListener { resolve(false) }' not in android_mobile_title_widget_port):
     fail.append('android_mobile_unwatch_confirmation_or_cancel_gate_missing')
-if ('onActivation(action, selectedActionId, semanticEvent, acknowledged)' not in android_mobile_title_widget_port or
+if ('result.intent.action' not in android_mobile_title_widget_port or
+    'result.intent.selectedActionId' not in android_mobile_title_widget_port or
+    'result.intent.semanticEvent' not in android_mobile_title_widget_port or
     'setOnTouchListener' in android_mobile_title_widget_port):
     fail.append('android_mobile_widget_exact_callback_or_raw_touch_gate_missing')
+if ('activeConfirmationDialog' not in android_mobile_title_widget_port or
+    'controller.invalidateConfirmation()' not in android_mobile_title_widget_port or
+    'controller.beginConfirmation(intent)' not in android_mobile_title_widget_port or
+    'controller.resolveConfirmation(' not in android_mobile_title_widget_port or
+    'dialog.dismiss()' not in android_mobile_title_widget_port):
+    fail.append('android_mobile_stale_confirmation_dialog_gate_missing')
 if ('AndroidMobileTitleWatchedWidgetPort(' in java_text or
     'NativeMobileTitleWatchedWidgetController(' in java_text):
     fail.append('android_mobile_title_widget_port_wired_to_synthetic_activity')
@@ -402,7 +440,11 @@ if any(name not in mobile_title_widget_controller_test for name in [
     'staleAndForgedMobileWidgetObjectsCannotActivate',
     'malformedMobileWidgetGenerationFailsClosed',
     'mobileWidgetPreservesDestructiveAcknowledgementMetadata',
-    'mobileWidgetOwnerThreadClearAndCloseFailClosed'
+    'mobileWidgetOwnerThreadClearAndCloseFailClosed',
+    'destructiveMobileConfirmationLeaseReturnsExactIntentOnce',
+    'mobileReplacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease',
+    'forgedAndForeignMobileConfirmationCallbacksPreserveOwnerLease',
+    'mobileClearAndCloseRevokePendingConfirmations'
 ]):
     fail.append('native_mobile_title_widget_controller_regressions_missing')
 if ('class NativeMobileTitleWatchedViewPortRelay : NativeMobileTitleWatchedViewPort' not in title_watched_view_port_relay or
@@ -738,7 +780,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':189,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':195,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

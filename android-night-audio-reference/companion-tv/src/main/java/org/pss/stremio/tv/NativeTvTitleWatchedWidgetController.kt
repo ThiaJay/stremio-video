@@ -20,10 +20,25 @@ class NativeTvTitleWatchedWidget internal constructor(
         if (provenanceSeal === seal) action else null
 }
 
-data class NativeTvTitleWatchedWidgetIntent(
+class NativeTvTitleWatchedWidgetIntent internal constructor(
     val action: NativeTvTitleWatchedViewAction,
     val focusedActionId: String,
-    val remoteKey: String
+    val remoteKey: String,
+    private val provenanceSeal: Any
+) {
+    internal fun issuedBy(seal: Any): Boolean = provenanceSeal === seal
+}
+
+class NativeTvTitleWatchedConfirmation internal constructor(
+    internal val intent: NativeTvTitleWatchedWidgetIntent,
+    private val provenanceSeal: Any
+) {
+    internal fun issuedBy(seal: Any): Boolean = provenanceSeal === seal
+}
+
+data class NativeTvTitleWatchedConfirmationResult(
+    val intent: NativeTvTitleWatchedWidgetIntent,
+    val acknowledged: Boolean
 )
 
 /**
@@ -47,7 +62,10 @@ class NativeTvTitleWatchedWidgetController {
 
     private val ownerThread = Thread.currentThread()
     private val controllerSeal = Any()
+    private val confirmationSeal = Any()
     private val issued = LinkedHashMap<String, Issued>()
+    private var confirmableIntent: NativeTvTitleWatchedWidgetIntent? = null
+    private var pendingConfirmation: NativeTvTitleWatchedConfirmation? = null
     private var closed = false
 
     fun replace(
@@ -55,6 +73,8 @@ class NativeTvTitleWatchedWidgetController {
     ): List<NativeTvTitleWatchedWidget>? {
         if (!onOwnerThread() || closed) return null
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         if (actions.isEmpty() ||
             actions.size > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS ||
             actions.any {
@@ -103,16 +123,58 @@ class NativeTvTitleWatchedWidgetController {
             (remoteKey != KEY_ENTER && remoteKey != KEY_DPAD_CENTER)
         ) return null
 
-        return NativeTvTitleWatchedWidgetIntent(
+        val intent = NativeTvTitleWatchedWidgetIntent(
             action = record.action,
             focusedActionId = widget.actionId,
-            remoteKey = remoteKey
+            remoteKey = remoteKey,
+            provenanceSeal = controllerSeal
         )
+        confirmableIntent = if (widget.requiresAcknowledgement) intent else null
+        return intent
+    }
+
+    fun beginConfirmation(
+        intent: NativeTvTitleWatchedWidgetIntent
+    ): NativeTvTitleWatchedConfirmation? {
+        if (!onOwnerThread() || closed || pendingConfirmation != null ||
+            confirmableIntent !== intent || !intent.issuedBy(controllerSeal) ||
+            intent.action.watched
+        ) return null
+
+        confirmableIntent = null
+        return NativeTvTitleWatchedConfirmation(intent, confirmationSeal).also {
+            pendingConfirmation = it
+        }
+    }
+
+    fun resolveConfirmation(
+        confirmation: NativeTvTitleWatchedConfirmation,
+        acknowledged: Boolean
+    ): NativeTvTitleWatchedConfirmationResult? {
+        if (!onOwnerThread() || closed ||
+            pendingConfirmation !== confirmation ||
+            !confirmation.issuedBy(confirmationSeal)
+        ) return null
+
+        pendingConfirmation = null
+        return NativeTvTitleWatchedConfirmationResult(
+            intent = confirmation.intent,
+            acknowledged = acknowledged
+        )
+    }
+
+    fun invalidateConfirmation(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        confirmableIntent = null
+        pendingConfirmation = null
+        return true
     }
 
     fun clear(): Boolean {
         if (!onOwnerThread() || closed) return false
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         return true
     }
 
@@ -120,6 +182,8 @@ class NativeTvTitleWatchedWidgetController {
         if (!onOwnerThread() || closed) return false
         closed = true
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         return true
     }
 

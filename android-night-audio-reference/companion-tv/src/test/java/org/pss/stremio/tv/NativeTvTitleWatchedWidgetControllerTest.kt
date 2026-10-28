@@ -184,4 +184,107 @@ class NativeTvTitleWatchedWidgetControllerTest {
         assertFalse(controller.clear())
         assertFalse(controller.close())
     }
+
+    @Test fun destructiveConfirmationLeaseReturnsExactIntentOnce() {
+        val controller = NativeTvTitleWatchedWidgetController()
+        val widget = controller.replace(
+            listOf(action("series-unwatched", watched = false))
+        )!!.single()
+        val intent = controller.consume(
+            widget,
+            widget.actionId,
+            NativeTvTitleWatchedWidgetController.KEY_ENTER,
+            NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+        )!!
+        val confirmation = controller.beginConfirmation(intent)!!
+
+        val result = controller.resolveConfirmation(confirmation, true)!!
+        assertSame(intent, result.intent)
+        assertTrue(result.acknowledged)
+        assertNull(controller.resolveConfirmation(confirmation, true))
+        assertNull(controller.beginConfirmation(intent))
+    }
+
+    @Test fun replacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease() {
+        val controller = NativeTvTitleWatchedWidgetController()
+        val oldWidget = controller.replace(
+            listOf(action("old-unwatched", watched = false))
+        )!!.single()
+        val oldIntent = controller.consume(
+            oldWidget,
+            oldWidget.actionId,
+            NativeTvTitleWatchedWidgetController.KEY_ENTER,
+            NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+        )!!
+        val oldConfirmation = controller.beginConfirmation(oldIntent)!!
+
+        val currentWidget = controller.replace(
+            listOf(action("current-unwatched", watched = false))
+        )!!.single()
+        val currentIntent = controller.consume(
+            currentWidget,
+            currentWidget.actionId,
+            NativeTvTitleWatchedWidgetController.KEY_DPAD_CENTER,
+            NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+        )!!
+        val currentConfirmation = controller.beginConfirmation(currentIntent)!!
+
+        assertNull(controller.resolveConfirmation(oldConfirmation, true))
+        val currentResult = controller.resolveConfirmation(currentConfirmation, false)!!
+        assertSame(currentIntent, currentResult.intent)
+        assertFalse(currentResult.acknowledged)
+    }
+
+    @Test fun forgedAndForeignConfirmationCallbacksPreserveOwnerLease() {
+        val controller = NativeTvTitleWatchedWidgetController()
+        val widget = controller.replace(
+            listOf(action("series-unwatched", watched = false))
+        )!!.single()
+        val intent = controller.consume(
+            widget,
+            widget.actionId,
+            NativeTvTitleWatchedWidgetController.KEY_ENTER,
+            NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+        )!!
+        val confirmation = controller.beginConfirmation(intent)!!
+        val forged = NativeTvTitleWatchedConfirmation(intent, Any())
+        assertNull(controller.resolveConfirmation(forged, true))
+
+        val foreignResolution =
+            AtomicReference<NativeTvTitleWatchedConfirmationResult?>()
+        val foreignInvalidation = AtomicReference<Boolean>()
+        val thread = Thread {
+            foreignResolution.set(controller.resolveConfirmation(confirmation, true))
+            foreignInvalidation.set(controller.invalidateConfirmation())
+        }
+        thread.start()
+        thread.join()
+
+        assertNull(foreignResolution.get())
+        assertFalse(foreignInvalidation.get())
+        assertNotNull(controller.resolveConfirmation(confirmation, false))
+    }
+
+    @Test fun clearAndCloseRevokePendingConfirmations() {
+        val controller = NativeTvTitleWatchedWidgetController()
+        fun pending(id: String): NativeTvTitleWatchedConfirmation {
+            val widget = controller.replace(listOf(action(id, watched = false)))!!.single()
+            val intent = controller.consume(
+                widget,
+                widget.actionId,
+                NativeTvTitleWatchedWidgetController.KEY_ENTER,
+                NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+            )!!
+            return controller.beginConfirmation(intent)!!
+        }
+
+        val cleared = pending("clear-unwatched")
+        assertTrue(controller.clear())
+        assertNull(controller.resolveConfirmation(cleared, true))
+
+        val closed = pending("close-unwatched")
+        assertTrue(controller.close())
+        assertNull(controller.resolveConfirmation(closed, true))
+        assertFalse(controller.invalidateConfirmation())
+    }
 }

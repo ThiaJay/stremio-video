@@ -19,10 +19,25 @@ class NativeMobileTitleWatchedWidget internal constructor(
         if (provenanceSeal === seal) action else null
 }
 
-data class NativeMobileTitleWatchedWidgetIntent(
+class NativeMobileTitleWatchedWidgetIntent internal constructor(
     val action: NativeMobileTitleWatchedViewAction,
     val selectedActionId: String,
-    val semanticEvent: String
+    val semanticEvent: String,
+    private val provenanceSeal: Any
+) {
+    internal fun issuedBy(seal: Any): Boolean = provenanceSeal === seal
+}
+
+class NativeMobileTitleWatchedConfirmation internal constructor(
+    internal val intent: NativeMobileTitleWatchedWidgetIntent,
+    private val provenanceSeal: Any
+) {
+    internal fun issuedBy(seal: Any): Boolean = provenanceSeal === seal
+}
+
+data class NativeMobileTitleWatchedConfirmationResult(
+    val intent: NativeMobileTitleWatchedWidgetIntent,
+    val acknowledged: Boolean
 )
 
 /**
@@ -39,7 +54,10 @@ class NativeMobileTitleWatchedWidgetController {
 
     private val ownerThread = Thread.currentThread()
     private val controllerSeal = Any()
+    private val confirmationSeal = Any()
     private val issued = LinkedHashMap<String, Issued>()
+    private var confirmableIntent: NativeMobileTitleWatchedWidgetIntent? = null
+    private var pendingConfirmation: NativeMobileTitleWatchedConfirmation? = null
     private var closed = false
 
     fun replace(
@@ -47,6 +65,8 @@ class NativeMobileTitleWatchedWidgetController {
     ): List<NativeMobileTitleWatchedWidget>? {
         if (!onOwnerThread() || closed) return null
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         if (actions.isEmpty() ||
             actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS ||
             actions.any {
@@ -91,16 +111,58 @@ class NativeMobileTitleWatchedWidgetController {
             semanticEvent != NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
         ) return null
 
-        return NativeMobileTitleWatchedWidgetIntent(
+        val intent = NativeMobileTitleWatchedWidgetIntent(
             action = record.action,
             selectedActionId = widget.actionId,
-            semanticEvent = semanticEvent
+            semanticEvent = semanticEvent,
+            provenanceSeal = controllerSeal
         )
+        confirmableIntent = if (widget.requiresAcknowledgement) intent else null
+        return intent
+    }
+
+    fun beginConfirmation(
+        intent: NativeMobileTitleWatchedWidgetIntent
+    ): NativeMobileTitleWatchedConfirmation? {
+        if (!onOwnerThread() || closed || pendingConfirmation != null ||
+            confirmableIntent !== intent || !intent.issuedBy(controllerSeal) ||
+            intent.action.watched
+        ) return null
+
+        confirmableIntent = null
+        return NativeMobileTitleWatchedConfirmation(intent, confirmationSeal).also {
+            pendingConfirmation = it
+        }
+    }
+
+    fun resolveConfirmation(
+        confirmation: NativeMobileTitleWatchedConfirmation,
+        acknowledged: Boolean
+    ): NativeMobileTitleWatchedConfirmationResult? {
+        if (!onOwnerThread() || closed ||
+            pendingConfirmation !== confirmation ||
+            !confirmation.issuedBy(confirmationSeal)
+        ) return null
+
+        pendingConfirmation = null
+        return NativeMobileTitleWatchedConfirmationResult(
+            intent = confirmation.intent,
+            acknowledged = acknowledged
+        )
+    }
+
+    fun invalidateConfirmation(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        confirmableIntent = null
+        pendingConfirmation = null
+        return true
     }
 
     fun clear(): Boolean {
         if (!onOwnerThread() || closed) return false
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         return true
     }
 
@@ -108,6 +170,8 @@ class NativeMobileTitleWatchedWidgetController {
         if (!onOwnerThread() || closed) return false
         closed = true
         issued.clear()
+        confirmableIntent = null
+        pendingConfirmation = null
         return true
     }
 
