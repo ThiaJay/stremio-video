@@ -115,36 +115,38 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         return true
     }
 
-    private fun observeOrNull(): DetachedObservation? = try {
-        val before = host.sessionEpoch()
-        if (before < 0L) return null
-        val raw = host.observe() ?: return null
-        if (raw.sessionEpoch != before) return null
+    private fun observeOrNull(): DetachedObservation? {
+        return try {
+            val before = host.sessionEpoch()
+            if (before < 0L) return null
+            val raw = host.observe() ?: return null
+            if (raw.sessionEpoch != before) return null
 
-        val snapshot = detachSnapshot(raw.snapshot) ?: return null
-        if (raw.watchedVideoIds.size > MAX_WATCHED_VIDEO_IDS) return null
-        val watchedIds = raw.watchedVideoIds.toList()
-        if (watchedIds.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } ||
-            watchedIds.size != watchedIds.toSet().size
-        ) return null
+            val snapshot = detachSnapshot(raw.snapshot) ?: return null
+            if (raw.watchedVideoIds.size > MAX_WATCHED_VIDEO_IDS) return null
+            val watchedIds = raw.watchedVideoIds.toList()
+            if (watchedIds.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } ||
+                watchedIds.size != watchedIds.toSet().size
+            ) return null
 
-        val after = host.sessionEpoch()
-        if (after != before) return null
-        val identity = ObservationIdentity(after, snapshot)
-        DetachedObservation(
-            identity = identity,
-            snapshot = snapshot,
-            readback = CanonicalWatchedStateReadback(
-                accountFingerprint = snapshot.accountFingerprint,
-                libraryItemFingerprint = snapshot.libraryItemFingerprint,
-                seriesId = snapshot.seriesId,
-                watchedVideoIds = watchedIds
+            val after = host.sessionEpoch()
+            if (after != before) return null
+            val identity = ObservationIdentity(after, snapshot)
+            DetachedObservation(
+                identity = identity,
+                snapshot = snapshot,
+                readback = CanonicalWatchedStateReadback(
+                    accountFingerprint = snapshot.accountFingerprint,
+                    libraryItemFingerprint = snapshot.libraryItemFingerprint,
+                    seriesId = snapshot.seriesId,
+                    watchedVideoIds = watchedIds
+                )
             )
-        )
-    } catch (_: Exception) {
-        null
-    } catch (_: LinkageError) {
-        null
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
     }
 
     private fun detachSnapshot(raw: SeriesAccountSnapshot): SeriesAccountSnapshot? {
@@ -167,33 +169,35 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         return raw.copy(videos = videos, storyOrder = storyOrder)
     }
 
-    private fun exactTitleWatchedCommand(message: Map<String, Any>): Map<String, Any>? = try {
-        if (message.keys != setOf("action", "args") || message["action"] != "MetaDetails") {
-            return null
-        }
-        val inner = message["args"] as? Map<*, *> ?: return null
-        if (inner.keys != setOf("action", "args")) return null
-        val action = inner["action"] as? String ?: return null
-        val detachedArgs: Any = when (action) {
-            "MarkAsWatched" -> inner["args"] as? Boolean ?: return null
-            "MarkSeasonAsWatched" -> {
-                val args = inner["args"] as? List<*> ?: return null
-                if (args.size != 2) return null
-                val season = args[0] as? Int ?: return null
-                val watched = args[1] as? Boolean ?: return null
-                if (season <= 0) return null
-                listOf(season, watched)
+    private fun exactTitleWatchedCommand(message: Map<String, Any>): Map<String, Any>? {
+        return try {
+            if (message.keys != setOf("action", "args") || message["action"] != "MetaDetails") {
+                return null
             }
-            else -> return null
+            val inner = message["args"] as? Map<*, *> ?: return null
+            if (inner.keys != setOf("action", "args")) return null
+            val action = inner["action"] as? String ?: return null
+            val detachedArgs: Any = when (action) {
+                "MarkAsWatched" -> inner["args"] as? Boolean ?: return null
+                "MarkSeasonAsWatched" -> {
+                    val args = inner["args"] as? List<*> ?: return null
+                    if (args.size != 2) return null
+                    val season = args[0] as? Int ?: return null
+                    val watched = args[1] as? Boolean ?: return null
+                    if (season <= 0) return null
+                    listOf(season, watched)
+                }
+                else -> return null
+            }
+            mapOf<String, Any>(
+                "action" to "MetaDetails",
+                "args" to mapOf<String, Any>("action" to action, "args" to detachedArgs)
+            )
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
         }
-        mapOf<String, Any>(
-            "action" to "MetaDetails",
-            "args" to mapOf<String, Any>("action" to action, "args" to detachedArgs)
-        )
-    } catch (_: Exception) {
-        null
-    } catch (_: LinkageError) {
-        null
     }
 
     private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
