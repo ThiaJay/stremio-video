@@ -486,6 +486,8 @@ if any(name not in canonical_watched_account_adapter_test for name in [
     'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes',
     'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess',
     'externalScreenAccountLeaseNeverOwnsCallerPort',
+    'screenOwnedLeaseTerminationRequestIsStickyAndRevokesAccount',
+    'externalScreenLeaseTerminationNeverOwnsCallerPort',
     'throwingHostCollectionsAndCallbacksFailClosed'
 ]):
     fail.append('canonical_account_adapter_regressions_missing')
@@ -514,11 +516,16 @@ if ('internal object CanonicalWatchedScreenConstructionBoundary' not in
     fail.append('android_title_screen_construction_failure_boundary_missing')
 if ('class CanonicalWatchedScreenOwnedAccountLease' not in
         canonical_watched_account_adapter or
+    'private val terminationRequested = AtomicBoolean(false)' not in
+        canonical_watched_account_adapter or
     'private val revoked = AtomicBoolean(false)' not in
+        canonical_watched_account_adapter or
+    'terminationRequested.set(true)' not in canonical_watched_account_adapter or
+    'fun isTerminationRequested(): Boolean = terminationRequested.get()' not in
         canonical_watched_account_adapter or
     'if (!revoked.compareAndSet(false, true)) return true' not in
         canonical_watched_account_adapter):
-    fail.append('android_title_screen_owned_account_revocation_lease_missing')
+    fail.append('android_title_screen_owned_account_termination_lease_missing')
 if android_title_watched_screen_owners.count(
         'private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?'
     ) != 2:
@@ -527,19 +534,28 @@ if (android_title_watched_screen_owners.count('if (!ready) {') != 2 or
     android_title_watched_screen_owners.count(
         'private val ownedAccountLease = CanonicalWatchedScreenOwnedAccountLease(ownedAccount)'
     ) != 2 or
-    android_title_watched_screen_owners.count('ownedAccountLease.revoke()') != 8):
+    android_title_watched_screen_owners.count(
+        'ownedAccountLease.requestTermination()'
+    ) != 10 or
+    android_title_watched_screen_owners.count(
+        'ownedAccountLease.isTerminationRequested()'
+    ) != 6):
     fail.append('android_title_screen_owned_adapter_failure_or_close_missing')
 if (android_title_watched_screen_owners.count(
-        'val accountClosed = ownedAccountLease.revoke()'
+        'val accountClosed = ownedAccountLease.requestTermination()'
     ) != 2 or
     android_title_watched_screen_owners.count(
         'return hostClosed && relayClosed && accountClosed'
     ) != 2):
     fail.append('android_title_screen_close_does_not_revoke_owned_adapter')
 if android_title_watched_screen_owners.count(
-        'if (!onMainOwnerThread()) {\n            ownedAccountLease.revoke()'
-    ) != 2:
-    fail.append('android_title_screen_foreign_teardown_does_not_revoke_owned_adapter')
+        'if (!onMainOwnerThread()) {\n            ownedAccountLease.requestTermination()'
+    ) != 4:
+    fail.append('android_title_screen_foreign_teardown_or_callback_not_contained')
+if android_title_watched_screen_owners.count(
+        'if (ownedAccountLease.isTerminationRequested()) {\n            poison()'
+    ) != 4:
+    fail.append('android_title_screen_requested_termination_not_cleaned_on_owner_thread')
 if (any(name in java_text for name in [
         'AndroidMobileTitleWatchedScreenOwner',
         'AndroidTvTitleWatchedScreenOwner',

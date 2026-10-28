@@ -340,6 +340,34 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertTrue(lease.revoke())
     }
 
+    @Test fun screenOwnedLeaseTerminationRequestIsStickyAndRevokesAccount() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        val lease = CanonicalWatchedScreenOwnedAccountLease(adapter)
+        val requested = AtomicReference<Boolean>()
+        val thread = Thread { requested.set(lease.requestTermination()) }
+        thread.start()
+        thread.join()
+
+        assertTrue(requested.get())
+        assertTrue(lease.isTerminationRequested())
+        assertTrue(lease.requestTermination())
+        assertNull(adapter.currentSnapshot())
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.epochReads)
+        assertEquals(0, host.observeCalls)
+        assertEquals(0, host.dispatchedEpochs.size)
+    }
+
+    @Test fun externalScreenLeaseTerminationNeverOwnsCallerPort() {
+        val lease = CanonicalWatchedScreenOwnedAccountLease(null)
+        assertFalse(lease.isTerminationRequested())
+
+        assertTrue(lease.requestTermination())
+        assertTrue(lease.isTerminationRequested())
+        assertTrue(lease.requestTermination())
+    }
+
     @Test fun throwingHostCollectionsAndCallbacksFailClosed() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)

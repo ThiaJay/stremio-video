@@ -76,7 +76,15 @@ internal object CanonicalWatchedScreenConstructionBoundary {
 internal class CanonicalWatchedScreenOwnedAccountLease(
     private val account: SessionBoundCanonicalWatchedAccountAdapter?
 ) {
+    private val terminationRequested = AtomicBoolean(false)
     private val revoked = AtomicBoolean(false)
+
+    fun requestTermination(): Boolean {
+        terminationRequested.set(true)
+        return revoke()
+    }
+
+    fun isTerminationRequested(): Boolean = terminationRequested.get()
 
     fun revoke(): Boolean {
         if (!revoked.compareAndSet(false, true)) return true

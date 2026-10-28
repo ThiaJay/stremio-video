@@ -77,18 +77,26 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         if (!ready) {
             host.close()
             relay.close()
-            ownedAccountLease.revoke()
+            ownedAccountLease.requestTermination()
             closed = true
         }
     }
 
     fun render(seasonNumber: Int?): Boolean {
         if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) return false
+        if (ownedAccountLease.isTerminationRequested()) {
+            poison()
+            return false
+        }
         return host.render(seasonNumber)
     }
 
     fun consumeOutcome(): NativeMobileTitleWatchedOutcome? {
         if (!onMainOwnerThread() || closed || !ready) return null
+        if (ownedAccountLease.isTerminationRequested()) {
+            poison()
+            return null
+        }
         val outcome = pendingOutcome ?: return null
         pendingOutcome = null
         return outcome
@@ -96,7 +104,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
 
     fun close(): Boolean {
         if (!onMainOwnerThread()) {
-            ownedAccountLease.revoke()
+            ownedAccountLease.requestTermination()
             return false
         }
         if (closed) return false
@@ -105,7 +113,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        val accountClosed = ownedAccountLease.revoke()
+        val accountClosed = ownedAccountLease.requestTermination()
         return hostClosed && relayClosed && accountClosed
     }
 
@@ -115,7 +123,13 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         semanticEvent: String,
         unwatchAcknowledged: Boolean
     ) {
-        if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) {
+        if (!onMainOwnerThread()) {
+            ownedAccountLease.requestTermination()
+            return
+        }
+        if (ownedAccountLease.isTerminationRequested() ||
+            closed || !ready || pendingOutcome != null
+        ) {
             poison()
             return
         }
@@ -134,7 +148,7 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
-        ownedAccountLease.revoke()
+        ownedAccountLease.requestTermination()
     }
 
     private fun onMainOwnerThread(): Boolean =
@@ -195,18 +209,26 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         if (!ready) {
             host.close()
             relay.close()
-            ownedAccountLease.revoke()
+            ownedAccountLease.requestTermination()
             closed = true
         }
     }
 
     fun render(seasonNumber: Int?): Boolean {
         if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) return false
+        if (ownedAccountLease.isTerminationRequested()) {
+            poison()
+            return false
+        }
         return host.render(seasonNumber)
     }
 
     fun consumeOutcome(): NativeTvTitleWatchedOutcome? {
         if (!onMainOwnerThread() || closed || !ready) return null
+        if (ownedAccountLease.isTerminationRequested()) {
+            poison()
+            return null
+        }
         val outcome = pendingOutcome ?: return null
         pendingOutcome = null
         return outcome
@@ -214,7 +236,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
 
     fun close(): Boolean {
         if (!onMainOwnerThread()) {
-            ownedAccountLease.revoke()
+            ownedAccountLease.requestTermination()
             return false
         }
         if (closed) return false
@@ -223,7 +245,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         val hostClosed = host.close()
         val relayClosed = relay.close()
-        val accountClosed = ownedAccountLease.revoke()
+        val accountClosed = ownedAccountLease.requestTermination()
         return hostClosed && relayClosed && accountClosed
     }
 
@@ -233,7 +255,13 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         remoteKey: String,
         unwatchAcknowledged: Boolean
     ) {
-        if (!onMainOwnerThread() || closed || !ready || pendingOutcome != null) {
+        if (!onMainOwnerThread()) {
+            ownedAccountLease.requestTermination()
+            return
+        }
+        if (ownedAccountLease.isTerminationRequested() ||
+            closed || !ready || pendingOutcome != null
+        ) {
             poison()
             return
         }
@@ -252,7 +280,7 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
         pendingOutcome = null
         host.close()
         relay.close()
-        ownedAccountLease.revoke()
+        ownedAccountLease.requestTermination()
     }
 
     private fun onMainOwnerThread(): Boolean =
