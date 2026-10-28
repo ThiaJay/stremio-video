@@ -147,6 +147,7 @@ if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watc
     'DISPATCHED_PENDING_READBACK' not in title_watched_menu or
     'private var pendingReadback: PendingReadback? = null' not in title_watched_menu or
     'if (!confirmPendingReadback(snapshot)) return emptyList()' not in title_watched_menu or
+    'state.copy(watchedVideoIds = state.watchedVideoIds.toList())' not in title_watched_menu or
     'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
     fail.append('title_watched_canonical_post_write_readback_gate_missing')
 if ('NativeTvTitleWatchedMenu(' in java_text or 'NativeTvTitleWatchedAction(' in java_text):
@@ -161,7 +162,8 @@ if any(name not in title_watched_menu_test for name in [
     'ownerThreadAndCloseFailClosed',
     'snapshotAndDispatchExceptionsFailClosed',
     'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches',
-    'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration'
+    'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration',
+    'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping'
 ]):
     fail.append('native_tv_title_watched_menu_regressions_missing')
 if ('class NativeMobileTitleWatchedMenu' not in mobile_title_watched_menu or
@@ -410,6 +412,10 @@ if ('NativeMobileTitleWatchedHostBinding(coordinator, account, relay)' not in an
     'NativeTvTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
     'private var ready = relay.bind(port)' not in android_title_watched_screen_owners):
     fail.append('android_title_screen_host_widget_composition_missing')
+if ('import org.pss.stremio.tv.CanonicalWatchedStatePort' not in android_title_watched_screen_owners or
+    android_title_watched_screen_owners.count('account: CanonicalWatchedStatePort') != 4 or
+    'account: StremioAccountPort' in android_title_watched_screen_owners):
+    fail.append('android_title_screen_canonical_readback_port_not_mandatory')
 if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
     android_title_watched_screen_owners.count('pendingOutcome = host.activate(') != 2):
     fail.append('android_title_screen_one_outcome_mailbox_missing')
@@ -601,7 +607,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':171,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':175,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

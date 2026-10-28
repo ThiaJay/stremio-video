@@ -2,6 +2,7 @@ package org.thiajay.stremiotvcompanion
 
 import android.os.Looper
 import android.view.ViewGroup
+import org.pss.stremio.tv.CanonicalWatchedStatePort
 import org.pss.stremio.tv.NativeMobileTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome
 import org.pss.stremio.tv.NativeMobileTitleWatchedViewAction
@@ -10,7 +11,6 @@ import org.pss.stremio.tv.NativeTvTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeTvTitleWatchedOutcome
 import org.pss.stremio.tv.NativeTvTitleWatchedViewAction
 import org.pss.stremio.tv.NativeTvTitleWatchedViewPortRelay
-import org.pss.stremio.tv.StremioAccountPort
 import org.pss.stremio.tv.TvWatchedCoordinator
 
 /**
@@ -24,13 +24,13 @@ import org.pss.stremio.tv.TvWatchedCoordinator
 class AndroidMobileTitleWatchedScreenOwner private constructor(
     container: ViewGroup,
     coordinator: TvWatchedCoordinator,
-    account: StremioAccountPort
+    account: CanonicalWatchedStatePort
 ) {
     companion object {
         fun create(
             container: ViewGroup,
             coordinator: TvWatchedCoordinator,
-            account: StremioAccountPort
+            account: CanonicalWatchedStatePort
         ): AndroidMobileTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
             val owner = AndroidMobileTitleWatchedScreenOwner(container, coordinator, account)
@@ -107,13 +107,13 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
 class AndroidTvTitleWatchedScreenOwner private constructor(
     container: ViewGroup,
     coordinator: TvWatchedCoordinator,
-    account: StremioAccountPort
+    account: CanonicalWatchedStatePort
 ) {
     companion object {
         fun create(
             container: ViewGroup,
             coordinator: TvWatchedCoordinator,
-            account: StremioAccountPort
+            account: CanonicalWatchedStatePort
         ): AndroidTvTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
             val owner = AndroidTvTitleWatchedScreenOwner(container, coordinator, account)

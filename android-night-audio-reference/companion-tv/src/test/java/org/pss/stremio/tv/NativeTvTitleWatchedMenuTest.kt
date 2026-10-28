@@ -264,4 +264,33 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(4, menu.present(1).size)
         assertEquals(1, account.sent.size)
     }
+
+    @Test fun throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping() {
+        val account = Account(snapshot()).apply {
+            applyDispatchToReadback = false
+            readbackOverride = CanonicalWatchedStateReadback(
+                accountFingerprint = value!!.accountFingerprint,
+                libraryItemFingerprint = value!!.libraryItemFingerprint,
+                seriesId = value!!.seriesId,
+                watchedVideoIds = object : AbstractList<String>() {
+                    override val size: Int = 1
+                    override fun get(index: Int): String =
+                        throw IllegalStateException("mutable Core wrapper changed")
+                }
+            )
+        }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        assertTrue(menu.present(1).isEmpty())
+
+        account.readbackOverride = null
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
 }

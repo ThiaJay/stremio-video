@@ -35,7 +35,7 @@ data class CanonicalWatchedStateReadback(
     val watchedVideoIds: List<String>
 )
 
-/** Optional stronger account boundary required only after an accepted write. */
+/** Mandatory account boundary for a real Android title-action screen owner. */
 interface CanonicalWatchedStatePort : StremioAccountPort {
     fun currentWatchedState(): CanonicalWatchedStateReadback?
 }
@@ -223,7 +223,9 @@ class NativeTvTitleWatchedMenu(
     }
 
     private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
-        (account as? CanonicalWatchedStatePort)?.currentWatchedState()
+        val state = (account as? CanonicalWatchedStatePort)?.currentWatchedState()
+            ?: return null
+        state.copy(watchedVideoIds = state.watchedVideoIds.toList())
     } catch (_: Exception) {
         null
     } catch (_: LinkageError) {
