@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=168 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=169 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -97,7 +97,8 @@ jobs:
           assert 'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess' in names, 'Owned screen exception cleanup regression not executed'
           assert 'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle' in names, 'Owned screen lifecycle transfer regression not executed'
           assert 'externalScreenConstructionFailuresAreContainedWithoutOwnership' in names, 'External screen construction containment regression not executed'
-          assert 'foreignThreadAndCloseRejectAllOperations' in names, 'Canonical adapter lifecycle regression not executed'
+          assert 'foreignThreadCloseRevokesWithoutHostAccess' in names, 'Canonical adapter asynchronous close regression not executed'
+          assert 'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes' in names, 'Canonical adapter in-flight close serialization regression not executed'
           assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
           assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'

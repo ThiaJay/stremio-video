@@ -3,6 +3,8 @@ package org.pss.stremio.tv
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class SessionBoundCanonicalWatchedAccountAdapterTest {
@@ -34,6 +36,8 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         var throwObserve = false
         var throwDispatch = false
         var incrementEpochOnDispatch = false
+        var dispatchEntered: CountDownLatch? = null
+        var dispatchRelease: CountDownLatch? = null
         var epochSequence = ArrayDeque<Long>()
         var epochReads = 0
         var observeCalls = 0
@@ -58,6 +62,8 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
             dispatchedEpochs.add(expectedSessionEpoch)
             if (expectedSessionEpoch != epoch) return false
             if (throwDispatch) throw IllegalStateException("bounded test")
+            dispatchEntered?.countDown()
+            dispatchRelease?.await(5, TimeUnit.SECONDS)
             sent.add(message)
             if (incrementEpochOnDispatch) epoch += 1
             return !rejectDispatch
@@ -224,7 +230,7 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         })
     }
 
-    @Test fun foreignThreadAndCloseRejectAllOperations() {
+    @Test fun foreignThreadCloseRevokesWithoutHostAccess() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
         val snapshot = AtomicReference<SeriesAccountSnapshot?>()
@@ -240,11 +246,69 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
 
         assertNull(snapshot.get())
         assertFalse(dispatched.get())
-        assertFalse(closed.get())
-        assertTrue(adapter.close())
+        assertTrue(closed.get())
         assertNull(adapter.currentSnapshot())
         assertNull(adapter.currentWatchedState())
         assertFalse(adapter.dispatch(seriesCommand()))
+        assertFalse(adapter.close())
+        assertEquals(0, host.epochReads)
+        assertEquals(0, host.observeCalls)
+        assertEquals(0, host.dispatchedEpochs.size)
+    }
+
+    @Test fun foreignCloseWaitsForInFlightOwnerDispatchThenRevokes() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val adapterReady = CountDownLatch(1)
+        val closeStarted = CountDownLatch(1)
+        val closeFinished = CountDownLatch(1)
+        val ownerFinished = CountDownLatch(1)
+        val host = Host().apply {
+            dispatchEntered = entered
+            dispatchRelease = release
+        }
+        val adapterRef = AtomicReference<SessionBoundCanonicalWatchedAccountAdapter>()
+        val prepared = AtomicReference<Boolean>()
+        val dispatched = AtomicReference<Boolean>()
+        val closed = AtomicReference<Boolean>()
+        val snapshotAfterClose = AtomicReference<SeriesAccountSnapshot?>()
+        val dispatchAfterClose = AtomicReference<Boolean>()
+
+        val owner = Thread {
+            val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+            adapterRef.set(adapter)
+            prepared.set(adapter.currentSnapshot() != null)
+            adapterReady.countDown()
+            dispatched.set(adapter.dispatch(seriesCommand()))
+            closeFinished.await(5, TimeUnit.SECONDS)
+            snapshotAfterClose.set(adapter.currentSnapshot())
+            dispatchAfterClose.set(adapter.dispatch(seriesCommand()))
+            ownerFinished.countDown()
+        }
+        owner.start()
+
+        assertTrue(adapterReady.await(5, TimeUnit.SECONDS))
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        val closer = Thread {
+            closeStarted.countDown()
+            closed.set(adapterRef.get().close())
+            closeFinished.countDown()
+        }
+        closer.start()
+
+        assertTrue(closeStarted.await(5, TimeUnit.SECONDS))
+        assertFalse(closeFinished.await(100, TimeUnit.MILLISECONDS))
+        release.countDown()
+        assertTrue(ownerFinished.await(5, TimeUnit.SECONDS))
+        owner.join()
+        closer.join()
+
+        assertTrue(prepared.get())
+        assertTrue(dispatched.get())
+        assertTrue(closed.get())
+        assertNull(snapshotAfterClose.get())
+        assertFalse(dispatchAfterClose.get())
+        assertEquals(1, host.dispatchedEpochs.size)
     }
 
     @Test fun throwingHostCollectionsAndCallbacksFailClosed() {

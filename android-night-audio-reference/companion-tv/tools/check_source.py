@@ -462,8 +462,11 @@ if ('expectedSessionEpoch: Long' not in canonical_watched_account_adapter or
     'host.dispatchTitleWatched(expected.sessionEpoch, command)' not in canonical_watched_account_adapter):
     fail.append('canonical_account_atomic_session_epoch_dispatch_missing')
 if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
-    'fun close(): Boolean' not in canonical_watched_account_adapter or
-    'private var closed = false' not in canonical_watched_account_adapter):
+    'private val lifecycleLock = Any()' not in canonical_watched_account_adapter or
+    canonical_watched_account_adapter.count('synchronized(lifecycleLock)') != 4 or
+    '@Volatile\n    private var closed = false' not in canonical_watched_account_adapter or
+    'fun close(): Boolean = synchronized(lifecycleLock)' not in
+        canonical_watched_account_adapter):
     fail.append('canonical_account_owner_thread_or_close_missing')
 if ('SessionBoundCanonicalWatchedAccountAdapter(' in java_text or
     'CanonicalWatchedAccountHostPort' in java_text):
@@ -479,7 +482,8 @@ if any(name not in canonical_watched_account_adapter_test for name in [
     'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess',
     'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle',
     'externalScreenConstructionFailuresAreContainedWithoutOwnership',
-    'foreignThreadAndCloseRejectAllOperations',
+    'foreignThreadCloseRevokesWithoutHostAccess',
+    'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes',
     'throwingHostCollectionsAndCallbacksFailClosed'
 ]):
     fail.append('canonical_account_adapter_regressions_missing')

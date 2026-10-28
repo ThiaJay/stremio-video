@@ -71,7 +71,10 @@ internal object CanonicalWatchedScreenConstructionBoundary {
  * consumes that lease before the host call, accepts only exact series/season
  * watched commands and verifies that the host epoch did not change.
  *
- * This adapter is owner-thread confined and carries no authentication material.
+ * Account operations remain owner-thread confined. [close] is a thread-safe
+ * revocation boundary so an asynchronous host teardown can wait for any
+ * in-flight owner operation and guarantee that no later host callback starts.
+ * The adapter carries no authentication material.
  */
 class SessionBoundCanonicalWatchedAccountAdapter(
     private val host: CanonicalWatchedAccountHostPort
@@ -95,31 +98,34 @@ class SessionBoundCanonicalWatchedAccountAdapter(
     )
 
     private val ownerThread = Thread.currentThread()
+    private val lifecycleLock = Any()
     private val hexSha = Regex("^[a-f0-9]{64}$")
     private var latestIdentity: ObservationIdentity? = null
+    @Volatile
     private var closed = false
 
-    override fun currentSnapshot(): SeriesAccountSnapshot? {
-        if (!onOwnerThread() || closed) return null
-        val observation = observeOrNull() ?: return null
+    override fun currentSnapshot(): SeriesAccountSnapshot? = synchronized(lifecycleLock) {
+        if (!onOwnerThread() || closed) return@synchronized null
+        val observation = observeOrNull() ?: return@synchronized null
         latestIdentity = observation.identity
-        return observation.snapshot
+        observation.snapshot
     }
 
-    override fun currentWatchedState(): CanonicalWatchedStateReadback? {
-        if (!onOwnerThread() || closed) return null
-        val expected = latestIdentity ?: return null
-        val observation = observeOrNull() ?: return null
-        if (observation.identity != expected) return null
-        return observation.readback
-    }
+    override fun currentWatchedState(): CanonicalWatchedStateReadback? =
+        synchronized(lifecycleLock) {
+            if (!onOwnerThread() || closed) return@synchronized null
+            val expected = latestIdentity ?: return@synchronized null
+            val observation = observeOrNull() ?: return@synchronized null
+            if (observation.identity != expected) return@synchronized null
+            observation.readback
+        }
 
-    override fun dispatch(message: Map<String, Any>): Boolean {
-        if (!onOwnerThread() || closed) return false
-        val expected = latestIdentity ?: return false
-        val observation = observeOrNull() ?: return false
-        if (observation.identity != expected) return false
-        val command = exactTitleWatchedCommand(message) ?: return false
+    override fun dispatch(message: Map<String, Any>): Boolean = synchronized(lifecycleLock) {
+        if (!onOwnerThread() || closed) return@synchronized false
+        val expected = latestIdentity ?: return@synchronized false
+        val observation = observeOrNull() ?: return@synchronized false
+        if (observation.identity != expected) return@synchronized false
+        val command = exactTitleWatchedCommand(message) ?: return@synchronized false
 
         latestIdentity = null
         val accepted = try {
@@ -129,22 +135,22 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         } catch (_: LinkageError) {
             false
         }
-        if (!accepted) return false
+        if (!accepted) return@synchronized false
         val after = try {
             host.sessionEpoch()
         } catch (_: Exception) {
-            return false
+            return@synchronized false
         } catch (_: LinkageError) {
-            return false
+            return@synchronized false
         }
-        return after == expected.sessionEpoch
+        after == expected.sessionEpoch
     }
 
-    fun close(): Boolean {
-        if (!onOwnerThread() || closed) return false
+    fun close(): Boolean = synchronized(lifecycleLock) {
+        if (closed) return@synchronized false
         closed = true
         latestIdentity = null
-        return true
+        true
     }
 
     private fun observeOrNull(): DetachedObservation? {
