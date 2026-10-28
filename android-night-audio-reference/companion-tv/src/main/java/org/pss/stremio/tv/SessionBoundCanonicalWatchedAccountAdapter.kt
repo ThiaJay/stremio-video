@@ -32,6 +32,38 @@ interface CanonicalWatchedAccountHostPort {
 }
 
 /**
+ * Fail-closed construction boundary for the real Android mobile/TV screen
+ * owners.
+ *
+ * A host-owned adapter is revoked when construction returns no screen or
+ * raises an ordinary compatibility failure. A successfully returned owner
+ * receives the still-live adapter and becomes solely responsible for closing
+ * it. The external path contains the same construction failures without ever
+ * assuming ownership of the caller-supplied canonical port.
+ */
+internal object CanonicalWatchedScreenConstructionBoundary {
+    fun <T : Any> owned(
+        host: CanonicalWatchedAccountHostPort,
+        build: (SessionBoundCanonicalWatchedAccountAdapter) -> T?
+    ): T? {
+        val account = SessionBoundCanonicalWatchedAccountAdapter(host)
+        val owner = contained { build(account) }
+        if (owner == null) account.close()
+        return owner
+    }
+
+    fun <T : Any> external(build: () -> T?): T? = contained(build)
+
+    private fun <T : Any> contained(build: () -> T?): T? = try {
+        build()
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+}
+
+/**
  * Concrete fail-closed [CanonicalWatchedStatePort] for Android title actions.
  *
  * Every observation is detached between two equal session-epoch reads. Dispatch

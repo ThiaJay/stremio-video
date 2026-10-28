@@ -177,6 +177,53 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertEquals(0, host.dispatchedEpochs.size)
     }
 
+    @Test fun ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess() {
+        val host = Host()
+        var captured: SessionBoundCanonicalWatchedAccountAdapter? = null
+
+        val result = CanonicalWatchedScreenConstructionBoundary.owned<String>(host) { account ->
+            captured = account
+            throw IllegalStateException("bounded construction failure")
+        }
+
+        assertNull(result)
+        assertNotNull(captured)
+        assertNull(captured!!.currentSnapshot())
+        assertEquals(0, host.epochReads)
+        assertEquals(0, host.observeCalls)
+        assertEquals(0, host.dispatchedEpochs.size)
+    }
+
+    @Test fun ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle() {
+        val rejectedHost = Host()
+        var rejected: SessionBoundCanonicalWatchedAccountAdapter? = null
+        assertNull(CanonicalWatchedScreenConstructionBoundary.owned<Any>(rejectedHost) {
+            rejected = it
+            null
+        })
+        assertNull(rejected!!.currentSnapshot())
+        assertEquals(0, rejectedHost.epochReads)
+
+        val acceptedHost = Host()
+        var accepted: SessionBoundCanonicalWatchedAccountAdapter? = null
+        val screen = Any()
+        assertSame(screen, CanonicalWatchedScreenConstructionBoundary.owned(acceptedHost) {
+            accepted = it
+            screen
+        })
+        assertNotNull(accepted!!.currentSnapshot())
+        assertTrue(accepted!!.close())
+    }
+
+    @Test fun externalScreenConstructionFailuresAreContainedWithoutOwnership() {
+        assertNull(CanonicalWatchedScreenConstructionBoundary.external<String> {
+            throw IllegalStateException("bounded construction failure")
+        })
+        assertNull(CanonicalWatchedScreenConstructionBoundary.external<String> {
+            throw LinkageError("bounded compatibility failure")
+        })
+    }
+
     @Test fun foreignThreadAndCloseRejectAllOperations() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)

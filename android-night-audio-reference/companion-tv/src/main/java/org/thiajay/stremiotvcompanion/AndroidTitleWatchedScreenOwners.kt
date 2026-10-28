@@ -3,6 +3,7 @@ package org.thiajay.stremiotvcompanion
 import android.os.Looper
 import android.view.ViewGroup
 import org.pss.stremio.tv.CanonicalWatchedAccountHostPort
+import org.pss.stremio.tv.CanonicalWatchedScreenConstructionBoundary
 import org.pss.stremio.tv.CanonicalWatchedStatePort
 import org.pss.stremio.tv.NativeMobileTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome
@@ -36,10 +37,12 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
             account: CanonicalWatchedStatePort
         ): AndroidMobileTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val owner = AndroidMobileTitleWatchedScreenOwner(
-                container, coordinator, account, ownedAccount = null
-            )
-            return if (owner.ready) owner else null
+            return CanonicalWatchedScreenConstructionBoundary.external {
+                val owner = AndroidMobileTitleWatchedScreenOwner(
+                    container, coordinator, account, ownedAccount = null
+                )
+                if (owner.ready) owner else null
+            }
         }
 
         fun create(
@@ -48,11 +51,12 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
             accountHost: CanonicalWatchedAccountHostPort
         ): AndroidMobileTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val account = SessionBoundCanonicalWatchedAccountAdapter(accountHost)
-            val owner = AndroidMobileTitleWatchedScreenOwner(
-                container, coordinator, account, ownedAccount = account
-            )
-            return if (owner.ready) owner else null
+            return CanonicalWatchedScreenConstructionBoundary.owned(accountHost) { account ->
+                val owner = AndroidMobileTitleWatchedScreenOwner(
+                    container, coordinator, account, ownedAccount = account
+                )
+                if (owner.ready) owner else null
+            }
         }
     }
 
@@ -146,10 +150,12 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
             account: CanonicalWatchedStatePort
         ): AndroidTvTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val owner = AndroidTvTitleWatchedScreenOwner(
-                container, coordinator, account, ownedAccount = null
-            )
-            return if (owner.ready) owner else null
+            return CanonicalWatchedScreenConstructionBoundary.external {
+                val owner = AndroidTvTitleWatchedScreenOwner(
+                    container, coordinator, account, ownedAccount = null
+                )
+                if (owner.ready) owner else null
+            }
         }
 
         fun create(
@@ -158,11 +164,12 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
             accountHost: CanonicalWatchedAccountHostPort
         ): AndroidTvTitleWatchedScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
-            val account = SessionBoundCanonicalWatchedAccountAdapter(accountHost)
-            val owner = AndroidTvTitleWatchedScreenOwner(
-                container, coordinator, account, ownedAccount = account
-            )
-            return if (owner.ready) owner else null
+            return CanonicalWatchedScreenConstructionBoundary.owned(accountHost) { account ->
+                val owner = AndroidTvTitleWatchedScreenOwner(
+                    container, coordinator, account, ownedAccount = account
+                )
+                if (owner.ready) owner else null
+            }
         }
     }
 

@@ -476,6 +476,9 @@ if any(name not in canonical_watched_account_adapter_test for name in [
     'dispatchBindsHostCallToObservedSessionEpoch',
     'sessionEpochDriftFailsClosed',
     'closedAdapterNeverTouchesHostCallbacks',
+    'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess',
+    'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle',
+    'externalScreenConstructionFailuresAreContainedWithoutOwnership',
     'foreignThreadAndCloseRejectAllOperations',
     'throwingHostCollectionsAndCallbacksFailClosed'
 ]):
@@ -491,9 +494,18 @@ if (android_title_watched_screen_owners.count('val hostClosed = host.close()') !
     fail.append('android_title_screen_lifecycle_close_missing')
 if (android_title_watched_screen_owners.count('accountHost: CanonicalWatchedAccountHostPort') != 2 or
     android_title_watched_screen_owners.count(
-        'SessionBoundCanonicalWatchedAccountAdapter(accountHost)'
+        'CanonicalWatchedScreenConstructionBoundary.owned(accountHost)'
+    ) != 2 or
+    android_title_watched_screen_owners.count(
+        'CanonicalWatchedScreenConstructionBoundary.external'
     ) != 2):
     fail.append('android_title_screen_owned_account_host_overloads_missing')
+if ('internal object CanonicalWatchedScreenConstructionBoundary' not in
+        canonical_watched_account_adapter or
+    'if (owner == null) account.close()' not in canonical_watched_account_adapter or
+    'catch (_: Exception)' not in canonical_watched_account_adapter or
+    'catch (_: LinkageError)' not in canonical_watched_account_adapter):
+    fail.append('android_title_screen_construction_failure_boundary_missing')
 if android_title_watched_screen_owners.count(
         'private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?'
     ) != 2:
