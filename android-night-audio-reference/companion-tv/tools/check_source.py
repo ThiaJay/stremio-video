@@ -235,7 +235,8 @@ if ('revokeRenderedGeneration()' not in mobile_title_host_binding or
     fail.append('mobile_host_generation_revocation_missing')
 if ('Thread.currentThread() === ownerThread' not in mobile_title_host_binding or
     'private var closed = false' not in mobile_title_host_binding or
-    'val menuClosed = menu.close()' not in mobile_title_host_binding):
+    'val menuClosed = menu.close()' not in mobile_title_host_binding or
+    'fun isOperational(): Boolean = onOwnerThread() && !closed' not in mobile_title_host_binding):
     fail.append('mobile_host_thread_or_lifecycle_guard_missing')
 if ('NativeMobileTitleWatchedHostBinding(' in java_text or
     'NativeMobileTitleWatchedViewAction(' in java_text):
@@ -250,7 +251,8 @@ if any(name not in mobile_title_host_binding_test for name in [
     'futureEpisodeFilteringSurvivesRealHostBoundary',
     'rejectedOrThrowingViewPortPermanentlyPoisonsBinding',
     'hostOwnerThreadAndCloseRevokeOutstandingCallbacks',
-    'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback'
+    'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback',
+    'mobileHostOperationalStateDistinguishesFatalFailureFromPendingReadback'
 ]):
     fail.append('native_mobile_title_host_binding_regressions_missing')
 if ('class NativeTvTitleWatchedHostBinding' not in tv_title_host_binding or
@@ -278,7 +280,8 @@ if ('revokeRenderedGeneration()' not in tv_title_host_binding or
     fail.append('tv_host_generation_revocation_missing')
 if ('Thread.currentThread() === ownerThread' not in tv_title_host_binding or
     'private var closed = false' not in tv_title_host_binding or
-    'val menuClosed = menu.close()' not in tv_title_host_binding):
+    'val menuClosed = menu.close()' not in tv_title_host_binding or
+    'fun isOperational(): Boolean = onOwnerThread() && !closed' not in tv_title_host_binding):
     fail.append('tv_host_thread_or_lifecycle_guard_missing')
 if ('val focusable: Boolean = true' not in tv_title_host_binding or
     'val requiresAcknowledgement: Boolean = !watched' not in tv_title_host_binding):
@@ -298,7 +301,8 @@ if any(name not in tv_title_host_binding_test for name in [
     'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding',
     'clearFailureAfterAppliedTvActionClosesWithoutReplay',
     'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks',
-    'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback'
+    'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback',
+    'tvHostOperationalStateDistinguishesFatalFailureFromPendingReadback'
 ]):
     fail.append('native_tv_title_host_binding_regressions_missing')
 if ('class NativeTvTitleWatchedWidgetController' not in tv_title_widget_controller or
@@ -540,14 +544,29 @@ if any(name not in canonical_watched_account_adapter_test for name in [
 ]):
     fail.append('canonical_account_adapter_regressions_missing')
 if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = host.activate(') != 2):
+    android_title_watched_screen_owners.count('val outcome = host.activate(') != 2 or
+    android_title_watched_screen_owners.count('pendingOutcome = outcome') != 2):
     fail.append('android_title_screen_one_outcome_mailbox_missing')
 if (android_title_watched_screen_owners.count('fun consumeOutcome()') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = null') < 6):
+    android_title_watched_screen_owners.count('pendingOutcome = null') < 8 or
+    android_title_watched_screen_owners.count(
+        'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
+    ) != 2 or
+    android_title_watched_screen_owners.count('return outcome') != 4):
     fail.append('android_title_screen_outcome_consumption_missing')
 if (android_title_watched_screen_owners.count('val hostClosed = host.close()') != 2 or
     android_title_watched_screen_owners.count('val relayClosed = relay.close()') != 2):
     fail.append('android_title_screen_lifecycle_close_missing')
+if (android_title_watched_screen_owners.count(
+        'val rendered = host.render(seasonNumber)'
+    ) != 2 or
+    android_title_watched_screen_owners.count(
+        'if (!rendered && !host.isOperational()) poison()'
+    ) != 2 or
+    android_title_watched_screen_owners.count(
+        'if (!host.isOperational()) {\n            ownedAccountLease.requestTermination()'
+    ) != 2):
+    fail.append('android_title_screen_fatal_host_liveness_not_propagated')
 if (android_title_watched_screen_owners.count('accountHost: CanonicalWatchedAccountHostPort') != 2 or
     android_title_watched_screen_owners.count(
         'CanonicalWatchedScreenConstructionBoundary.owned(accountHost)'
@@ -584,7 +603,7 @@ if (android_title_watched_screen_owners.count('if (!ready) {') != 2 or
     ) != 2 or
     android_title_watched_screen_owners.count(
         'ownedAccountLease.requestTermination()'
-    ) != 10 or
+    ) != 12 or
     android_title_watched_screen_owners.count(
         'ownedAccountLease.isTerminationRequested()'
     ) != 6):
@@ -600,9 +619,12 @@ if android_title_watched_screen_owners.count(
         'if (!onMainOwnerThread()) {\n            ownedAccountLease.requestTermination()'
     ) != 4:
     fail.append('android_title_screen_foreign_teardown_or_callback_not_contained')
-if android_title_watched_screen_owners.count(
+if (android_title_watched_screen_owners.count(
         'if (ownedAccountLease.isTerminationRequested()) {\n            poison()'
-    ) != 4:
+    ) != 2 or
+    android_title_watched_screen_owners.count(
+        'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
+    ) != 2):
     fail.append('android_title_screen_requested_termination_not_cleaned_on_owner_thread')
 if (any(name in java_text for name in [
         'AndroidMobileTitleWatchedScreenOwner',
@@ -786,7 +808,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':195,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':199,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

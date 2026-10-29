@@ -397,4 +397,37 @@ class NativeMobileTitleWatchedHostBindingTest {
         assertEquals(4, view.actions.size)
         assertEquals(1, account.sent.size)
     }
+    @Test fun mobileHostOperationalStateDistinguishesFatalFailureFromPendingReadback() {
+        val fatalView = View().apply { rejectReplace = true }
+        val fatal = NativeMobileTitleWatchedHostBinding(
+            TvWatchedCoordinator(),
+            Account(snapshot()),
+            fatalView
+        )
+        assertFalse(fatal.render(1))
+        assertFalse(fatal.isOperational())
+
+        val pendingAccount = Account(snapshot()).apply {
+            applyDispatchToReadback = false
+        }
+        val pendingView = View()
+        val pending = NativeMobileTitleWatchedHostBinding(
+            TvWatchedCoordinator(),
+            pendingAccount,
+            pendingView
+        )
+        assertTrue(pending.render(1))
+        val selected = action(pendingView, WatchedScope.Series, true)
+        assertEquals(
+            NativeMobileTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            pending.activate(
+                selected,
+                selected.actionId,
+                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+            )
+        )
+        assertFalse(pending.render(1))
+        assertTrue(pending.isOperational())
+    }
+
 }

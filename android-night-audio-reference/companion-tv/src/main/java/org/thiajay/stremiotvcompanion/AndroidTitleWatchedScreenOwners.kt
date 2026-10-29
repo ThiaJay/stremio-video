@@ -88,16 +88,20 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
             poison()
             return false
         }
-        return host.render(seasonNumber)
+        val rendered = host.render(seasonNumber)
+        if (!rendered && !host.isOperational()) poison()
+        return rendered
     }
 
     fun consumeOutcome(): NativeMobileTitleWatchedOutcome? {
         if (!onMainOwnerThread() || closed || !ready) return null
-        if (ownedAccountLease.isTerminationRequested()) {
+        val outcome = pendingOutcome
+        if (ownedAccountLease.isTerminationRequested() || !host.isOperational()) {
+            pendingOutcome = null
             poison()
-            return null
+            return outcome
         }
-        val outcome = pendingOutcome ?: return null
+        outcome ?: return null
         pendingOutcome = null
         return outcome
     }
@@ -133,12 +137,16 @@ class AndroidMobileTitleWatchedScreenOwner private constructor(
             poison()
             return
         }
-        pendingOutcome = host.activate(
+        val outcome = host.activate(
             action = action,
             selectedActionId = selectedActionId,
             semanticEvent = semanticEvent,
             unwatchAcknowledged = unwatchAcknowledged
         )
+        pendingOutcome = outcome
+        if (!host.isOperational()) {
+            ownedAccountLease.requestTermination()
+        }
     }
 
     private fun poison() {
@@ -220,16 +228,20 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
             poison()
             return false
         }
-        return host.render(seasonNumber)
+        val rendered = host.render(seasonNumber)
+        if (!rendered && !host.isOperational()) poison()
+        return rendered
     }
 
     fun consumeOutcome(): NativeTvTitleWatchedOutcome? {
         if (!onMainOwnerThread() || closed || !ready) return null
-        if (ownedAccountLease.isTerminationRequested()) {
+        val outcome = pendingOutcome
+        if (ownedAccountLease.isTerminationRequested() || !host.isOperational()) {
+            pendingOutcome = null
             poison()
-            return null
+            return outcome
         }
-        val outcome = pendingOutcome ?: return null
+        outcome ?: return null
         pendingOutcome = null
         return outcome
     }
@@ -265,12 +277,16 @@ class AndroidTvTitleWatchedScreenOwner private constructor(
             poison()
             return
         }
-        pendingOutcome = host.activate(
+        val outcome = host.activate(
             action = action,
             focusedActionId = focusedActionId,
             remoteKey = remoteKey,
             unwatchAcknowledged = unwatchAcknowledged
         )
+        pendingOutcome = outcome
+        if (!host.isOperational()) {
+            ownedAccountLease.requestTermination()
+        }
     }
 
     private fun poison() {

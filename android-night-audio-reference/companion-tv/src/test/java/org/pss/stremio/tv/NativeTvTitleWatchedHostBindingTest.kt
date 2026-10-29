@@ -390,4 +390,33 @@ class NativeTvTitleWatchedHostBindingTest {
         assertEquals(4, view.actions.size)
         assertEquals(1, account.sent.size)
     }
+    @Test fun tvHostOperationalStateDistinguishesFatalFailureFromPendingReadback() {
+        val fatalView = View().apply { rejectReplace = true }
+        val fatal = NativeTvTitleWatchedHostBinding(
+            TvWatchedCoordinator(),
+            Account(snapshot()),
+            fatalView
+        )
+        assertFalse(fatal.render(1))
+        assertFalse(fatal.isOperational())
+
+        val pendingAccount = Account(snapshot()).apply {
+            applyDispatchToReadback = false
+        }
+        val pendingView = View()
+        val pending = NativeTvTitleWatchedHostBinding(
+            TvWatchedCoordinator(),
+            pendingAccount,
+            pendingView
+        )
+        assertTrue(pending.render(1))
+        val selected = action(pendingView, WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            pending.activate(selected, selected.actionId, "ENTER")
+        )
+        assertFalse(pending.render(1))
+        assertTrue(pending.isOperational())
+    }
+
 }

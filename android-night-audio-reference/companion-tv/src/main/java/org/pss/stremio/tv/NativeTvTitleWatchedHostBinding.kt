@@ -146,6 +146,8 @@ class NativeTvTitleWatchedHostBinding(
         return menuClosed && viewCleared
     }
 
+    fun isOperational(): Boolean = onOwnerThread() && !closed
+
     private fun revokeRenderedGeneration() {
         issued.clear()
         visible = false
