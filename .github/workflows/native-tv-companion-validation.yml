@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=186 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=188 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -79,6 +79,7 @@ jobs:
           assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'
           assert 'futureEpisodeSuppressesUnsafeSeasonActions' in names, 'TV title-action future-episode regression not executed'
           assert 'focusAndRemoteConfirmationDispatchExactSeriesAction' in names, 'TV title-action remote-focus regression not executed'
+          assert 'activatingOneActionRevokesEverySiblingFromThatGeneration' in names, 'TV title-action generation revocation regression not executed'
           assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'
           assert 'accountDriftRefusesPresentedAction' in names, 'TV title-action account-drift regression not executed'
           assert 'staleAndForgedActionsCannotExecute' in names, 'TV title-action issuance regression not executed'
@@ -109,6 +110,7 @@ jobs:
           assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
           assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
           assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'
+          assert 'mobileActivationRevokesEverySiblingFromThatGeneration' in names, 'Mobile title-action generation revocation regression not executed'
           assert 'rawPointerAndLongPressEventsNeverImplyConsent' in names, 'Mobile raw-pointer refusal regression not executed'
           assert 'mobileUnwatchRequiresAcknowledgementAndConsumesIssuance' in names, 'Mobile unwatch acknowledgement regression not executed'
           assert 'futureEpisodeStillSuppressesUnsafeMobileSeasonActions' in names, 'Mobile future-episode regression not executed'

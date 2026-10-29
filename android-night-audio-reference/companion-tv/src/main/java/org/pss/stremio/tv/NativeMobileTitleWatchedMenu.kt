@@ -85,7 +85,8 @@ class NativeMobileTitleWatchedMenu(
         unwatchAcknowledged: Boolean = false
     ): NativeMobileTitleWatchedOutcome {
         if (!onOwnerThread() || closed) return NativeMobileTitleWatchedOutcome.REFUSED
-        val record = issued.remove(action.actionId) ?: return NativeMobileTitleWatchedOutcome.REFUSED
+        val record = issued[action.actionId] ?: return NativeMobileTitleWatchedOutcome.REFUSED
+        issued.clear()
         val exactDelegate = action.delegateFor(mobileSeal)
         if (record.action !== action || exactDelegate !== record.delegateAction ||
             selectedActionId != action.actionId || semanticEvent != SEMANTIC_ACTIVATION) {

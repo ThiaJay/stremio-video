@@ -134,7 +134,8 @@ class NativeTvTitleWatchedMenu(
         unwatchAcknowledged: Boolean = false
     ): NativeTvTitleWatchedOutcome {
         if (!onOwnerThread() || closed) return NativeTvTitleWatchedOutcome.REFUSED
-        val record = issued.remove(action.actionId) ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED
+        issued.clear()
         if (record.action !== action || !action.wasIssuedBy(menuSeal) ||
             focusedActionId != action.actionId ||
             (remoteKey != "ENTER" && remoteKey != "DPAD_CENTER")) {

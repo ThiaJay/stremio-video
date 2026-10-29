@@ -120,6 +120,24 @@ class NativeTvTitleWatchedMenuTest {
         )
     }
 
+    @Test fun activatingOneActionRevokesEverySiblingFromThatGeneration() {
+        val account = Account(snapshot())
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val actions = menu.present(1)
+        val selected = action(actions, WatchedScope.Series, true)
+        val sibling = action(actions, WatchedScope.Season(1), true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.APPLIED,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        assertEquals(
+            NativeTvTitleWatchedOutcome.REFUSED,
+            menu.activate(sibling, sibling.actionId, "ENTER")
+        )
+        assertEquals(1, account.sent.size)
+    }
+
     @Test fun unwatchRequiresAcknowledgementAndPresentationIsOneShot() {
         val account = Account(snapshot())
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)

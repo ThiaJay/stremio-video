@@ -168,10 +168,13 @@ if ('private val account: CanonicalWatchedStatePort' not in title_watched_menu o
     fail.append('android_title_ui_canonical_readback_port_not_mandatory')
 if ('NativeTvTitleWatchedMenu(' in java_text or 'NativeTvTitleWatchedAction(' in java_text):
     fail.append('title_watched_menu_wired_to_synthetic_activity')
+if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED\n        issued.clear()' not in title_watched_menu):
+    fail.append('tv_title_watched_activation_does_not_revoke_generation')
 if any(name not in title_watched_menu_test for name in [
     'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting',
     'futureEpisodeSuppressesUnsafeSeasonActions',
     'focusAndRemoteConfirmationDispatchExactSeriesAction',
+    'activatingOneActionRevokesEverySiblingFromThatGeneration',
     'unwatchRequiresAcknowledgementAndPresentationIsOneShot',
     'accountDriftRefusesPresentedAction',
     'staleAndForgedActionsCannotExecute',
@@ -201,9 +204,12 @@ if ('Thread.currentThread() === ownerThread' not in mobile_title_watched_menu or
     fail.append('mobile_title_thread_or_lifecycle_guard_missing')
 if ('NativeMobileTitleWatchedMenu(' in java_text or 'NativeMobileTitleWatchedAction(' in java_text):
     fail.append('mobile_title_watched_menu_wired_to_synthetic_activity')
+if ('val record = issued[action.actionId] ?: return NativeMobileTitleWatchedOutcome.REFUSED\n        issued.clear()' not in mobile_title_watched_menu):
+    fail.append('mobile_title_watched_activation_does_not_revoke_generation')
 if any(name not in mobile_title_watched_menu_test for name in [
     'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting',
     'semanticAccessibilityActivationDispatchesExactSeriesAction',
+    'mobileActivationRevokesEverySiblingFromThatGeneration',
     'rawPointerAndLongPressEventsNeverImplyConsent',
     'mobileUnwatchRequiresAcknowledgementAndConsumesIssuance',
     'futureEpisodeStillSuppressesUnsafeMobileSeasonActions',
@@ -822,7 +828,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':202,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':206,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

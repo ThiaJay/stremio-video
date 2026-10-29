@@ -98,6 +98,32 @@ class NativeMobileTitleWatchedMenuTest {
         )
     }
 
+    @Test fun mobileActivationRevokesEverySiblingFromThatGeneration() {
+        val account = Account(snapshot())
+        val menu = NativeMobileTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val actions = menu.present(1)
+        val selected = action(actions, WatchedScope.Series, true)
+        val sibling = action(actions, WatchedScope.Season(1), true)
+
+        assertEquals(
+            NativeMobileTitleWatchedOutcome.APPLIED,
+            menu.activate(
+                selected,
+                selected.actionId,
+                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+            )
+        )
+        assertEquals(
+            NativeMobileTitleWatchedOutcome.REFUSED,
+            menu.activate(
+                sibling,
+                sibling.actionId,
+                NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION
+            )
+        )
+        assertEquals(1, account.sent.size)
+    }
+
     @Test fun rawPointerAndLongPressEventsNeverImplyConsent() {
         val account = Account(snapshot())
         val menu = NativeMobileTitleWatchedMenu(TvWatchedCoordinator(), account)
