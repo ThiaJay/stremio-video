@@ -106,14 +106,63 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertNotNull(adapter.currentWatchedState())
     }
 
+    @Test fun failedSnapshotRefreshCannotReviveEarlierLease() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        assertNotNull(adapter.currentSnapshot())
+
+        host.throwObserve = true
+        assertNull(adapter.currentSnapshot())
+        host.throwObserve = false
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.dispatchedEpochs.size)
+
+        assertNotNull(adapter.currentSnapshot())
+        assertTrue(adapter.dispatch(seriesCommand()))
+    }
+
+    @Test fun mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        val original = host.value
+        assertNotNull(adapter.currentSnapshot())
+
+        host.value = original.copy(libraryItemFingerprint = "c".repeat(64))
+        assertNull(adapter.currentWatchedState())
+        host.value = original
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.dispatchedEpochs.size)
+
+        assertNotNull(adapter.currentSnapshot())
+        assertTrue(adapter.dispatch(seriesCommand()))
+    }
+
+    @Test fun failedDispatchPreconditionsConsumeLeaseBeforeIdentityAba() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        val original = host.value
+        assertNotNull(adapter.currentSnapshot())
+
+        host.value = original.copy(libraryItemFingerprint = "c".repeat(64))
+        assertFalse(adapter.dispatch(seriesCommand()))
+        host.value = original
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.dispatchedEpochs.size)
+
+        assertNotNull(adapter.currentSnapshot())
+        assertTrue(adapter.dispatch(seriesCommand()))
+    }
+
     @Test fun dispatchAcceptsOnlyExactTitleWatchedCommands() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
         assertNotNull(adapter.currentSnapshot())
 
         assertFalse(adapter.dispatch(mapOf("action" to "Player", "args" to true)))
+        assertFalse(adapter.dispatch(seriesCommand()))
         assertEquals(0, host.sent.size)
 
+        assertNotNull(adapter.currentSnapshot())
         assertTrue(adapter.dispatch(seriesCommand()))
         assertEquals(seriesCommand(), host.sent.single())
 

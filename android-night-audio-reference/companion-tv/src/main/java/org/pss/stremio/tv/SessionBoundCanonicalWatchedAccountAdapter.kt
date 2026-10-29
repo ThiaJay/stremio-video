@@ -105,7 +105,9 @@ internal class CanonicalWatchedScreenOwnedAccountLease(
  * Every observation is detached between two equal session-epoch reads. Dispatch
  * requires the complete detached snapshot last returned by [currentSnapshot],
  * consumes that lease before the host call, accepts only exact series/season
- * watched commands and verifies that the host epoch did not change.
+ * watched commands and verifies that the host epoch did not change. Every
+ * failed refresh, readback identity check or dispatch precondition consumes
+ * the previous snapshot lease, so an ABA return cannot revive stale authority.
  *
  * Account operations remain owner-thread confined. [close] is a thread-safe
  * revocation boundary so an asynchronous host teardown can wait for any
@@ -142,6 +144,7 @@ class SessionBoundCanonicalWatchedAccountAdapter(
 
     override fun currentSnapshot(): SeriesAccountSnapshot? = synchronized(lifecycleLock) {
         if (!onOwnerThread() || closed) return@synchronized null
+        latestIdentity = null
         val observation = observeOrNull() ?: return@synchronized null
         latestIdentity = observation.identity
         observation.snapshot
@@ -151,19 +154,21 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         synchronized(lifecycleLock) {
             if (!onOwnerThread() || closed) return@synchronized null
             val expected = latestIdentity ?: return@synchronized null
-            val observation = observeOrNull() ?: return@synchronized null
-            if (observation.identity != expected) return@synchronized null
+            val observation = observeOrNull()
+            if (observation == null || observation.identity != expected) {
+                latestIdentity = null
+                return@synchronized null
+            }
             observation.readback
         }
 
     override fun dispatch(message: Map<String, Any>): Boolean = synchronized(lifecycleLock) {
         if (!onOwnerThread() || closed) return@synchronized false
         val expected = latestIdentity ?: return@synchronized false
+        latestIdentity = null
         val observation = observeOrNull() ?: return@synchronized false
         if (observation.identity != expected) return@synchronized false
         val command = exactTitleWatchedCommand(message) ?: return@synchronized false
-
-        latestIdentity = null
         val accepted = try {
             host.dispatchTitleWatched(expected.sessionEpoch, command)
         } catch (_: Exception) {
