@@ -135,7 +135,7 @@ if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
 if ('val snapshot = snapshotOrNull() ?: return emptyList()' not in title_watched_menu or
     'coordinator.prepare(snapshot, scope, watched)' not in title_watched_menu):
     fail.append('title_watched_menu_not_built_from_one_fresh_core_snapshot')
-if ('issued.remove(action.actionId)' not in title_watched_menu or
+if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED\n        issued.clear()' not in title_watched_menu or
     'record.action !== action' not in title_watched_menu or
     'account.currentSnapshot()' not in title_watched_menu):
     fail.append('title_watched_menu_issuance_or_fresh_read_missing')
@@ -195,8 +195,8 @@ if ('const val SEMANTIC_ACTIVATION = "ACTIVATE"' not in mobile_title_watched_men
     'semanticEvent != SEMANTIC_ACTIVATION' not in mobile_title_watched_menu or
     'selectedActionId != action.actionId' not in mobile_title_watched_menu):
     fail.append('mobile_semantic_accessibility_activation_gate_missing')
-if ('issued.remove(action.actionId)' not in mobile_title_watched_menu or
-    mobile_title_watched_menu.find('issued.remove(action.actionId)') > mobile_title_watched_menu.find('delegate.activate(')):
+if ('val record = issued[action.actionId] ?: return NativeMobileTitleWatchedOutcome.REFUSED\n        issued.clear()' not in mobile_title_watched_menu or
+    mobile_title_watched_menu.find('val record = issued[action.actionId]') > mobile_title_watched_menu.find('delegate.activate(')):
     fail.append('mobile_title_action_not_consumed_before_core_delegate')
 if ('Thread.currentThread() === ownerThread' not in mobile_title_watched_menu or
     'private var closed = false' not in mobile_title_watched_menu or
