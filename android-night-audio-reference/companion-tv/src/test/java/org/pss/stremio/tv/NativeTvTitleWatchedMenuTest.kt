@@ -341,6 +341,34 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(1, account.sent.size)
     }
 
+    @Test fun unknownCanonicalWatchedIdNeverReopensGeneration() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+
+        val ids = account.value!!.videos.map { it.id }
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = account.value!!.accountFingerprint,
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = ids + "stale-unknown-episode"
+        )
+        assertTrue(menu.present(1).isEmpty())
+
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = account.value!!.accountFingerprint,
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = ids
+        )
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
+
     @Test fun throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping() {
         val account = Account(snapshot()).apply {
             applyDispatchToReadback = false
