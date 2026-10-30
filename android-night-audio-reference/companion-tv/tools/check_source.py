@@ -141,6 +141,13 @@ if not all(fragment in episode for fragment in (
     'Cyclic Core Video metadata',
 )):
     fail.append('core_video_double_read_or_bounded_snapshot_missing')
+if not all(fragment in episode for fragment in (
+    'is Int -> "i32:$value"',
+    'is Long -> "i64:$value"',
+    '"f32:${java.lang.Integer.toUnsignedString(value.toRawBits(), 16)}"',
+    '"f64:${java.lang.Long.toUnsignedString(value.toRawBits(), 16)}"',
+)):
+    fail.append('core_video_numeric_type_fingerprint_missing')
 if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
     'class NativeTvTitleWatchedAction internal constructor' not in title_watched_menu):
     fail.append('native_tv_title_watched_menu_missing')
@@ -850,7 +857,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':212,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':213,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
-
