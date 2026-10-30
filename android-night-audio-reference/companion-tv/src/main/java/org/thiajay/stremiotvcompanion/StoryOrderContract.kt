@@ -79,25 +79,26 @@ object StoryOrderContract {
         }
     }
 
-    private fun snapshotInputs(
-        canonical: List<CanonicalEpisode>,
-        hints: StoryOrderHints?
-    ): InputSnapshot? {
-        val canonicalSnapshot = snapshotList(canonical, MAX_INPUT_ENTRIES) ?: return null
-        if (hints == null) return InputSnapshot(canonicalSnapshot, null)
+    private fun snapshotHints(hints: StoryOrderHints): StoryOrderHints? {
         val requested = hints.storyOrder
         val requestedSnapshot = if (requested == null) {
             null
         } else {
             snapshotList(requested, MAX_INPUT_ENTRIES) ?: return null
         }
-        return InputSnapshot(
-            canonical = canonicalSnapshot,
-            hints = StoryOrderHints(
-                storyOrderVersion = hints.storyOrderVersion,
-                storyOrder = requestedSnapshot
-            )
+        return StoryOrderHints(
+            storyOrderVersion = hints.storyOrderVersion,
+            storyOrder = requestedSnapshot
         )
+    }
+
+    private fun snapshotInputs(
+        canonical: List<CanonicalEpisode>,
+        hints: StoryOrderHints?
+    ): InputSnapshot? {
+        val canonicalSnapshot = snapshotList(canonical, MAX_INPUT_ENTRIES) ?: return null
+        val hintsSnapshot = if (hints == null) null else snapshotHints(hints) ?: return null
+        return InputSnapshot(canonicalSnapshot, hintsSnapshot)
     }
 
     private fun resolveSnapshot(snapshot: InputSnapshot): StoryOrderResolution {
@@ -157,13 +158,19 @@ object StoryOrderContract {
         hints: StoryOrderHints?,
         storyOrderSelected: Boolean
     ): List<CanonicalEpisode> {
-        if (!storyOrderSelected) {
-            return snapshotList(canonical, MAX_INPUT_ENTRIES) ?: emptyList()
+        val canonicalSnapshot = snapshotList(canonical, MAX_INPUT_ENTRIES) ?: return emptyList()
+        if (!storyOrderSelected) return canonicalSnapshot
+
+        val hintsSnapshot = if (hints == null) {
+            null
+        } else {
+            snapshotHints(hints) ?: return canonicalSnapshot
         }
-        val snapshot = snapshotInputs(canonical, hints) ?: return emptyList()
-        return when (val resolved = resolveSnapshot(snapshot)) {
+        return when (
+            val resolved = resolveSnapshot(InputSnapshot(canonicalSnapshot, hintsSnapshot))
+        ) {
             is StoryOrderResolution.Valid -> resolved.episodes
-            is StoryOrderResolution.CanonicalFallback -> snapshot.canonical
+            is StoryOrderResolution.CanonicalFallback -> canonicalSnapshot
         }
     }
 
