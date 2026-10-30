@@ -284,13 +284,24 @@ jobs:
           grep -F "package: name='org.thiajay.stremiotvcompanion'" /tmp/companion-badging.txt
           grep -F "sdkVersion:'26'" /tmp/companion-badging.txt
           grep -F "launchable-activity: name='org.thiajay.stremiotvcompanion.MobileStoryOrderLabActivity'" /tmp/companion-badging.txt
-          grep -F "uses-feature-not-required:'android.software.leanback'" /tmp/companion-badging.txt
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml > /tmp/companion-manifest-tree.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines=Path('/tmp/companion-manifest-tree.txt').read_text().splitlines()
+          matches=[i for i,line in enumerate(lines) if '"android.software.leanback"' in line]
+          assert len(matches)==1, ('leanback_feature_count',len(matches))
+          i=matches[0]
+          block='\n'.join(lines[max(0,i-2):min(len(lines),i+5)])
+          assert re.search(r'android:required.*(?:0x0|false)',block), block
+          print('Verified packaged Leanback feature is optional')
+          PY
           "$aapt" dump permissions "$apk" > /tmp/companion-permissions.txt
           if grep -E 'uses-permission:' /tmp/companion-permissions.txt; then
             echo 'Unreviewed Android permission. Refusing admission.'
             exit 1
           fi
-          if "$aapt" dump xmltree "$apk" AndroidManifest.xml | grep -Fq 'android.intent.action.VIEW'; then
+          if grep -Fq 'android.intent.action.VIEW' /tmp/companion-manifest-tree.txt; then
             echo 'External playback intent unexpectedly exposed in offline-only candidate.'
             exit 1
           fi
