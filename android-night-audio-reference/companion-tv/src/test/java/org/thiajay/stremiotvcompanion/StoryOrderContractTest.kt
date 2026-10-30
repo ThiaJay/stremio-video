@@ -1,8 +1,10 @@
 package org.thiajay.stremiotvcompanion
 
+import java.util.AbstractList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class StoryOrderContractTest {
@@ -38,7 +40,9 @@ class StoryOrderContractTest {
             StoryOrderFallbackReason.DUPLICATE_ORDER_ID,
             (resolved as StoryOrderResolution.CanonicalFallback).reason
         )
-        assertSame(canonical, StoryOrderContract.presentation(canonical, broken, true))
+        val fallback = StoryOrderContract.presentation(canonical, broken, true)
+        assertEquals(canonical, fallback)
+        assertTrue(fallback !== canonical)
     }
 
     @Test fun unknownOrderIdFallsBackToCanonicalPresentation() {
@@ -79,9 +83,28 @@ class StoryOrderContractTest {
         )
     }
 
-    @Test fun canonicalModeReturnsOriginalListWithoutHintInterpretation() {
-        val invalid = StoryOrderHints(99, listOf("unknown"))
-        assertSame(canonical, StoryOrderContract.presentation(canonical, invalid, false))
+    @Test fun canonicalModeReturnsDetachedListWithoutHintInterpretation() {
+        var hintRead = false
+        val hostileOrder = object : AbstractList<String>() {
+            override val size: Int
+                get() {
+                    hintRead = true
+                    throw IllegalStateException("must not inspect disabled Story Order")
+                }
+
+            override fun get(index: Int): String {
+                hintRead = true
+                throw IllegalStateException("must not inspect disabled Story Order")
+            }
+        }
+        val result = StoryOrderContract.presentation(
+            canonical,
+            StoryOrderHints(99, hostileOrder),
+            false
+        )
+        assertEquals(canonical, result)
+        assertTrue(result !== canonical)
+        assertTrue(!hintRead)
     }
 
     @Test fun nextStoryUsesStableIdAndReturnsOriginalCanonicalObject() {
@@ -105,6 +128,73 @@ class StoryOrderContractTest {
         assertEquals(
             NoStoryOverrideReason.END_OF_STORY,
             (terminal as NextStoryDecision.UseExistingContinuation).reason
+        )
+    }
+
+    @Test fun callerMutationCannotChangeDetachedStoryPresentation() {
+        val mutableCanonical = canonical.toMutableList()
+        val mutableOrder = hints.storyOrder!!.toMutableList()
+        val result = StoryOrderContract.presentation(
+            mutableCanonical,
+            StoryOrderHints(1, mutableOrder),
+            true
+        )
+        mutableCanonical.clear()
+        mutableOrder.clear()
+
+        assertEquals(
+            listOf(regularOne.id, narrativeSpecial.id, regularTwo.id),
+            result.map { it.id }
+        )
+        assertSame(narrativeSpecial, result[1])
+        try {
+            @Suppress("UNCHECKED_CAST")
+            (result as MutableList<CanonicalEpisode>).add(ancillarySpecial)
+            fail("detached result must be immutable")
+        } catch (_: UnsupportedOperationException) {
+            // Expected: the host cannot mutate the accepted presentation.
+        }
+    }
+
+    @Test fun changingCardinalityFailsClosedWithoutEscaping() {
+        val shortIterator = object : AbstractList<String>() {
+            override val size: Int = 2
+            override fun get(index: Int): String = regularOne.id
+            override fun iterator(): MutableIterator<String> =
+                mutableListOf(regularOne.id).iterator()
+        }
+        val hostileHints = StoryOrderHints(1, shortIterator)
+
+        val resolved = StoryOrderContract.resolve(canonical, hostileHints)
+        assertEquals(
+            StoryOrderFallbackReason.INPUT_SNAPSHOT_FAILED,
+            (resolved as StoryOrderResolution.CanonicalFallback).reason
+        )
+        assertTrue(StoryOrderContract.presentation(canonical, hostileHints, true).isEmpty())
+        val next = StoryOrderContract.next(canonical, hostileHints, regularOne.id)
+        assertEquals(
+            NoStoryOverrideReason.INVALID_HINT,
+            (next as NextStoryDecision.UseExistingContinuation).reason
+        )
+    }
+
+    @Test fun throwingCanonicalCollectionFailsClosedWithoutEscaping() {
+        val throwingCanonical = object : AbstractList<CanonicalEpisode>() {
+            override val size: Int = 1
+            override fun get(index: Int): CanonicalEpisode =
+                throw IllegalStateException("host collection failed")
+        }
+
+        val resolved = StoryOrderContract.resolve(throwingCanonical, hints)
+        assertEquals(
+            StoryOrderFallbackReason.INPUT_SNAPSHOT_FAILED,
+            (resolved as StoryOrderResolution.CanonicalFallback).reason
+        )
+        assertTrue(StoryOrderContract.presentation(throwingCanonical, hints, true).isEmpty())
+        val next = StoryOrderContract.next(throwingCanonical, hints, regularOne.id)
+        assertEquals(
+            NoStoryOverrideReason.INVALID_HINT,
+            (next as NextStoryDecision.UseExistingContinuation).reason
         )
     }
 }
