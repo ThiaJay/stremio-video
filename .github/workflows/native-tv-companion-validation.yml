@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=200 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=207 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -177,6 +177,13 @@ jobs:
           assert 'callerMutationCannotChangeDetachedStoryPresentation' in names, 'Story Order detached snapshot regression not executed'
           assert 'changingCardinalityFailsClosedWithoutEscaping' in names, 'Story Order changing-cardinality regression not executed'
           assert 'throwingCanonicalCollectionFailsClosedWithoutEscaping' in names, 'Story Order throwing-collection regression not executed'
+          assert 'mobileStoryModePresentsNarrativeSpecialWithStableIdentity' in names, 'Android mobile Story Order identity regression not executed'
+          assert 'mobileCanonicalModePreservesOrdinarySequenceAndAncillaryEntry' in names, 'Android mobile canonical-mode regression not executed'
+          assert 'malformedHintsFallBackToCanonicalAndDisableStoryNext' in names, 'Android mobile malformed-hint fallback regression not executed'
+          assert 'semanticSelectionRequiresExactIssuedRowAndStableId' in names, 'Android mobile semantic-selection regression not executed'
+          assert 'rawPointerAndForgedRowsNeverAuthorizeSelection' in names, 'Android mobile selection provenance regression not executed'
+          assert 'mobileNextUsesPresentedStableIdentityAndSurvivesCallerMutation' in names, 'Android mobile continuation identity regression not executed'
+          assert 'ownerThreadAndCloseFailClosed' in names, 'Android mobile Story Order lifecycle regression not executed'
           assert 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' in names, 'Classification terminal-stop composition regression not executed'
           assert 'classifierAlwaysEmitsExactPreservationEnvelope' in names, 'Native classifier preservation envelope regression not executed'
           assert 'invalidSanitisedFactsFailClosed' in names, 'Native classifier invalid-input regression not executed'
