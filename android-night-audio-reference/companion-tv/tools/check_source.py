@@ -708,6 +708,18 @@ if 'NextStoryDecision.UseExistingContinuation' not in story or 'byId[id]' not in
     fail.append('story_order_stable_identity_or_fail_closed_continuation_missing')
 if 'assertSame(narrativeSpecial' not in story_test or 'missingRegularEpisodeFailsClosed' not in story_test:
     fail.append('story_order_identity_regression_missing')
+if (('private fun <T> snapshotList(value: List<T>, maximum: Int)' not in story) or
+    ('repeat(expectedSize)' not in story) or
+    ('if (iterator.hasNext()) return null' not in story) or
+    ('Collections.unmodifiableList(detached)' not in story) or
+    ('INPUT_SNAPSHOT_FAILED' not in story)):
+    fail.append('story_order_host_collection_snapshot_guard_missing')
+if any(name not in story_test for name in [
+    'callerMutationCannotChangeDetachedStoryPresentation',
+    'changingCardinalityFailsClosedWithoutEscaping',
+    'throwingCanonicalCollectionFailsClosedWithoutEscaping'
+]):
+    fail.append('story_order_host_collection_snapshot_regressions_missing')
 if 'private val TERMINAL' not in recovery or 'private val RETRYABLE' not in recovery:
     fail.append('classification_first_authority_sets_missing')
 if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
