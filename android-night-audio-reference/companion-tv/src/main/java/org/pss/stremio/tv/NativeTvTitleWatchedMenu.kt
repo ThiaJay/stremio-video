@@ -50,7 +50,7 @@ interface CanonicalWatchedStatePort : StremioAccountPort {
  * cannot replay the same confirmation.
  */
 class NativeTvTitleWatchedMenu(
-    private val coordinator: TvWatchedCoordinator,
+    coordinator: TvWatchedCoordinator,
     private val account: CanonicalWatchedStatePort
 ) {
     companion object {
@@ -66,6 +66,13 @@ class NativeTvTitleWatchedMenu(
 
     private val ownerThread = Thread.currentThread()
     private val menuSeal = Any()
+    // Both directions initially share the supplied one-shot coordinator. Only a
+    // matching canonical readback re-arms the opposite direction, while the
+    // confirmed direction stays consumed and cannot repeat as a no-op write.
+    private val coordinators = mutableMapOf(
+        true to coordinator,
+        false to coordinator
+    )
     private val issued = LinkedHashMap<String, IssuedAction>()
     private var pendingReadback: PendingReadback? = null
     private var closed = false
@@ -85,7 +92,8 @@ class NativeTvTitleWatchedMenu(
         }
         val prepared = try {
             requests.mapNotNull { (scope, watched) ->
-                coordinator.prepare(snapshot, scope, watched)?.let { Triple(scope, watched, it) }
+                coordinatorFor(watched).prepare(snapshot, scope, watched)
+                    ?.let { Triple(scope, watched, it) }
             }
         } catch (_: Exception) {
             return emptyList()
@@ -143,7 +151,7 @@ class NativeTvTitleWatchedMenu(
         }
         val fresh = snapshotOrNull() ?: return NativeTvTitleWatchedOutcome.REFUSED
         val command = try {
-            coordinator.confirm(
+            coordinatorFor(record.plan.watched).confirm(
                 record.plan,
                 fresh,
                 TvWatchedConfirmation(
@@ -196,7 +204,8 @@ class NativeTvTitleWatchedMenu(
     private fun confirmPendingReadback(snapshot: SeriesAccountSnapshot): Boolean {
         val pending = pendingReadback ?: return true
         val currentPlan = try {
-            coordinator.prepare(snapshot, pending.plan.scope, pending.plan.watched)
+            coordinatorFor(pending.plan.watched)
+                .prepare(snapshot, pending.plan.scope, pending.plan.watched)
         } catch (_: Exception) {
             null
         } catch (_: LinkageError) {
@@ -219,9 +228,13 @@ class NativeTvTitleWatchedMenu(
             pending.plan.selectedIds.none { it in watchedIds }
         }
         if (!confirmed) return false
+        coordinators[!pending.plan.watched] = TvWatchedCoordinator()
         pendingReadback = null
         return true
     }
+
+    private fun coordinatorFor(watched: Boolean): TvWatchedCoordinator =
+        coordinators.getValue(watched)
 
     private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
         val state = account.currentWatchedState() ?: return null
