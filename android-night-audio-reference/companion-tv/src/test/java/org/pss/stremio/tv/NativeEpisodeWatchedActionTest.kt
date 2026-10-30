@@ -154,4 +154,28 @@ class NativeEpisodeWatchedActionTest {
         assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
         assertEquals(0,p.writes)
     }
+
+    @Test fun numericTypeChangesCannotReuseCanonicalVideoFingerprint() {
+        val integerAccount=FakeAccount(base)
+        integerAccount.video=integerAccount.video+mapOf("runtime" to 120)
+        val integerActuator=NativeTvEpisodeWatchedActuator(integerAccount)
+        val integerPlan=integerActuator.prepare("tt18:1:1",true)!!
+        integerAccount.beforeVideoRead={ read ->
+            if(read==3) integerAccount.video=integerAccount.video+mapOf("runtime" to 120L)
+        }
+        assertFalse(integerActuator.confirm(integerPlan,
+            TvWatchedConfirmation(true,"ENTER",integerPlan.fingerprint)))
+        assertEquals(0,integerAccount.writes)
+
+        val floatingAccount=FakeAccount(base)
+        floatingAccount.video=floatingAccount.video+mapOf("score" to 1.5f)
+        val floatingActuator=NativeTvEpisodeWatchedActuator(floatingAccount)
+        val floatingPlan=floatingActuator.prepare("tt18:1:1",true)!!
+        floatingAccount.beforeVideoRead={ read ->
+            if(read==3) floatingAccount.video=floatingAccount.video+mapOf("score" to 1.5)
+        }
+        assertFalse(floatingActuator.confirm(floatingPlan,
+            TvWatchedConfirmation(true,"ENTER",floatingPlan.fingerprint)))
+        assertEquals(0,floatingAccount.writes)
+    }
 }
