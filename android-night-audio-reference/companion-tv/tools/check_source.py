@@ -152,6 +152,8 @@ if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watc
     'private var pendingReadback: PendingReadback? = null' not in title_watched_menu or
     'if (!confirmPendingReadback(snapshot)) return emptyList()' not in title_watched_menu or
     'if (currentPlan != pending.plan) return false' not in title_watched_menu or
+    'coordinators[!pending.plan.watched] = TvWatchedCoordinator()' not in title_watched_menu or
+    'coordinatorFor(record.plan.watched).confirm(' not in title_watched_menu or
     'if (currentPlan.selectedIds != pending.plan.selectedIds)' in title_watched_menu or
     'state.copy(watchedVideoIds = state.watchedVideoIds.toList())' not in title_watched_menu or
     'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
@@ -182,6 +184,7 @@ if any(name not in title_watched_menu_test for name in [
     'staleAndForgedActionsCannotExecute',
     'ownerThreadAndCloseFailClosed',
     'snapshotAndDispatchExceptionsFailClosed',
+    'canonicalReadbackRearmsOnlyOppositeWatchedDirection',
     'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches',
     'pendingReadbackCannotCrossAccountOrLibraryIdentity',
     'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration',
@@ -831,7 +834,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':208,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':209,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
