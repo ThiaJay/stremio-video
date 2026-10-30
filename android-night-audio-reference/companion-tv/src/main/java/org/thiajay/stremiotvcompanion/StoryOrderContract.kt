@@ -1,5 +1,7 @@
 package org.thiajay.stremiotvcompanion
 
+import java.util.Collections
+
 /**
  * Pure Story Order presentation adapter for the isolated Android TV companion.
  *
@@ -30,7 +32,8 @@ enum class StoryOrderFallbackReason {
     INVALID_ORDER_ID,
     DUPLICATE_ORDER_ID,
     UNKNOWN_ORDER_ID,
-    MISSING_REGULAR_EPISODE
+    MISSING_REGULAR_EPISODE,
+    INPUT_SNAPSHOT_FAILED
 }
 
 sealed interface StoryOrderResolution {
@@ -50,10 +53,56 @@ sealed interface NextStoryDecision {
 }
 
 object StoryOrderContract {
-    fun resolve(
+    private const val MAX_INPUT_ENTRIES = 10_000
+
+    private data class InputSnapshot(
+        val canonical: List<CanonicalEpisode>,
+        val hints: StoryOrderHints?
+    )
+
+    private fun <T> snapshotList(value: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = value.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val iterator = value.iterator()
+            val detached = ArrayList<T>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    private fun snapshotInputs(
         canonical: List<CanonicalEpisode>,
         hints: StoryOrderHints?
-    ): StoryOrderResolution {
+    ): InputSnapshot? {
+        val canonicalSnapshot = snapshotList(canonical, MAX_INPUT_ENTRIES) ?: return null
+        if (hints == null) return InputSnapshot(canonicalSnapshot, null)
+        val requested = hints.storyOrder
+        val requestedSnapshot = if (requested == null) {
+            null
+        } else {
+            snapshotList(requested, MAX_INPUT_ENTRIES) ?: return null
+        }
+        return InputSnapshot(
+            canonical = canonicalSnapshot,
+            hints = StoryOrderHints(
+                storyOrderVersion = hints.storyOrderVersion,
+                storyOrder = requestedSnapshot
+            )
+        )
+    }
+
+    private fun resolveSnapshot(snapshot: InputSnapshot): StoryOrderResolution {
+        val canonical = snapshot.canonical
+        val hints = snapshot.hints
         if (canonical.isEmpty()) {
             return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.EMPTY_CANONICAL)
         }
@@ -89,7 +138,18 @@ object StoryOrderContract {
         if (canonical.any { it.season > 0 && it.id !in seen }) {
             return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.MISSING_REGULAR_EPISODE)
         }
-        return StoryOrderResolution.Valid(ordered)
+        return StoryOrderResolution.Valid(Collections.unmodifiableList(ordered))
+    }
+
+    fun resolve(
+        canonical: List<CanonicalEpisode>,
+        hints: StoryOrderHints?
+    ): StoryOrderResolution {
+        val snapshot = snapshotInputs(canonical, hints)
+            ?: return StoryOrderResolution.CanonicalFallback(
+                StoryOrderFallbackReason.INPUT_SNAPSHOT_FAILED
+            )
+        return resolveSnapshot(snapshot)
     }
 
     fun presentation(
@@ -97,10 +157,11 @@ object StoryOrderContract {
         hints: StoryOrderHints?,
         storyOrderSelected: Boolean
     ): List<CanonicalEpisode> {
-        if (!storyOrderSelected) return canonical
-        return when (val resolved = resolve(canonical, hints)) {
+        val snapshot = snapshotInputs(canonical, hints) ?: return emptyList()
+        if (!storyOrderSelected) return snapshot.canonical
+        return when (val resolved = resolveSnapshot(snapshot)) {
             is StoryOrderResolution.Valid -> resolved.episodes
-            is StoryOrderResolution.CanonicalFallback -> canonical
+            is StoryOrderResolution.CanonicalFallback -> snapshot.canonical
         }
     }
 
@@ -109,7 +170,11 @@ object StoryOrderContract {
         hints: StoryOrderHints?,
         currentVideoId: String
     ): NextStoryDecision {
-        val resolved = resolve(canonical, hints)
+        val snapshot = snapshotInputs(canonical, hints)
+            ?: return NextStoryDecision.UseExistingContinuation(
+                NoStoryOverrideReason.INVALID_HINT
+            )
+        val resolved = resolveSnapshot(snapshot)
         if (resolved !is StoryOrderResolution.Valid) {
             return NextStoryDecision.UseExistingContinuation(NoStoryOverrideReason.INVALID_HINT)
         }
