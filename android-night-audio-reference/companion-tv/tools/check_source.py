@@ -14,6 +14,8 @@ ANDROID='{http://schemas.android.com/apk/res/android}'
 SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
+MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
+MOBILE_STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderControllerTest.kt'
 RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
 RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
 CLASSIFIER=ROOT/'src/main/java/org/pss/stremio/tv/NativeStreamFailureClassifier.kt'
@@ -86,6 +88,8 @@ if 'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' not in BRIDGE
 java_text=SOURCE.read_text()
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
+mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
+mobile_story_test=MOBILE_STORY_TEST.read_text() if MOBILE_STORY_TEST.is_file() else ''
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
 recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
 classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
@@ -723,6 +727,23 @@ if any(name not in story_test for name in [
     'throwingCanonicalCollectionFailsClosedWithoutEscaping'
 ]):
     fail.append('story_order_host_collection_snapshot_regressions_missing')
+if any(token not in mobile_story for token in [
+    'class MobileStoryOrderController',
+    'StoryOrderContract.resolve(canonicalSnapshot, hints)',
+    'record.row !== row',
+    'semanticEvent != SEMANTIC_SELECTION',
+    'activeEpisodes.indexOfFirst { it.id == currentVideoId }'
+]):
+    fail.append('android_mobile_story_order_controller_missing')
+if any(name not in mobile_story_test for name in [
+    'mobileStoryModePresentsNarrativeSpecialWithStableIdentity',
+    'malformedHintsFallBackToCanonicalAndDisableStoryNext',
+    'semanticSelectionRequiresExactIssuedRowAndStableId',
+    'rawPointerAndForgedRowsNeverAuthorizeSelection',
+    'mobileNextUsesPresentedStableIdentityAndSurvivesCallerMutation',
+    'ownerThreadAndCloseFailClosed'
+]):
+    fail.append('android_mobile_story_order_regressions_missing')
 if 'private val TERMINAL' not in recovery or 'private val RETRYABLE' not in recovery:
     fail.append('classification_first_authority_sets_missing')
 if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
