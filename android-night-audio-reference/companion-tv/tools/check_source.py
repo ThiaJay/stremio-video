@@ -133,7 +133,7 @@ if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
     'class NativeTvTitleWatchedAction internal constructor' not in title_watched_menu):
     fail.append('native_tv_title_watched_menu_missing')
 if ('val snapshot = snapshotOrNull() ?: return emptyList()' not in title_watched_menu or
-    'coordinator.prepare(snapshot, scope, watched)' not in title_watched_menu):
+    'coordinatorFor(watched).prepare(snapshot, scope, watched)' not in title_watched_menu):
     fail.append('title_watched_menu_not_built_from_one_fresh_core_snapshot')
 if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED\n        issued.clear()' not in title_watched_menu or
     'record.action !== action' not in title_watched_menu or
