@@ -172,15 +172,31 @@ object NativePlaybackRecoveryPolicy {
             value.length in 1..MAX_CONTEXT_ID_LENGTH &&
             CONTEXT_ID.matches(value)
 
+    private fun snapshotAttemptHistory(value: List<String>?): List<String>? {
+        if (value == null) return null
+        return try {
+            val expectedSize = value.size
+            if (expectedSize !in 0..MAX_ATTEMPTS) return null
+            val snapshot = ArrayList<String>(expectedSize)
+            repeat(expectedSize) { index ->
+                snapshot += value[index]
+            }
+            snapshot
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
     private fun selectPlaybackRecovery(value: PlaybackHealthObservation): String? {
         if (value.sourceIdentityMismatch ||
             value.videoIdentityMismatch ||
             value.mediaGenerationChanged
         ) return null
 
-        val history = value.attemptedRecoveries ?: return null
-        if (history.size > MAX_ATTEMPTS ||
-            history.any { it !in RECOVERY_ACTIONS } ||
+        val history = snapshotAttemptHistory(value.attemptedRecoveries) ?: return null
+        if (history.any { it !in RECOVERY_ACTIONS } ||
             history.toSet().size != history.size
         ) return null
         if (!validContextId(value.recoveryContextId) ||
