@@ -61,8 +61,9 @@ class MobileStoryOrderLabActivity : Activity() {
                         result + "\nSynthetic watched IDs: " +
                             watchedHost.watchedIds().ifEmpty { listOf("none") }.joinToString()
                     if (!current.render(1)) {
-                        watchedStatus.text +=
-                            "\nTitle-action lab closed after a rejected re-render."
+                        watchedStatus.text =
+                            watchedStatus.text.toString() +
+                                "\nTitle-action lab closed after a rejected re-render."
                         current.close()
                         watchedOwner = null
                     }
