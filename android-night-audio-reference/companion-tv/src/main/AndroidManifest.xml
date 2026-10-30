@@ -7,10 +7,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-    <uses-feature android:name="android.software.leanback" android:required="true" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
     <application
         android:label="Stremio Companion Lab"
         android:banner="@drawable/companion_tv_banner"
+        android:icon="@drawable/companion_mobile_icon"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
@@ -21,6 +22,17 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".MobileStoryOrderLabActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:label="Mobile Story Order Lab">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
     </application>

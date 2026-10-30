@@ -20,6 +20,8 @@ MOBILE_STORY_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStory
 MOBILE_STORY_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderViewHostTest.kt'
 ANDROID_MOBILE_STORY_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderWidgetPort.kt'
 ANDROID_MOBILE_STORY_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderScreenOwner.kt'
+MOBILE_STORY_ACTIVITY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderLabActivity.kt'
+MOBILE_ICON=ROOT/'src/main/res/drawable/companion_mobile_icon.xml'
 RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
 RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
 CLASSIFIER=ROOT/'src/main/java/org/pss/stremio/tv/NativeStreamFailureClassifier.kt'
@@ -65,12 +67,32 @@ else:
     if app.get(ANDROID+'banner') != '@drawable/companion_tv_banner':fail.append('leanback_banner_missing')
     if app.get(ANDROID+'allowBackup') != 'false':fail.append('backup_not_disabled')
     if app.get(ANDROID+'usesCleartextTraffic') != 'false':fail.append('cleartext_not_disabled')
+    if app.get(ANDROID+'icon') != '@drawable/companion_mobile_icon':
+        fail.append('mobile_launcher_icon_missing')
+    features={
+        feature.get(ANDROID+'name'): feature.get(ANDROID+'required')
+        for feature in manifest.findall('uses-feature')
+    }
+    if features.get('android.software.leanback') != 'false':
+        fail.append('leanback_still_required_for_mobile_lab')
     activities=app.findall('activity')
-    if len(activities)!=1:fail.append('unexpected_activity_count')
+    by_name={activity.get(ANDROID+'name'): activity for activity in activities}
+    expected={'.CompanionTvActivity', '.MobileStoryOrderLabActivity'}
+    if set(by_name) != expected:fail.append('unexpected_activity_set:'+repr(set(by_name)))
     for activity in activities:
         names=[a.get(ANDROID+'name') for a in activity.findall('.//action')]
+        if activity.get(ANDROID+'exported') != 'true':
+            fail.append('launcher_activity_not_explicitly_exported')
         if 'android.intent.action.VIEW' in names:fail.append('external_media_view_exposed')
         if any('android.intent.action.BOOT_COMPLETED' in (name or '') for name in names):fail.append('boot_receiver')
+    tv=by_name.get('.CompanionTvActivity')
+    mobile=by_name.get('.MobileStoryOrderLabActivity')
+    tv_categories=[] if tv is None else [c.get(ANDROID+'name') for c in tv.findall('.//category')]
+    mobile_categories=[] if mobile is None else [c.get(ANDROID+'name') for c in mobile.findall('.//category')]
+    if tv_categories != ['android.intent.category.LEANBACK_LAUNCHER']:
+        fail.append('tv_launcher_category_changed')
+    if mobile_categories != ['android.intent.category.LAUNCHER']:
+        fail.append('mobile_launcher_category_missing_or_broadened')
     if app.findall('service') or app.findall('receiver') or app.findall('provider'):
         fail.append('unexpected_background_component')
 BANNER=ROOT/'src/main/res/drawable/companion_tv_banner.xml'
@@ -85,6 +107,17 @@ else:
             fail.append('native_tv_banner_wrong_dimensions')
     except (ET.ParseError,OSError):
         fail.append('native_tv_banner_invalid_xml')
+if not MOBILE_ICON.is_file():
+    fail.append('mobile_launcher_icon_resource_missing')
+else:
+    try:
+        icon=ET.parse(MOBILE_ICON).getroot()
+        if icon.tag!='vector' and not icon.tag.endswith('}vector'):
+            fail.append('mobile_launcher_icon_not_vector')
+        if icon.get(ANDROID+'width')!='108dp' or icon.get(ANDROID+'height')!='108dp':
+            fail.append('mobile_launcher_icon_wrong_dimensions')
+    except (ET.ParseError,OSError):
+        fail.append('mobile_launcher_icon_invalid_xml')
 if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
     fail.append('tested_bridge_modified')
 if 'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' not in BRIDGE.read_text():
@@ -98,6 +131,32 @@ mobile_story_host=MOBILE_STORY_HOST.read_text() if MOBILE_STORY_HOST.is_file() e
 mobile_story_host_test=MOBILE_STORY_HOST_TEST.read_text() if MOBILE_STORY_HOST_TEST.is_file() else ''
 android_mobile_story_widget_port=ANDROID_MOBILE_STORY_WIDGET_PORT.read_text() if ANDROID_MOBILE_STORY_WIDGET_PORT.is_file() else ''
 android_mobile_story_screen_owner=ANDROID_MOBILE_STORY_SCREEN_OWNER.read_text() if ANDROID_MOBILE_STORY_SCREEN_OWNER.is_file() else ''
+mobile_story_activity=MOBILE_STORY_ACTIVITY.read_text() if MOBILE_STORY_ACTIVITY.is_file() else ''
+if ('class MobileStoryOrderLabActivity : Activity()' not in mobile_story_activity or
+    'AndroidMobileStoryOrderScreenOwner.create(' not in mobile_story_activity or
+    'created.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
+    fail.append('mobile_story_launcher_composition_missing')
+if ('current.consumeSelection()' not in mobile_story_activity or
+    'current.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
+    fail.append('mobile_story_selection_mailbox_or_rerender_missing')
+if ('ui.removeCallbacks(selectionPump)' not in mobile_story_activity or
+    'owner?.close()' not in mobile_story_activity or
+    'override fun onDestroy()' not in mobile_story_activity):
+    fail.append('mobile_story_launcher_lifecycle_close_missing')
+if ('local:mobile-story:1:1' not in mobile_story_activity or
+    'Synthetic local metadata only.' not in mobile_story_activity or
+    'No playback, account or watched-state action was performed.' not in mobile_story_activity):
+    fail.append('mobile_story_launcher_synthetic_disclosure_missing')
+if any(token in mobile_story_activity for token in [
+    'androidx.media3', 'org.pss.stremio.tv', 'android.net.', 'java.net.',
+    'getIntent(', 'intent.get', 'startActivity(', 'startService(',
+    'ContentResolver', 'AccountManager', 'Datastore'
+]):
+    fail.append('mobile_story_launcher_external_or_player_surface')
+if ('Looper.getMainLooper()' not in mobile_story_activity or
+    'ui.post(selectionPump)' not in mobile_story_activity or
+    'ui.postDelayed(this, SELECTION_POLL_MS)' not in mobile_story_activity):
+    fail.append('mobile_story_launcher_main_thread_mailbox_pump_missing')
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
 recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
 classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
@@ -970,8 +1029,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':222,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':232,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)

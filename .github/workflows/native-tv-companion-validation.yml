@@ -280,8 +280,11 @@ jobs:
           apk=android-night-audio-reference/companion-tv/build/outputs/apk/debug/companion-tv-debug.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
-          "$aapt" dump badging "$apk" | grep -F "package: name='org.thiajay.stremiotvcompanion'"
-          "$aapt" dump badging "$apk" | grep -F "sdkVersion:'26'"
+          "$aapt" dump badging "$apk" > /tmp/companion-badging.txt
+          grep -F "package: name='org.thiajay.stremiotvcompanion'" /tmp/companion-badging.txt
+          grep -F "sdkVersion:'26'" /tmp/companion-badging.txt
+          grep -F "launchable-activity: name='org.thiajay.stremiotvcompanion.MobileStoryOrderLabActivity'" /tmp/companion-badging.txt
+          grep -F "uses-feature-not-required:'android.software.leanback'" /tmp/companion-badging.txt
           "$aapt" dump permissions "$apk" > /tmp/companion-permissions.txt
           if grep -E 'uses-permission:' /tmp/companion-permissions.txt; then
             echo 'Unreviewed Android permission. Refusing admission.'
