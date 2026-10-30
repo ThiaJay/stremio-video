@@ -16,6 +16,10 @@ STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
 MOBILE_STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderControllerTest.kt'
+MOBILE_STORY_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderViewHost.kt'
+MOBILE_STORY_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderViewHostTest.kt'
+ANDROID_MOBILE_STORY_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderWidgetPort.kt'
+ANDROID_MOBILE_STORY_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderScreenOwner.kt'
 RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
 RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
 CLASSIFIER=ROOT/'src/main/java/org/pss/stremio/tv/NativeStreamFailureClassifier.kt'
@@ -90,6 +94,10 @@ story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
 mobile_story_test=MOBILE_STORY_TEST.read_text() if MOBILE_STORY_TEST.is_file() else ''
+mobile_story_host=MOBILE_STORY_HOST.read_text() if MOBILE_STORY_HOST.is_file() else ''
+mobile_story_host_test=MOBILE_STORY_HOST_TEST.read_text() if MOBILE_STORY_HOST_TEST.is_file() else ''
+android_mobile_story_widget_port=ANDROID_MOBILE_STORY_WIDGET_PORT.read_text() if ANDROID_MOBILE_STORY_WIDGET_PORT.is_file() else ''
+android_mobile_story_screen_owner=ANDROID_MOBILE_STORY_SCREEN_OWNER.read_text() if ANDROID_MOBILE_STORY_SCREEN_OWNER.is_file() else ''
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
 recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
 classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
@@ -744,6 +752,68 @@ if any(name not in mobile_story_test for name in [
     'ownerThreadAndCloseFailClosed'
 ]):
     fail.append('android_mobile_story_order_regressions_missing')
+if any(token not in mobile_story_host for token in [
+    'class MobileStoryOrderViewAction internal constructor',
+    'interface MobileStoryOrderViewPort',
+    'class MobileStoryOrderHostBinding',
+    'const val MAX_PRESENTED_ROWS = 500',
+    'record.action === action',
+    'action.rowFor(bindingSeal)',
+    'semanticEvent == MobileStoryOrderController.SEMANTIC_SELECTION',
+    'view.replaceStoryRows(mode, actions.toList())',
+    'view.clearStoryRows()'
+]):
+    fail.append('android_mobile_story_order_host_binding_missing')
+if any(name not in mobile_story_host_test for name in [
+    'hostRendersStoryRowsWithoutSelecting',
+    'exactSemanticActionReturnsOriginalCanonicalAndRevokesGeneration',
+    'canonicalModeAndMalformedHintsPreserveOrdinaryRows',
+    'rawStaleAndForgedActionsFailClosed',
+    'viewReplacementAndClearFailuresPoisonHost',
+    'hostNextUsesPresentedStoryIdentityOnly',
+    'oversizedMobilePresentationFailsClosedBeforeView',
+    'hostOwnerThreadAndCloseRevokeOutstandingActions'
+]):
+    fail.append('android_mobile_story_order_host_regressions_missing')
+if any(token not in android_mobile_story_widget_port for token in [
+    'class AndroidMobileStoryOrderWidgetPort',
+    'Looper.myLooper() === Looper.getMainLooper()',
+    'createModeButton(mode)',
+    '"Show season order"',
+    '"Show story order"',
+    'setOnLongClickListener { true }',
+    'MobileStoryOrderController.SEMANTIC_SELECTION',
+    'container.addView(view)'
+]):
+    fail.append('android_mobile_story_order_widget_port_missing')
+if ('setOnTouchListener' in android_mobile_story_widget_port or
+    'MotionEvent' in android_mobile_story_widget_port):
+    fail.append('android_mobile_story_order_raw_touch_admission')
+if any(token not in android_mobile_story_screen_owner for token in [
+    'class AndroidMobileStoryOrderScreenOwner private constructor',
+    'Looper.myLooper() !== Looper.getMainLooper()',
+    'private var pendingSelection: CanonicalEpisode? = null',
+    'private val host = MobileStoryOrderHostBinding(canonical, hints, port)',
+    'fun consumeSelection(): CanonicalEpisode?',
+    'pendingSelection != null',
+    'return host.next(currentVideoId)'
+]):
+    fail.append('android_mobile_story_order_screen_owner_missing')
+if any(name in java_text for name in [
+    'MobileStoryOrderHostBinding',
+    'AndroidMobileStoryOrderWidgetPort',
+    'AndroidMobileStoryOrderScreenOwner'
+]):
+    fail.append('android_mobile_story_order_wired_to_synthetic_activity')
+if any(token in android_mobile_story_screen_owner+android_mobile_story_widget_port for token in [
+    'ExoPlayer',
+    'StremioAccountPort',
+    'http://',
+    'https://',
+    'getAuthKey',
+    'System.getenv'
+]):
+    fail.append('android_mobile_story_order_ui_crosses_player_account_or_network_boundary')
 if 'private val TERMINAL' not in recovery or 'private val RETRYABLE' not in recovery:
     fail.append('classification_first_authority_sets_missing')
 if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
@@ -900,8 +970,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':215,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':222,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
