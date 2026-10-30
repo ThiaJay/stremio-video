@@ -214,6 +214,7 @@ jobs:
           assert 'unadvertisedNativeCapabilityCannotPrepare' in names, 'Unadvertised native recovery capability regression not executed'
           assert 'capabilityChangeBeforeExecutionRefuses' in names, 'Native recovery capability drift regression not executed'
           assert 'malformedCapabilitySetFailsClosed' in names, 'Malformed native recovery capability regression not executed'
+          assert 'recoveryCapabilitiesAreSnapshottedOnceAndFailuresFailClosed' in names, 'Native recovery capability snapshot regression not executed'
           assert 'ownerThreadCloseRevokesOutstandingLeaseAndFutureUse' in names, 'Owner-thread actuator lifecycle revocation regression not executed'
           assert 'foreignThreadCannotCloseOrRevokeOwnerLease' in names, 'Foreign-thread actuator close regression not executed'
           assert 'throwingSnapshotDuringPreparationFailsClosed' in names, 'Preparation snapshot exception regression not executed'
