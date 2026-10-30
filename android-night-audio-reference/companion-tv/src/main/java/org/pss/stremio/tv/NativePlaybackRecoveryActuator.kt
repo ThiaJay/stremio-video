@@ -155,8 +155,8 @@ class NativePlaybackRecoveryActuator(
         return value.copy(supportedRecoveryActions = capabilities)
     }
 
-    private fun snapshotRecoveryActions(value: Set<String>): Set<String>? =
-        try {
+    private fun snapshotRecoveryActions(value: Set<String>): Set<String>? {
+        return try {
             val expectedSize = value.size
             if (expectedSize !in 1..RECOVERY_ACTIONS.size) return null
             val snapshot = LinkedHashSet<String>(expectedSize)
@@ -173,6 +173,7 @@ class NativePlaybackRecoveryActuator(
         } catch (_: LinkageError) {
             null
         }
+    }
 
     private fun executeOrFalse(action: String): Boolean =
         try {
