@@ -129,8 +129,18 @@ if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' n
     fail.append('individual_episode_core_action_not_present')
 if 'issued.add(plan.fingerprint)' not in episode or 'port.currentSnapshot()' not in episode:
     fail.append('episode_account_refresh_or_one_shot_not_enforced')
-if 'videoFingerprint' not in episode or 'detached(secondSource)' not in episode:
-    fail.append('core_video_double_read_or_detached_payload_missing')
+if not all(fragment in episode for fragment in (
+    'videoFingerprint',
+    'snapshotCoreVideo(videoSource)',
+    'snapshotCoreVideo(secondSource)',
+    'MAX_CANONICAL_VIDEO_DEPTH',
+    'MAX_CANONICAL_VIDEO_NODES',
+    'MAX_CANONICAL_VIDEO_COLLECTION_ENTRIES',
+    'MAX_CANONICAL_VIDEO_STRING_LENGTH',
+    'MAX_CANONICAL_VIDEO_TOTAL_STRING_LENGTH',
+    'Cyclic Core Video metadata',
+)):
+    fail.append('core_video_double_read_or_bounded_snapshot_missing')
 if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
     'class NativeTvTitleWatchedAction internal constructor' not in title_watched_menu):
     fail.append('native_tv_title_watched_menu_missing')
