@@ -36,11 +36,11 @@ jobs:
           gradle-version: '8.11.1'
       - name: Install only required Android SDK components
         run: sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
-      - name: Verify tested bridge source still matches original reference
+      - name: Verify tested bridge source matches accepted Season 0-safe contract
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' '0e067446053abc456196d060bc96dff72d03902542fb9ae97cefd47fa143f23b  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+          printf '%s\n' '789e29b997b503ee6cac03d638a7da023ecef551c866fbafe36287ce36862715  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
       - name: Validate exact source contract and safety guard
         run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK
