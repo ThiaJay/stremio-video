@@ -171,6 +171,38 @@ class NativePlaybackRecoveryPolicyTest {
         }
     }
 
+    @Test fun recoveryHistoryIsSnapshottedOnceAndFailuresFailClosed() {
+        var reads = 0
+        val changing = object : AbstractList<String>() {
+            override val size: Int = 1
+            override fun get(index: Int): String {
+                require(index == 0)
+                reads += 1
+                return if (reads == 1) "transcodeAudio" else "switchPlaybackEngine"
+            }
+        }
+        val changedPlan = NativePlaybackRecoveryPolicy.plan(
+            classification(),
+            observation(history = changing)
+        )
+        assertEquals("switchPlaybackEngine", changedPlan.action)
+        assertEquals(1, reads)
+
+        val throwing = object : AbstractList<String>() {
+            override val size: Int = 1
+            override fun get(index: Int): String {
+                throw IllegalStateException("host history changed during snapshot")
+            }
+        }
+        assertEquals(
+            "stop_no_safe_playback_recovery",
+            NativePlaybackRecoveryPolicy.plan(
+                classification(),
+                observation(history = throwing)
+            ).action
+        )
+    }
+
     @Test fun policyExposesNoPreclassifiedDecisionParameter() {
         val methods = NativePlaybackRecoveryPolicy::class.java.methods
             .filter { it.name == "plan" && it.parameterCount == 2 }
