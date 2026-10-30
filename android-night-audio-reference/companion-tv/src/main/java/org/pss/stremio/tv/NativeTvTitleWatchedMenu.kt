@@ -221,6 +221,9 @@ class NativeTvTitleWatchedMenu(
             state.watchedVideoIds.size != state.watchedVideoIds.toSet().size
         ) return false
 
+        val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()
+        if (!canonicalVideoIds.containsAll(state.watchedVideoIds)) return false
+
         val watchedIds = state.watchedVideoIds.toSet()
         val confirmed = if (pending.plan.watched) {
             pending.plan.selectedIds.all { it in watchedIds }
