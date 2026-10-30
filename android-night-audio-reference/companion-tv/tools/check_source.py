@@ -837,6 +837,10 @@ if 'supportedRecoveryActions' not in actuator or 'plan.action !in lease.supporte
     fail.append('actuator_native_capability_binding_missing')
 if 'supportedRecoveryActions.sorted().joinToString(",")' not in actuator:
     fail.append('actuator_capability_set_not_bound_to_lease_token')
+if (('snapshotRecoveryActions(value.supportedRecoveryActions)' not in actuator) or
+    ('Collections.unmodifiableSet(snapshot)' not in actuator) or
+    ('recoveryCapabilitiesAreSnapshottedOnceAndFailuresFailClosed' not in actuator_test)):
+    fail.append('actuator_capability_set_single_immutable_snapshot_missing')
 if any(name not in actuator_test for name in ['unadvertisedNativeCapabilityCannotPrepare','capabilityChangeBeforeExecutionRefuses','malformedCapabilitySetFailsClosed']):
     fail.append('actuator_capability_regressions_missing')
 if 'private var closed = false' not in actuator or 'fun close(): Boolean' not in actuator or 'issued.clear()' not in actuator or 'consumed.clear()' not in actuator:
