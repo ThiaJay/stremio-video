@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=188 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=189 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -86,6 +86,7 @@ jobs:
           assert 'ownerThreadAndCloseFailClosed' in names, 'TV title-action lifecycle regression not executed'
           assert 'snapshotAndDispatchExceptionsFailClosed' in names, 'TV title-action exception regression not executed'
           assert 'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches' in names, 'TV canonical watched readback gate regression not executed'
+          assert 'pendingReadbackCannotCrossAccountOrLibraryIdentity' in names, 'TV canonical watched readback identity regression not executed'
           assert 'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration' in names, 'TV malformed watched readback regression not executed'
           assert 'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping' in names, 'TV throwing watched readback regression not executed'
           assert 'detachesSnapshotAndWatchedIdsFromHostCollections' in names, 'Canonical adapter detachment regression not executed'
