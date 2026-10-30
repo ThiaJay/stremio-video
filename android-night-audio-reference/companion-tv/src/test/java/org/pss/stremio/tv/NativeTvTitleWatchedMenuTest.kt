@@ -251,6 +251,29 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(1, account.sent.size)
     }
 
+    @Test fun pendingReadbackCannotCrossAccountOrLibraryIdentity() {
+        val original = snapshot()
+        val account = Account(original).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        account.watchedIds.addAll(original.videos.map { it.id })
+
+        account.value = original.copy(accountFingerprint = "c".repeat(64))
+        assertTrue(menu.present(1).isEmpty())
+
+        account.value = original.copy(libraryItemFingerprint = "d".repeat(64))
+        assertTrue(menu.present(1).isEmpty())
+
+        account.value = original
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
+
     @Test fun mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration() {
         val account = Account(snapshot()).apply { applyDispatchToReadback = false }
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
