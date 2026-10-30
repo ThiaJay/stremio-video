@@ -7,7 +7,7 @@ import org.pss.stremio.tv.CanonicalWatchedAccountObservation
 import org.pss.stremio.tv.SeriesAccountSnapshot
 
 /**
- * Fixture-only watched-state host for the side-by-side mobile lab.
+ * Fixture-only watched-state host for the side-by-side mobile and TV labs.
  *
  * It has no credentials, network, persistence, Stremio account or provider
  * surface. Exact accepted title commands update only this in-memory instance.

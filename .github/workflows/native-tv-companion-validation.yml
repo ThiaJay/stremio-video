@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=215 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=220 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -196,6 +196,7 @@ jobs:
           assert 'seasonActionIsBoundedToRequestedSyntheticSeason' in names, 'Synthetic watched season regression not executed'
           assert 'malformedOrStaleDispatchNeverMutatesSyntheticState' in names, 'Synthetic watched malformed dispatch regression not executed'
           assert 'observationsAndReadbackListsAreDetached' in names, 'Synthetic watched detachment regression not executed'
+          assert 'tvHostBindingAppliesOnlyLocalSyntheticSeriesState' in names, 'Synthetic Android TV title-action composition regression not executed'
           assert 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' in names, 'Classification terminal-stop composition regression not executed'
           assert 'classifierAlwaysEmitsExactPreservationEnvelope' in names, 'Native classifier preservation envelope regression not executed'
           assert 'invalidSanitisedFactsFailClosed' in names, 'Native classifier invalid-input regression not executed'

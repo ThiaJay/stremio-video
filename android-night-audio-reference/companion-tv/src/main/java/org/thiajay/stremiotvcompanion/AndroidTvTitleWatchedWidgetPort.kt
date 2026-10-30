@@ -14,7 +14,8 @@ import org.pss.stremio.tv.NativeTvTitleWatchedWidgetController
 
 /**
  * Actual Android TV focusable-button implementation of the title-action view
- * port. It remains deliberately uninstantiated by the synthetic companion.
+ * port. The disclosed side-by-side synthetic TV launcher instantiates it only
+ * against local in-memory state; private and official clients remain unwired.
  *
  * This adapter owns only Android Views and confirmation presentation. It has no
  * account/Core/network surface. The host callback must pass the exact action

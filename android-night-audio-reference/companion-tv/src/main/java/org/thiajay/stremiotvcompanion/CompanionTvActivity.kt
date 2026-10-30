@@ -27,6 +27,7 @@ import org.pss.stremio.tv.CoreSkipSegment
 import org.pss.stremio.tv.NativeSkipOutcome
 import org.pss.stremio.tv.NativeMedia3FailureIntake
 import org.pss.stremio.tv.NativeSeekPort
+import org.pss.stremio.tv.NativeTvTitleWatchedOutcome
 import org.pss.stremio.tv.SnapshotBoundNativeSeekPort
 import org.pss.stremio.tv.NativeTvSkipActuator
 import org.pss.stremio.tv.SegmentIdentity
@@ -34,6 +35,7 @@ import org.pss.stremio.tv.SkipKind
 import org.pss.stremio.tv.SkipMode
 import org.pss.stremio.tv.TvPlaybackState
 import org.pss.stremio.tv.TvSkipCoordinator
+import org.pss.stremio.tv.TvWatchedCoordinator
 import org.stremio.nightaudio.reference.NightAudioMedia3Processor
 import org.stremio.nightaudio.reference.PcmDynamicsProcessor
 import java.io.File
@@ -51,7 +53,9 @@ class CompanionTvActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var controls: LinearLayout
     private val manualButtons = LinkedHashMap<SkipKind, Button>()
-    private val watchedButtons = mutableListOf<Button>()
+    private var watchedOwner: AndroidTvTitleWatchedScreenOwner? = null
+    private val watchedHost = SyntheticTitleWatchedAccountHost()
+    private lateinit var watchedStatus: TextView
     private lateinit var storyOrderToggle: Button
     private lateinit var storyOrderSummary: TextView
     private var storyOrderSelected = false
@@ -99,6 +103,7 @@ class CompanionTvActivity : Activity() {
     private val refresh = object : Runnable {
         override fun run() {
             if (::player.isInitialized && ::status.isInitialized) updateUi()
+            pollWatchedOutcome()
             ui.postDelayed(this, 300L)
         }
     }
@@ -180,11 +185,31 @@ class CompanionTvActivity : Activity() {
         button("Next Story item (local metadata only)") { advanceStoryOrderDemo() }
         storyOrderSummary = small("")
         updateStoryOrderDemo()
-        small("Stremio account and watched controls will activate only after a validated native Core session with isolated account evidence.")
-        watchedButtons += button("Mark episode watched (unavailable)") { }
-        watchedButtons += button("Mark season watched (unavailable)") { }
-        watchedButtons += button("Mark series watched (unavailable)") { }
-        watchedButtons.forEach { it.isEnabled = false }
+        small(
+            "Title actions below use the real bounded Android TV widget and owner " +
+                "against this process's local in-memory fixture only. They cannot read " +
+                "or change a Stremio account."
+        )
+        watchedStatus = small("Preparing synthetic title actions.")
+        val watchedActions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        controls.addView(watchedActions)
+        val createdWatched = AndroidTvTitleWatchedScreenOwner.create(
+            watchedActions,
+            TvWatchedCoordinator(),
+            watchedHost
+        )
+        if (createdWatched == null || !createdWatched.render(1)) {
+            createdWatched?.close()
+            watchedStatus.text =
+                "Synthetic title actions unavailable. No account action was attempted."
+        } else {
+            watchedOwner = createdWatched
+            watchedStatus.text =
+                "Title actions ready. Any accepted action changes this process's local " +
+                    "synthetic watched set only."
+        }
         status = header("Ready. No media or account loaded.")
         small("No external media, credentials, Stremio account, history or source URL are read or written by this build.")
         setContentView(container)
@@ -307,6 +332,30 @@ class CompanionTvActivity : Activity() {
         }
     }
 
+    private fun pollWatchedOutcome() {
+        watchedOwner?.let { current ->
+            val outcome = current.consumeOutcome() ?: return
+            val result = when (outcome) {
+                NativeTvTitleWatchedOutcome.APPLIED ->
+                    "Applied to local synthetic watched state."
+                NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK ->
+                    "Local readback was not available; no further action is enabled."
+                NativeTvTitleWatchedOutcome.REFUSED ->
+                    "Action refused by the bounded title-action contract."
+            }
+            watchedStatus.text =
+                result + "\nSynthetic watched IDs: " +
+                    watchedHost.watchedIds().ifEmpty { listOf("none") }.joinToString()
+            if (!current.render(1)) {
+                watchedStatus.text =
+                    watchedStatus.text.toString() +
+                        "\nTitle-action lab closed after a rejected re-render."
+                current.close()
+                watchedOwner = null
+            }
+        }
+    }
+
     private fun stopFixture() {
         player.stop()
         fixtureLoaded = false
@@ -362,6 +411,8 @@ class CompanionTvActivity : Activity() {
 
     override fun onDestroy() {
         ui.removeCallbacks(refresh)
+        watchedOwner?.close()
+        watchedOwner = null
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()

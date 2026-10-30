@@ -195,6 +195,7 @@ if any(name not in synthetic_watched_host_test for name in [
     'seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes',
     'seasonActionIsBoundedToRequestedSyntheticSeason',
     'malformedOrStaleDispatchNeverMutatesSyntheticState',
+    'tvHostBindingAppliesOnlyLocalSyntheticSeriesState',
     'observationsAndReadbackListsAreDetached',
 ]):
     fail.append('synthetic_watched_host_regressions_missing')
@@ -787,13 +788,45 @@ if (android_title_watched_screen_owners.count(
         'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
     ) != 2):
     fail.append('android_title_screen_requested_termination_not_cleaned_on_owner_thread')
-if (any(name in java_text for name in [
+if any(name in java_text for name in [
         'AndroidMobileTitleWatchedScreenOwner',
-        'AndroidTvTitleWatchedScreenOwner',
         'NativeMobileTitleWatchedViewPortRelay',
         'NativeTvTitleWatchedViewPortRelay'
-    ])):
-    fail.append('android_title_screen_owners_wired_to_synthetic_activity')
+    ]):
+    fail.append('unreviewed_title_screen_surface_wired_to_tv_activity')
+if ('AndroidTvTitleWatchedScreenOwner.create(' not in java_text or
+    'createdWatched.render(1)' not in java_text or
+    'current.consumeOutcome()' not in java_text):
+    fail.append('tv_title_action_lab_composition_or_mailbox_missing')
+if ('SyntheticTitleWatchedAccountHost()' not in java_text or
+    'watchedHost.watchedIds()' not in java_text or
+    'current.render(1)' not in java_text):
+    fail.append('tv_title_action_synthetic_readback_or_rerender_missing')
+if ('watchedOwner?.close()' not in java_text or
+    'watchedOwner = null' not in java_text or
+    'ui.removeCallbacks(refresh)' not in java_text):
+    fail.append('tv_title_action_lab_lifecycle_close_missing')
+if ('local in-memory fixture only' not in java_text or
+    'cannot read' not in java_text or
+    'change a Stremio account' not in java_text):
+    fail.append('tv_title_action_synthetic_disclosure_missing')
+if any(name in java_text for name in [
+        'SessionBoundCanonicalWatchedAccountAdapter(',
+        'NativeTvTitleWatchedHostBinding(',
+        'NativeTvTitleWatchedViewPortRelay(',
+        'CanonicalWatchedStatePort',
+        'CanonicalWatchedAccountHostPort'
+    ]):
+    fail.append('tv_activity_bypasses_reviewed_screen_owner')
+if ('NativeTvTitleWatchedOutcome.APPLIED' not in java_text or
+    'DISPATCHED_PENDING_READBACK' not in java_text or
+    'NativeTvTitleWatchedOutcome.REFUSED' not in java_text):
+    fail.append('tv_title_action_outcome_handling_missing')
+if ('tvHostBindingAppliesOnlyLocalSyntheticSeriesState' not in
+        synthetic_watched_host_test or
+    'binding.activate(selected, selected.actionId, "ENTER")' not in
+        synthetic_watched_host_test):
+    fail.append('tv_title_action_synthetic_host_composition_regression_missing')
 if any(name not in title_watched_view_port_relay_test for name in [
     'mobileRelayRefusesBeforeBindingAndDelegatesAfterBinding',
     'mobileRelayCloseClearsAndPermanentlyRevokes',
@@ -808,8 +841,9 @@ if any(name not in title_watched_view_port_relay_test for name in [
     fail.append('native_title_view_port_relay_regressions_missing')
 if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
     fail.append('atomic_enough_main_looper_seek_guard_missing')
-if 'watchedButtons.forEach { it.isEnabled = false }' not in java_text:
-    fail.append('watched_controls_not_fail_closed')
+if ('watchedButtons' in java_text or
+    'watched (unavailable)' in java_text):
+    fail.append('stale_disabled_tv_watched_placeholders_present')
 if 'StoryOrderContract.presentation' not in java_text or 'StoryOrderContract.next' not in java_text:
     fail.append('story_order_not_bound_to_focusable_local_ui')
 if 'storyOrderToggle = button(' not in java_text or 'isFocusable = true' not in java_text:
@@ -1072,6 +1106,6 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':242,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':248,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
