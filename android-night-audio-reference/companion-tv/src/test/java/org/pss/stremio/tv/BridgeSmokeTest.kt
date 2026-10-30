@@ -68,7 +68,7 @@ fun main() {
         Instant.parse("2026-10-12T13:00:00Z"))
     val watched = TvWatchedCoordinator()
     val title = watched.prepare(state, WatchedScope.Series, true)
-    checkCase(title != null && title.selectedIds == listOf("s1e1", "s1e2", "s2e1", "s2e2", "special"), "released story excludes future and ancillary")
+    checkCase(title != null && title.selectedIds == listOf("s1e1", "s1e2", "s2e1", "s2e2"), "released story excludes future and every Season 0 item")
     checkCase(watched.prepare(state, WatchedScope.Season(3), true) == null, "future season watched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(3), false) == null, "future season unwatched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(0), true) == null, "season zero refused")
