@@ -160,6 +160,9 @@ if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watc
     'state.copy(watchedVideoIds = state.watchedVideoIds.toList())' not in title_watched_menu or
     'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
     fail.append('title_watched_canonical_post_write_readback_gate_missing')
+if ('val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()' not in title_watched_menu or
+    'if (!canonicalVideoIds.containsAll(state.watchedVideoIds)) return false' not in title_watched_menu):
+    fail.append('title_watched_unknown_canonical_id_gate_missing')
 if ('private val account: CanonicalWatchedStatePort' not in title_watched_menu or
     'account: CanonicalWatchedStatePort' not in mobile_title_watched_menu or
     'account: CanonicalWatchedStatePort' not in mobile_title_host_binding or
@@ -190,6 +193,7 @@ if any(name not in title_watched_menu_test for name in [
     'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches',
     'pendingReadbackCannotCrossAccountOrLibraryIdentity',
     'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration',
+    'unknownCanonicalWatchedIdNeverReopensGeneration',
     'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping'
 ]):
     fail.append('native_tv_title_watched_menu_regressions_missing')
@@ -836,7 +840,7 @@ if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
 if any(x in java_text+story+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':210,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':212,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
