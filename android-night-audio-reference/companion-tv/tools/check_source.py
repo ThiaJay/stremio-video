@@ -712,7 +712,10 @@ if (('private fun <T> snapshotList(value: List<T>, maximum: Int)' not in story) 
     ('repeat(expectedSize)' not in story) or
     ('if (iterator.hasNext()) return null' not in story) or
     ('Collections.unmodifiableList(detached)' not in story) or
-    ('INPUT_SNAPSHOT_FAILED' not in story)):
+    ('INPUT_SNAPSHOT_FAILED' not in story) or
+    ('snapshotHints(hints) ?: return canonicalSnapshot' not in story) or
+    ('assertEquals(canonical, fallback)' not in story_test) or
+    ('fallback !== canonical' not in story_test)):
     fail.append('story_order_host_collection_snapshot_guard_missing')
 if any(name not in story_test for name in [
     'callerMutationCannotChangeDetachedStoryPresentation',
