@@ -234,6 +234,41 @@ class NativeTvTitleWatchedMenuTest {
         )
     }
 
+    @Test fun canonicalReadbackRearmsOnlyOppositeWatchedDirection() {
+        val account = Account(snapshot())
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+
+        val firstWatched = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.APPLIED,
+            menu.activate(firstWatched, firstWatched.actionId, "ENTER")
+        )
+
+        val duplicateWatched = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.REFUSED,
+            menu.activate(duplicateWatched, duplicateWatched.actionId, "ENTER")
+        )
+
+        val unwatched = action(menu.present(1), WatchedScope.Series, false)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.APPLIED,
+            menu.activate(
+                unwatched,
+                unwatched.actionId,
+                "ENTER",
+                unwatchAcknowledged = true
+            )
+        )
+
+        val watchedAgain = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.APPLIED,
+            menu.activate(watchedAgain, watchedAgain.actionId, "ENTER")
+        )
+        assertEquals(3, account.sent.size)
+    }
+
     @Test fun acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches() {
         val account = Account(snapshot()).apply { applyDispatchToReadback = false }
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
