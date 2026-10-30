@@ -136,9 +136,14 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         null -> "n"
         is Boolean -> if (value) "b1" else "b0"
         is String -> "s${value.length}:$value"
-        is Int, is Long -> "i$value"
-        is Float -> if (value.isFinite()) "d$value" else null
-        is Double -> if (value.isFinite()) "d$value" else null
+        is Int -> "i32:$value"
+        is Long -> "i64:$value"
+        is Float -> if (value.isFinite()) {
+            "f32:${java.lang.Integer.toUnsignedString(value.toRawBits(), 16)}"
+        } else null
+        is Double -> if (value.isFinite()) {
+            "f64:${java.lang.Long.toUnsignedString(value.toRawBits(), 16)}"
+        } else null
         is List<*> -> {
             val parts = value.map { canonical(it) ?: return null }
             "l${parts.size}[${parts.joinToString("")}]"
