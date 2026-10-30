@@ -219,6 +219,55 @@ class NativePlaybackRecoveryActuatorTest {
         }
     }
 
+    @Test fun recoveryCapabilitiesAreSnapshottedOnceAndFailuresFailClosed() {
+        var iterations = 0
+        val changing = object : AbstractSet<String>() {
+            override val size: Int = 1
+
+            override fun iterator(): Iterator<String> {
+                iterations += 1
+                val action = if (iterations == 1) {
+                    "transcodeAudio"
+                } else {
+                    "switchPlaybackEngine"
+                }
+                return listOf(action).iterator()
+            }
+        }
+        val port = FakePort(snapshot(capabilities = changing))
+        val actuator = NativePlaybackRecoveryActuator(port)
+        val prepared = actuator.prepare(classification(), observation())
+        assertNotNull(prepared)
+        assertEquals(1, iterations)
+
+        var immutable = false
+        try {
+            @Suppress("UNCHECKED_CAST")
+            (prepared!!.lease.supportedRecoveryActions as MutableSet<String>)
+                .add("switchPlaybackEngine")
+        } catch (_: UnsupportedOperationException) {
+            immutable = true
+        }
+        assertEquals(true, immutable)
+
+        port.snapshot = prepared.lease
+        assertEquals(NativeRecoveryExecutionOutcome.APPLIED, actuator.execute(prepared))
+        assertEquals(listOf("transcodeAudio"), port.actions)
+        assertEquals(1, iterations)
+
+        val throwing = object : AbstractSet<String>() {
+            override val size: Int = 1
+
+            override fun iterator(): Iterator<String> {
+                throw IllegalStateException("host capability set changed")
+            }
+        }
+        assertNull(
+            NativePlaybackRecoveryActuator(FakePort(snapshot(capabilities = throwing)))
+                .prepare(classification(), observation())
+        )
+    }
+
     @Test fun unadvertisedNativeCapabilityCannotPrepare() {
         val actuator = NativePlaybackRecoveryActuator(FakePort(
             snapshot(capabilities = setOf("switchPlaybackEngine"))
