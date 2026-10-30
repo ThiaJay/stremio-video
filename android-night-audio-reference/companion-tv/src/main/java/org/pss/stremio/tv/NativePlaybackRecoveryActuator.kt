@@ -1,5 +1,7 @@
 package org.pss.stremio.tv
 
+import java.util.Collections
+
 /**
  * Immutable native state used to lease one exact playback recovery action.
  * The host owns capture and must call this boundary on its single player thread.
@@ -141,7 +143,31 @@ class NativePlaybackRecoveryActuator(
 
     private fun snapshotOrNull(): NativeRecoverySnapshot? =
         try {
-            port.currentSnapshot()
+            snapshotRecoverySnapshot(port.currentSnapshot())
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+
+    private fun snapshotRecoverySnapshot(value: NativeRecoverySnapshot): NativeRecoverySnapshot? {
+        val capabilities = snapshotRecoveryActions(value.supportedRecoveryActions) ?: return null
+        return value.copy(supportedRecoveryActions = capabilities)
+    }
+
+    private fun snapshotRecoveryActions(value: Set<String>): Set<String>? =
+        try {
+            val expectedSize = value.size
+            if (expectedSize !in 1..RECOVERY_ACTIONS.size) return null
+            val snapshot = LinkedHashSet<String>(expectedSize)
+            val iterator = value.iterator()
+            while (iterator.hasNext()) {
+                if (snapshot.size >= expectedSize) return null
+                val action = iterator.next()
+                if (action !in RECOVERY_ACTIONS || !snapshot.add(action)) return null
+            }
+            if (snapshot.size != expectedSize) return null
+            Collections.unmodifiableSet(snapshot)
         } catch (_: Exception) {
             null
         } catch (_: LinkageError) {
