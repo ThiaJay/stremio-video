@@ -19,7 +19,9 @@ import org.pss.stremio.tv.TvWatchedCoordinator
 
 /**
  * Actual Android mobile composition root for the accepted host binding and
- * widget port. The synthetic companion deliberately never creates this owner.
+ * widget port. The isolated lab creates this owner only with a local in-memory
+ * synthetic account host; production adoption still requires a validated
+ * authenticated private-client host.
  *
  * Outcomes are held in a one-slot mailbox. A client must consume the result
  * before rendering a fresh account snapshot, preventing a refused or

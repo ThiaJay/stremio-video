@@ -18,8 +18,9 @@ import org.pss.stremio.tv.NativeMobileTitleWatchedWidgetIntent
  * Android framework click, accessibility click and keyboard activation all
  * arrive through performClick/setOnClickListener as one semantic ACTIVATE
  * event. Raw touch coordinates are never accepted and long-press is consumed
- * without activation. The synthetic companion deliberately never instantiates
- * this adapter.
+ * without activation. The isolated lab may instantiate this adapter only through its local in-memory
+ * synthetic account host. Production adoption still requires the private
+ * client to supply a validated authenticated host.
  */
 class AndroidMobileTitleWatchedWidgetPort(
     private val container: ViewGroup,

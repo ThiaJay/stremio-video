@@ -21,6 +21,8 @@ MOBILE_STORY_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/Mobile
 ANDROID_MOBILE_STORY_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderWidgetPort.kt'
 ANDROID_MOBILE_STORY_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderScreenOwner.kt'
 MOBILE_STORY_ACTIVITY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderLabActivity.kt'
+SYNTHETIC_WATCHED_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticTitleWatchedAccountHost.kt'
+SYNTHETIC_WATCHED_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticTitleWatchedAccountHostTest.kt'
 MOBILE_ICON=ROOT/'src/main/res/drawable/companion_mobile_icon.xml'
 RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
 RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
@@ -132,31 +134,70 @@ mobile_story_host_test=MOBILE_STORY_HOST_TEST.read_text() if MOBILE_STORY_HOST_T
 android_mobile_story_widget_port=ANDROID_MOBILE_STORY_WIDGET_PORT.read_text() if ANDROID_MOBILE_STORY_WIDGET_PORT.is_file() else ''
 android_mobile_story_screen_owner=ANDROID_MOBILE_STORY_SCREEN_OWNER.read_text() if ANDROID_MOBILE_STORY_SCREEN_OWNER.is_file() else ''
 mobile_story_activity=MOBILE_STORY_ACTIVITY.read_text() if MOBILE_STORY_ACTIVITY.is_file() else ''
+synthetic_watched_host=SYNTHETIC_WATCHED_HOST.read_text() if SYNTHETIC_WATCHED_HOST.is_file() else ''
+synthetic_watched_host_test=SYNTHETIC_WATCHED_HOST_TEST.read_text() if SYNTHETIC_WATCHED_HOST_TEST.is_file() else ''
 if ('class MobileStoryOrderLabActivity : Activity()' not in mobile_story_activity or
     'AndroidMobileStoryOrderScreenOwner.create(' not in mobile_story_activity or
-    'created.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
+    'createdStory.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
     fail.append('mobile_story_launcher_composition_missing')
 if ('current.consumeSelection()' not in mobile_story_activity or
     'current.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
     fail.append('mobile_story_selection_mailbox_or_rerender_missing')
-if ('ui.removeCallbacks(selectionPump)' not in mobile_story_activity or
-    'owner?.close()' not in mobile_story_activity or
+if ('AndroidMobileTitleWatchedScreenOwner.create(' not in mobile_story_activity or
+    'createdWatched.render(1)' not in mobile_story_activity or
+    'current.consumeOutcome()' not in mobile_story_activity):
+    fail.append('mobile_title_action_lab_composition_or_mailbox_missing')
+if ('ui.removeCallbacks(outcomePump)' not in mobile_story_activity or
+    'storyOwner?.close()' not in mobile_story_activity or
+    'watchedOwner?.close()' not in mobile_story_activity or
     'override fun onDestroy()' not in mobile_story_activity):
-    fail.append('mobile_story_launcher_lifecycle_close_missing')
+    fail.append('mobile_lab_lifecycle_close_missing')
 if ('local:mobile-story:1:1' not in mobile_story_activity or
-    'Synthetic local metadata only.' not in mobile_story_activity or
-    'No playback, account or watched-state action was performed.' not in mobile_story_activity):
-    fail.append('mobile_story_launcher_synthetic_disclosure_missing')
+    'Synthetic local metadata and watched state only.' not in mobile_story_activity or
+    'change production watched history' not in mobile_story_activity):
+    fail.append('mobile_lab_synthetic_disclosure_missing')
+allowed_pss_imports={
+    'import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome',
+    'import org.pss.stremio.tv.TvWatchedCoordinator',
+}
+actual_pss_imports={
+    line for line in mobile_story_activity.splitlines()
+    if line.startswith('import org.pss.stremio.tv.')
+}
+if actual_pss_imports != allowed_pss_imports:
+    fail.append('mobile_lab_unreviewed_pss_surface:'+repr(actual_pss_imports))
 if any(token in mobile_story_activity for token in [
-    'androidx.media3', 'org.pss.stremio.tv', 'android.net.', 'java.net.',
+    'androidx.media3', 'android.net.', 'java.net.',
     'getIntent(', 'intent.get', 'startActivity(', 'startService(',
     'ContentResolver', 'AccountManager', 'Datastore'
 ]):
-    fail.append('mobile_story_launcher_external_or_player_surface')
+    fail.append('mobile_lab_external_or_player_surface')
 if ('Looper.getMainLooper()' not in mobile_story_activity or
-    'ui.post(selectionPump)' not in mobile_story_activity or
-    'ui.postDelayed(this, SELECTION_POLL_MS)' not in mobile_story_activity):
-    fail.append('mobile_story_launcher_main_thread_mailbox_pump_missing')
+    'ui.post(outcomePump)' not in mobile_story_activity or
+    'ui.postDelayed(this, OUTCOME_POLL_MS)' not in mobile_story_activity):
+    fail.append('mobile_lab_main_thread_mailbox_pump_missing')
+if ('class SyntheticTitleWatchedAccountHost' not in synthetic_watched_host or
+    ': CanonicalWatchedAccountHostPort' not in synthetic_watched_host or
+    'private val epoch = 1L' not in synthetic_watched_host):
+    fail.append('synthetic_watched_host_missing_or_unbounded')
+if ('message.keys != setOf("action", "args")' not in synthetic_watched_host or
+    'inner.keys != setOf("action", "args")' not in synthetic_watched_host or
+    '"MarkAsWatched"' not in synthetic_watched_host or
+    '"MarkSeasonAsWatched"' not in synthetic_watched_host):
+    fail.append('synthetic_watched_host_exact_dispatch_gate_missing')
+if ('.filter { it.season > 0 && released(it) }' not in synthetic_watched_host or
+    '.filter { it.season == season && released(it) }' not in synthetic_watched_host):
+    fail.append('synthetic_watched_host_scope_or_season_zero_gate_missing')
+if ('snapshot.videos.map { it.copy() }' not in synthetic_watched_host or
+    'watchedVideoIds = watched.toList()' not in synthetic_watched_host):
+    fail.append('synthetic_watched_host_detached_observation_missing')
+if any(name not in synthetic_watched_host_test for name in [
+    'seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes',
+    'seasonActionIsBoundedToRequestedSyntheticSeason',
+    'malformedOrStaleDispatchNeverMutatesSyntheticState',
+    'observationsAndReadbackListsAreDetached',
+]):
+    fail.append('synthetic_watched_host_regressions_missing')
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
 recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
 classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
@@ -1029,8 +1070,8 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':232,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':242,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
