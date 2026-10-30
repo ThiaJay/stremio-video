@@ -121,4 +121,37 @@ class NativeEpisodeWatchedActionTest {
         assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
         assertEquals(0,p.writes)
     }
+
+    @Test fun cyclicCanonicalVideoGraphFailsClosedWithoutEscaping() {
+        val cyclic=mutableMapOf<String,Any?>(
+            "id" to "tt18:1:1", "season" to 1, "episode" to 1)
+        cyclic["loop"]=cyclic
+        val p=FakeAccount(base)
+        p.video=cyclic
+
+        assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
+        assertEquals(0,p.writes)
+    }
+
+    @Test fun excessiveCanonicalVideoDepthFailsClosed() {
+        var nested:Any?="leaf"
+        repeat(70) { nested=listOf(nested) }
+        val p=FakeAccount(base)
+        p.video=p.video+mapOf("nested" to nested)
+
+        assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
+        assertEquals(0,p.writes)
+    }
+
+    @Test fun excessiveCanonicalVideoGraphOrStringFailsClosed() {
+        val p=FakeAccount(base)
+        p.video=p.video+mapOf("nodes" to List(10_001) { it })
+        assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
+
+        p.video=mapOf(
+            "id" to "tt18:1:1", "season" to 1, "episode" to 1,
+            "overview" to "x".repeat(262_145))
+        assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
+        assertEquals(0,p.writes)
+    }
 }
