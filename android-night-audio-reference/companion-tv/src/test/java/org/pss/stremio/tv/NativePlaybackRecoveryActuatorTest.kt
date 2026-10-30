@@ -236,14 +236,13 @@ class NativePlaybackRecoveryActuatorTest {
         }
         val port = FakePort(snapshot(capabilities = changing))
         val actuator = NativePlaybackRecoveryActuator(port)
-        val prepared = actuator.prepare(classification(), observation())
-        assertNotNull(prepared)
+        val prepared = actuator.prepare(classification(), observation())!!
         assertEquals(1, iterations)
 
         var immutable = false
         try {
             @Suppress("UNCHECKED_CAST")
-            (prepared!!.lease.supportedRecoveryActions as MutableSet<String>)
+            (prepared.lease.supportedRecoveryActions as MutableSet<String>)
                 .add("switchPlaybackEngine")
         } catch (_: UnsupportedOperationException) {
             immutable = true
