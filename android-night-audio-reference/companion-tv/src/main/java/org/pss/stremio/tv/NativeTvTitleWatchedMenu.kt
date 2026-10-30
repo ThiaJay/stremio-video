@@ -202,7 +202,7 @@ class NativeTvTitleWatchedMenu(
         } catch (_: LinkageError) {
             null
         } ?: return false
-        if (currentPlan.selectedIds != pending.plan.selectedIds) return false
+        if (currentPlan != pending.plan) return false
 
         val state = watchedStateOrNull() ?: return false
         if (state.accountFingerprint != snapshot.accountFingerprint ||
