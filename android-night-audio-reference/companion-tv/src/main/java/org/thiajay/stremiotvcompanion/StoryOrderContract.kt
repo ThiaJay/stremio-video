@@ -157,8 +157,10 @@ object StoryOrderContract {
         hints: StoryOrderHints?,
         storyOrderSelected: Boolean
     ): List<CanonicalEpisode> {
+        if (!storyOrderSelected) {
+            return snapshotList(canonical, MAX_INPUT_ENTRIES) ?: emptyList()
+        }
         val snapshot = snapshotInputs(canonical, hints) ?: return emptyList()
-        if (!storyOrderSelected) return snapshot.canonical
         return when (val resolved = resolveSnapshot(snapshot)) {
             is StoryOrderResolution.Valid -> resolved.episodes
             is StoryOrderResolution.CanonicalFallback -> snapshot.canonical
