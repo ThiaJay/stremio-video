@@ -170,7 +170,9 @@ class StoryOrderContractTest {
             StoryOrderFallbackReason.INPUT_SNAPSHOT_FAILED,
             (resolved as StoryOrderResolution.CanonicalFallback).reason
         )
-        assertTrue(StoryOrderContract.presentation(canonical, hostileHints, true).isEmpty())
+        val fallback = StoryOrderContract.presentation(canonical, hostileHints, true)
+        assertEquals(canonical, fallback)
+        assertTrue(fallback !== canonical)
         val next = StoryOrderContract.next(canonical, hostileHints, regularOne.id)
         assertEquals(
             NoStoryOverrideReason.INVALID_HINT,
