@@ -81,7 +81,7 @@ class MobileStoryOrderLabActivity : Activity() {
                         outcome.result.ok && preference != null ->
                             "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
                                 " choice. Current in-memory state: " +
-                                (if (preference.enabled) "enabled." else "Off.")
+                                (if (preference.enabled == true) "enabled." else "Off.")
                         outcome.result.rollbackVerified ->
                             "Synthetic choice was refused and exact rollback was verified."
                         else ->
