@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=236 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=252 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -260,6 +260,22 @@ jobs:
           assert 'throwingTopLevelAndNestedMapsFailClosedWithoutEscaping' in names, 'Native subtitle provenance hostile-map regression throwingTopLevelAndNestedMapsFailClosedWithoutEscaping not executed'
           assert 'iteratorCardinalityDriftFailsClosed' in names, 'Native subtitle provenance hostile-map regression iteratorCardinalityDriftFailsClosed not executed'
           assert 'detachedReceiptCannotBeChangedByLaterCallerMutation' in names, 'Native subtitle provenance hostile-map regression detachedReceiptCannotBeChangedByLaterCallerMutation not executed'
+          assert 'absentStorageLoadsNoPreference' in names, 'Native subtitle store regression absentStorageLoadsNoPreference not executed'
+          assert 'firstExplicitChoicePersistsAndPromotes' in names, 'Native subtitle store regression firstExplicitChoicePersistsAndPromotes not executed'
+          assert 'repeatedChoiceIncrementsRevision' in names, 'Native subtitle store regression repeatedChoiceIncrementsRevision not executed'
+          assert 'existingInstallationDigestIsReused' in names, 'Native subtitle store regression existingInstallationDigestIsReused not executed'
+          assert 'invalidOrThrowingDigestSourceLeavesStorageUntouched' in names, 'Native subtitle store regression invalidOrThrowingDigestSourceLeavesStorageUntouched not executed'
+          assert 'receiptWithoutInstallationDigestFailsWithoutMutation' in names, 'Native subtitle store regression receiptWithoutInstallationDigestFailsWithoutMutation not executed'
+          assert 'corruptStoredReceiptFailsWithoutMutation' in names, 'Native subtitle store regression corruptStoredReceiptFailsWithoutMutation not executed'
+          assert 'unstablePrewriteTupleFailsWithoutMutation' in names, 'Native subtitle store regression unstablePrewriteTupleFailsWithoutMutation not executed'
+          assert 'digestCompareAndSetRefusalDoesNotWriteReceipt' in names, 'Native subtitle store regression digestCompareAndSetRefusalDoesNotWriteReceipt not executed'
+          assert 'receiptCompareAndSetRefusalRollsBackGeneratedDigest' in names, 'Native subtitle store regression receiptCompareAndSetRefusalRollsBackGeneratedDigest not executed'
+          assert 'falsePositiveReceiptWriteRollsBackExactTuple' in names, 'Native subtitle store regression falsePositiveReceiptWriteRollsBackExactTuple not executed'
+          assert 'unknownConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store regression unknownConcurrentDriftIsPreservedWithoutRollbackClaim not executed'
+          assert 'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest' in names, 'Native subtitle store regression explicitOffClearsOnlyReceiptAndKeepsInstallationDigest not executed'
+          assert 'explicitOffRefusalLeavesReceiptUntouched' in names, 'Native subtitle store regression explicitOffRefusalLeavesReceiptUntouched not executed'
+          assert 'loadingRequiresStableExactReadbackAndBinding' in names, 'Native subtitle store regression loadingRequiresStableExactReadbackAndBinding not executed'
+          assert 'foreignThreadAndClosedStoreFailClosed' in names, 'Native subtitle store regression foreignThreadAndClosedStoreFailClosed not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes
