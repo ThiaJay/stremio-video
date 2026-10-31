@@ -70,7 +70,16 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=324 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=333 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'startsExplicitlyOffWithFixedSyntheticBinding' in names, 'Synthetic subtitle Off-default regression not executed'
+          assert 'enabledChoiceChangesOnlyEnabledValue' in names, 'Synthetic subtitle enabled-choice regression not executed'
+          assert 'explicitOffChangesOnlyEnabledValue' in names, 'Synthetic subtitle explicit-Off regression not executed'
+          assert 'staleExpectedSnapshotCannotApply' in names, 'Synthetic subtitle stale-snapshot regression not executed'
+          assert 'exactIssuedRollbackRestoresBeforeSnapshot' in names, 'Synthetic subtitle exact rollback regression not executed'
+          assert 'forgedAndCrossHostTransitionsCannotRollback' in names, 'Synthetic subtitle transition provenance regression not executed'
+          assert 'newerChoiceRevokesOlderRollbackObject' in names, 'Synthetic subtitle stale rollback regression not executed'
+          assert 'foreignThreadCannotReadApplyRollbackOrClose' in names, 'Synthetic subtitle thread-confinement regression not executed'
+          assert 'closeRevokesEveryFutureOperation' in names, 'Synthetic subtitle close regression not executed'
           assert 'enabledApplicationCommitsOnlyAfterExactPreferenceReadback' in names, 'Subtitle preference application readback regression not executed'
           assert 'explicitOffAppliesPreferenceThenClearsOnlyReceipt' in names, 'Subtitle preference explicit-Off transaction regression not executed'
           assert 'alreadySelectedPreferenceMayRecordOnlyTheExplicitClick' in names, 'Subtitle preference no-op explicit-click regression not executed'

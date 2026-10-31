@@ -15,9 +15,10 @@ interface AndroidSubtitlePreferenceChoiceScreenPort {
  *
  * Exactly one typed outcome is held until the client explicitly consumes it.
  * Rendering or clearing over an unobserved outcome is refused. The owner is
- * deliberately absent from both lab Activities. Its production constructor
- * requires an injected client-owned preference-application port and grants no
- * account, player, provider, network or independent preference authority.
+ * composed only by the disclosed synthetic mobile lab. Its production
+ * constructor requires an injected client-owned preference-application port
+ * and grants no account, player, provider, network or independent preference
+ * authority.
  */
 class AndroidSubtitlePreferenceChoiceScreenOwner private constructor() {
     internal fun interface PortFactory {

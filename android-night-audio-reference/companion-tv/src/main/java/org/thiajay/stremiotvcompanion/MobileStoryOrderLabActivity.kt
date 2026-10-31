@@ -22,9 +22,12 @@ class MobileStoryOrderLabActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private var storyOwner: AndroidMobileStoryOrderScreenOwner? = null
     private var watchedOwner: AndroidMobileTitleWatchedScreenOwner? = null
+    private var subtitleOwner: AndroidSubtitlePreferenceChoiceScreenOwner? = null
+    private var subtitleHost: SyntheticSubtitlePreferenceHost? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var storyStatus: TextView
     private lateinit var watchedStatus: TextView
+    private lateinit var subtitleStatus: TextView
 
     private val outcomePump = object : Runnable {
         override fun run() {
@@ -66,6 +69,41 @@ class MobileStoryOrderLabActivity : Activity() {
                                 "\nTitle-action lab closed after a rejected re-render."
                         current.close()
                         watchedOwner = null
+                    }
+                }
+            }
+            subtitleOwner?.let { current ->
+                active = true
+                val outcome = current.consumeOutcome()
+                if (outcome != null) {
+                    val preference = subtitleHost?.readPreferenceSnapshot()?.sessionPreference
+                    subtitleStatus.text = when {
+                        outcome.result.ok && preference != null ->
+                            "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
+                                " choice. Current in-memory state: " +
+                                (if (preference.enabled) "enabled." else "Off.")
+                        outcome.result.rollbackVerified ->
+                            "Synthetic choice was refused and exact rollback was verified."
+                        else ->
+                            "Synthetic choice was refused with unverified rollback; " +
+                                "the subtitle lab is held closed."
+                    } + "\nProduction Stremio preferences were not read or changed."
+
+                    if (!outcome.result.rollbackVerified) {
+                        current.close()
+                        subtitleOwner = null
+                        subtitleHost?.close()
+                        subtitleHost = null
+                    } else if (!current.render(
+                            AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS
+                        )) {
+                        subtitleStatus.text =
+                            subtitleStatus.text.toString() +
+                                "\nSubtitle lab closed after a rejected re-render."
+                        current.close()
+                        subtitleOwner = null
+                        subtitleHost?.close()
+                        subtitleHost = null
                     }
                 }
             }
@@ -117,6 +155,19 @@ class MobileStoryOrderLabActivity : Activity() {
             orientation = LinearLayout.VERTICAL
         }
         screen.addView(watchedActions)
+
+        screen.addView(label("Synthetic subtitle preference choice", 20f, Color.WHITE))
+        subtitleStatus = label(
+            "Explicitly Off by default. This isolated lab stores only its own provenance " +
+                "receipt and never reads or changes production Stremio preferences.",
+            16f,
+            Color.rgb(132, 225, 190)
+        )
+        screen.addView(subtitleStatus)
+        val subtitleActions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        screen.addView(subtitleActions)
         setContentView(scroll)
 
         val createdStory = AndroidMobileStoryOrderScreenOwner.create(
@@ -151,7 +202,31 @@ class MobileStoryOrderLabActivity : Activity() {
                     "synthetic watched set only."
         }
 
-        if (storyOwner != null || watchedOwner != null) ui.post(outcomePump)
+        val createdSubtitleHost = SyntheticSubtitlePreferenceHost()
+        val createdSubtitle = AndroidSubtitlePreferenceChoiceScreenOwner.open(
+            getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+            createdSubtitleHost,
+            createdSubtitleHost,
+            subtitleActions
+        )
+        if (createdSubtitle == null || !createdSubtitle.render(
+                AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN
+            )) {
+            createdSubtitle?.close()
+            createdSubtitleHost.close()
+            subtitleStatus.text =
+                "Synthetic subtitle choices unavailable. Production preferences remain untouched."
+        } else {
+            subtitleHost = createdSubtitleHost
+            subtitleOwner = createdSubtitle
+            subtitleStatus.text =
+                "Choose enabled or explicit Off for this process-local synthetic preference. " +
+                    "Only this lab's private provenance receipt may be stored."
+        }
+
+        if (storyOwner != null || watchedOwner != null || subtitleOwner != null) {
+            ui.post(outcomePump)
+        }
     }
 
     override fun onDestroy() {
@@ -160,6 +235,10 @@ class MobileStoryOrderLabActivity : Activity() {
         storyOwner = null
         watchedOwner?.close()
         watchedOwner = null
+        subtitleOwner?.close()
+        subtitleOwner = null
+        subtitleHost?.close()
+        subtitleHost = null
         super.onDestroy()
     }
 
@@ -176,6 +255,8 @@ class MobileStoryOrderLabActivity : Activity() {
 
     companion object {
         private const val OUTCOME_POLL_MS = 100L
+        private const val SYNTHETIC_SUBTITLE_RECEIPT_PREFS =
+            "synthetic_mobile_subtitle_receipt_v1"
         private val SYNTHETIC_CANONICAL = listOf(
             CanonicalEpisode("local:mobile-story:1:1", 1, 1, "Episode one"),
             CanonicalEpisode("local:mobile-story:0:2", 0, 2, "Narrative special"),
@@ -192,3 +273,4 @@ class MobileStoryOrderLabActivity : Activity() {
         )
     }
 }
+

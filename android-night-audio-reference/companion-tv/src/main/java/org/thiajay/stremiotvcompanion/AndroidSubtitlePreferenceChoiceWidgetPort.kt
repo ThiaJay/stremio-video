@@ -22,9 +22,9 @@ data class AndroidSubtitlePreferenceChoiceOutcome(
  * preference-application transaction and committed through the accepted store
  * owner only after exact readback.
  *
- * This port is deliberately absent from both lab Activities. A private client
- * must still supply its existing compare-and-set preference authority, reviewed
- * lifecycle wiring, exclusive receipt keys, authenticated behaviour,
+ * This port is composed only by the disclosed synthetic mobile lab. A private
+ * client must still supply its existing compare-and-set preference authority,
+ * reviewed lifecycle wiring, exclusive receipt keys, authenticated behaviour,
  * accessibility acceptance and device validation.
  */
 class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
