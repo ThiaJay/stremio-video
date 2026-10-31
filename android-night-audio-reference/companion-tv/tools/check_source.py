@@ -1147,7 +1147,7 @@ if (
     not all(x in native_subtitle_provenance for x in [
         'Collections.unmodifiableMap(LinkedHashMap(value))',
         'This function validates that event and cannot create it.',
-        'does not prove UI, signed package, private-client or device acceptance.'
+        'not prove UI, signed package, private-client or device acceptance.'
     ]) or
     'NativeSubtitlePreferenceProvenance' in java_text or
     not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation'])
