@@ -6,9 +6,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.AbstractMap
-import java.util.AbstractSet
-import java.util.SimpleImmutableEntry
+import java.util.AbstractMap.SimpleImmutableEntry
+import kotlin.collections.AbstractMap
+import kotlin.collections.AbstractSet
 import org.thiajay.stremiotvcompanion.NativeSubtitlePreferenceProvenance.SessionPreference
 
 class NativeSubtitlePreferenceProvenanceTest {
