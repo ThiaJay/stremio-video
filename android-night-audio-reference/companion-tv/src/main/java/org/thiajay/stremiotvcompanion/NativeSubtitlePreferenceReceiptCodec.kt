@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -154,6 +155,8 @@ object NativeSubtitlePreferenceReceiptCodec {
                 )
             )
             receipt.takeIf { encode(it) == candidate }
+        } catch (_: CharacterCodingException) {
+            null
         } catch (_: RuntimeException) {
             null
         } catch (_: LinkageError) {

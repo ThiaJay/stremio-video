@@ -85,10 +85,14 @@ class NativeSubtitlePreferenceReceiptCodecTest {
     }
 
     @Test fun nonCanonicalOrOversizedTextFailsClosed() {
+        val nonCanonical = LinkedHashMap(receipt())
+        val nonCanonicalBinding = LinkedHashMap(
+            nonCanonical["binding"] as Map<String, Any?>
+        )
+        nonCanonicalBinding["sessionLanguage"] = " EN_GB "
+        nonCanonical["binding"] = nonCanonicalBinding
         assertNull(
-            NativeSubtitlePreferenceReceiptCodec.encode(
-                receipt(language = " EN_GB ")
-            )
+            NativeSubtitlePreferenceReceiptCodec.encode(nonCanonical)
         )
         assertNull(
             NativeSubtitlePreferenceReceiptCodec.encode(
