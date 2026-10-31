@@ -18,16 +18,18 @@ data class AndroidSubtitlePreferenceChoiceOutcome(
  * Framework click, keyboard and accessibility activation share the semantic
  * performClick path. Long press is consumed without activation and raw touch
  * coordinates are never accepted. The complete view generation is removed
- * before the exact controller intent is translated into a one-shot session
- * lease and committed through the accepted store owner.
+ * before the exact controller intent is translated into an injected
+ * preference-application transaction and committed through the accepted store
+ * owner only after exact readback.
  *
  * This port is deliberately absent from both lab Activities. A private client
- * must still own reviewed lifecycle wiring, exclusive preferences keys,
- * authenticated behaviour, accessibility acceptance and device validation.
+ * must still supply its existing compare-and-set preference authority, reviewed
+ * lifecycle wiring, exclusive receipt keys, authenticated behaviour,
+ * accessibility acceptance and device validation.
  */
 class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
     private val container: ViewGroup,
-    private val session: AndroidSubtitlePreferenceChoiceSession,
+    private val transaction: AndroidSubtitlePreferenceChoiceTransaction,
     private val onOutcome: (AndroidSubtitlePreferenceChoiceOutcome) -> Unit
 ) : AndroidSubtitlePreferenceChoiceScreenPort {
     private val ownerThread = Thread.currentThread()
@@ -73,8 +75,8 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
         closed = true
         val controllerClosed = controller.close()
         val viewsRemoved = removeOwnedViews()
-        val sessionClosed = session.close()
-        return controllerClosed && viewsRemoved && sessionClosed
+        val transactionClosed = transaction.close()
+        return controllerClosed && viewsRemoved && transactionClosed
     }
 
     private fun createButton(widget: AndroidSubtitlePreferenceChoiceWidget): Button =
@@ -99,8 +101,7 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
                 }
 
                 val result = try {
-                    val lease = session.prepareChoice(intent.surface, intent.choice)
-                    if (lease == null) rejected() else session.commitChoice(lease)
+                    transaction.applyAndCommitChoice(intent.surface, intent.choice)
                 } catch (_: Exception) {
                     rejected()
                 } catch (_: LinkageError) {
@@ -144,7 +145,7 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
         if (!closed) {
             closed = true
             controller.close()
-            session.close()
+            transaction.close()
         }
         removeOwnedViews()
         return false
@@ -158,6 +159,7 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
         fun open(
             preferences: SharedPreferences,
             snapshotPort: AndroidSubtitlePreferenceChoiceSession.SnapshotPort,
+            applicationPort: AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort,
             container: ViewGroup,
             onOutcome: (AndroidSubtitlePreferenceChoiceOutcome) -> Unit
         ): AndroidSubtitlePreferenceChoiceWidgetPort? {
@@ -166,17 +168,22 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
                 preferences,
                 snapshotPort
             ) ?: return null
+            val transaction = AndroidSubtitlePreferenceChoiceTransaction(
+                session,
+                snapshotPort,
+                applicationPort
+            )
             return try {
                 AndroidSubtitlePreferenceChoiceWidgetPort(
                     container,
-                    session,
+                    transaction,
                     onOutcome
                 )
             } catch (_: Exception) {
-                session.close()
+                transaction.close()
                 null
             } catch (_: LinkageError) {
-                session.close()
+                transaction.close()
                 null
             }
         }

@@ -70,7 +70,17 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=314 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=324 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'enabledApplicationCommitsOnlyAfterExactPreferenceReadback' in names, 'Subtitle preference application readback regression not executed'
+          assert 'explicitOffAppliesPreferenceThenClearsOnlyReceipt' in names, 'Subtitle preference explicit-Off transaction regression not executed'
+          assert 'alreadySelectedPreferenceMayRecordOnlyTheExplicitClick' in names, 'Subtitle preference no-op explicit-click regression not executed'
+          assert 'bindingMutationIsRejectedAndExactPreferenceRollbackSucceeds' in names, 'Subtitle preference binding-preservation regression not executed'
+          assert 'receiptCommitFailureRollsBackAppliedPreference' in names, 'Subtitle preference receipt-failure rollback regression not executed'
+          assert 'concurrentPreferenceDriftIsPreservedWithoutRollbackClaim' in names, 'Subtitle preference concurrent-drift regression not executed'
+          assert 'throwingApplicationPortFailsClosedBeforeReceipt' in names, 'Subtitle preference application exception regression not executed'
+          assert 'rollbackRefusalIsReportedWithoutOverwritingAppliedState' in names, 'Subtitle preference rollback-refusal regression not executed'
+          assert 'mismatchedTransitionCannotInventChoiceAuthority' in names, 'Subtitle preference transition provenance regression not executed'
+          assert 'ownerThreadAndCloseRevokeTransaction' in names, 'Subtitle preference transaction lifecycle regression not executed'
           assert 'screenHoldsOneOutcomeUntilExplicitConsumption' in names, 'Subtitle choice screen outcome mailbox regression not executed'
           assert 'refusedOutcomeIsHeldWithoutPromotionOrRerender' in names, 'Subtitle choice refused-outcome regression not executed'
           assert 'duplicateOutcomePermanentlyPoisonsAndClosesPort' in names, 'Subtitle choice duplicate-outcome regression not executed'

@@ -15,8 +15,9 @@ interface AndroidSubtitlePreferenceChoiceScreenPort {
  *
  * Exactly one typed outcome is held until the client explicitly consumes it.
  * Rendering or clearing over an unobserved outcome is refused. The owner is
- * deliberately absent from both lab Activities and grants no account, player,
- * provider, network or production preference authority.
+ * deliberately absent from both lab Activities. Its production constructor
+ * requires an injected client-owned preference-application port and grants no
+ * account, player, provider, network or independent preference authority.
  */
 class AndroidSubtitlePreferenceChoiceScreenOwner private constructor() {
     internal fun interface PortFactory {
@@ -119,6 +120,7 @@ class AndroidSubtitlePreferenceChoiceScreenOwner private constructor() {
         fun open(
             preferences: SharedPreferences,
             snapshotPort: AndroidSubtitlePreferenceChoiceSession.SnapshotPort,
+            applicationPort: AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort,
             container: ViewGroup
         ): AndroidSubtitlePreferenceChoiceScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
@@ -126,6 +128,7 @@ class AndroidSubtitlePreferenceChoiceScreenOwner private constructor() {
                 AndroidSubtitlePreferenceChoiceWidgetPort.open(
                     preferences,
                     snapshotPort,
+                    applicationPort,
                     container,
                     onOutcome
                 )
