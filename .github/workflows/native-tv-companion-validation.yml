@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=281 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=290 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -287,6 +287,15 @@ jobs:
           assert 'explicitOffRefusalLeavesReceiptUntouched' in names, 'Native subtitle store regression explicitOffRefusalLeavesReceiptUntouched not executed'
           assert 'loadingRequiresStableExactReadbackAndBinding' in names, 'Native subtitle store regression loadingRequiresStableExactReadbackAndBinding not executed'
           assert 'foreignThreadAndClosedStoreFailClosed' in names, 'Native subtitle store regression foreignThreadAndClosedStoreFailClosed not executed'
+          assert 'exactPreferencesObjectHasOneProcessLocalOwner' in names, 'Subtitle store owner exclusivity regression not executed'
+          assert 'distinctPreferencesObjectsHaveIndependentOwners' in names, 'Subtitle store owner identity isolation regression not executed'
+          assert 'loadWithoutReceiptDoesNotGenerateOrWriteIdentity' in names, 'Subtitle store owner passive-load regression not executed'
+          assert 'explicitChoiceComposesDigestStorageAndCanonicalStore' in names, 'Subtitle store owner composition regression not executed'
+          assert 'entropyRefusalLeavesEveryPreferenceUntouched' in names, 'Subtitle store owner entropy refusal regression not executed'
+          assert 'explicitOffClearsOnlyReceiptAndKeepsIdentity' in names, 'Subtitle store owner explicit-Off regression not executed'
+          assert 'foreignThreadCannotUseCloseOrReleaseOwnerLease' in names, 'Subtitle store owner foreign-thread regression not executed'
+          assert 'closeRevokesOperationsAndFreshOwnerCanReadReceipt' in names, 'Subtitle store owner lifecycle handoff regression not executed'
+          assert 'corruptStoredTypeFailsClosedWithoutOverwrite' in names, 'Subtitle store owner corrupt-storage regression not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes
@@ -357,4 +366,5 @@ jobs:
           sha256sum "$apk"
           echo 'Android companion source and debug APK built; no upload, release, device or account action performed.'
 # Never upload debug APK, release assets, credentials, private data or the synthetic sample.
+
 
