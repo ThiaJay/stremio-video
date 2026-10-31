@@ -44,7 +44,7 @@ class AndroidSubtitlePreferenceStoreOwner private constructor(
      * The caller still owns proof that this came from a genuine local choice
      * event. The owner only preserves the exact validated source contract.
      */
-    fun recordExplicitLocalChoice(
+    internal fun recordExplicitLocalChoice(
         sessionPreference: NativeSubtitlePreferenceProvenance.SessionPreference?,
         globalLanguage: String?,
         surface: String?
@@ -53,7 +53,7 @@ class AndroidSubtitlePreferenceStoreOwner private constructor(
         return store.recordExplicitLocalChoice(sessionPreference, globalLanguage, surface)
     }
 
-    fun clearStoredReceiptForExplicitOff(
+    internal fun clearStoredReceiptForExplicitOff(
         sessionPreference: NativeSubtitlePreferenceProvenance.SessionPreference?
     ): NativeSubtitlePreferenceStore.CommitResult {
         if (!usable()) return rejected()

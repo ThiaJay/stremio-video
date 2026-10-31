@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=290 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=299 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -296,6 +296,15 @@ jobs:
           assert 'foreignThreadCannotUseCloseOrReleaseOwnerLease' in names, 'Subtitle store owner foreign-thread regression not executed'
           assert 'closeRevokesOperationsAndFreshOwnerCanReadReceipt' in names, 'Subtitle store owner lifecycle handoff regression not executed'
           assert 'corruptStoredTypeFailsClosedWithoutOverwrite' in names, 'Subtitle store owner corrupt-storage regression not executed'
+          assert 'enabledChoiceRequiresExactIssuedLeaseAndStableSnapshot' in names, 'Subtitle choice exact-lease regression not executed'
+          assert 'duplicatePreparationCannotMintParallelConsent' in names, 'Subtitle choice duplicate-preparation regression not executed'
+          assert 'forgedOrCrossSessionLeaseRevokesDisplayedGeneration' in names, 'Subtitle choice cross-session provenance regression not executed'
+          assert 'finalSnapshotDriftConsumesLeaseBeforeStorage' in names, 'Subtitle choice final-snapshot regression not executed'
+          assert 'unstableAndThrowingSnapshotsFailClosedWithoutMutation' in names, 'Subtitle choice snapshot containment regression not executed'
+          assert 'explicitOffRequiresPresentedOffAndClearsOnlyReceipt' in names, 'Subtitle choice explicit-Off regression not executed'
+          assert 'cancellationConsumesOnlyTheExactPresentedLease' in names, 'Subtitle choice cancellation regression not executed'
+          assert 'foreignThreadCannotPrepareCommitCancelOrClose' in names, 'Subtitle choice owner-thread regression not executed'
+          assert 'closeRevokesPendingChoiceAndReleasesStorageOwner' in names, 'Subtitle choice lifecycle regression not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes
