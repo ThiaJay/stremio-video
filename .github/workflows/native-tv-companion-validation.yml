@@ -70,7 +70,15 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=299 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=307 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'widgetControllerBuildsTwoSemanticChoicesWithoutConsent' in names, 'Subtitle choice widget generation regression not executed'
+          assert 'semanticClickReturnsExactIntentAndRevokesGeneration' in names, 'Subtitle choice semantic callback regression not executed'
+          assert 'rawPointerOrLongPressNeverAuthorizesAndRevokesGeneration' in names, 'Subtitle choice raw-input refusal regression not executed'
+          assert 'selectedChoiceMismatchNeverAuthorizesAndRevokesGeneration' in names, 'Subtitle choice selection mismatch regression not executed'
+          assert 'forgedOrCrossControllerWidgetCannotAuthorize' in names, 'Subtitle choice widget provenance regression not executed'
+          assert 'replacementMakesEarlierWidgetStale' in names, 'Subtitle choice widget replacement regression not executed'
+          assert 'nullSurfaceClearAndCloseFailClosed' in names, 'Subtitle choice widget lifecycle regression not executed'
+          assert 'foreignThreadCannotRenderConsumeClearOrClose' in names, 'Subtitle choice widget thread regression not executed'
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
