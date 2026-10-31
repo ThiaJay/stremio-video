@@ -71,7 +71,7 @@ object NativeSubtitlePreferenceProvenance {
         preferenceProvenance: Map<*, *>?,
         activeInstallationDigest: String?
     ): Boolean {
-        val evidence = preferenceProvenance ?: return false
+        val evidence = snapshotExactObject(preferenceProvenance, explicitChoiceKeys.size, true) ?: return false
         val kind = evidence["kind"] as? String ?: return false
         if (wholeNumber(evidence["schemaVersion"]) != 1L || kind !in receiptKinds) return false
         val expectedKeys = if (kind == "explicit-local-choice") {
@@ -131,7 +131,7 @@ object NativeSubtitlePreferenceProvenance {
             return null
         }
         val revision = positiveRevision(preferenceRevision) ?: return null
-        val event = localChoiceEvent ?: return null
+        val event = snapshotExactObject(localChoiceEvent, choiceEventKeys.size, false) ?: return null
         if (!hasExactKeys(event, choiceEventKeys) ||
             event["installationDigest"] != activeInstallationDigest ||
             positiveRevision(event["preferenceRevision"]) != revision ||
@@ -164,7 +164,7 @@ object NativeSubtitlePreferenceProvenance {
         storedReceipt: Map<*, *>?,
         storageReadback: Map<*, *>?
     ): Map<String, Any?>? {
-        val stored = storedReceipt ?: return null
+        val stored = snapshotExactObject(storedReceipt, explicitChoiceKeys.size, true) ?: return null
         val kind = stored["kind"] as? String ?: return null
         val expectedStoredKeys = if (kind == "explicit-local-choice") {
             explicitChoiceKeys
@@ -180,7 +180,7 @@ object NativeSubtitlePreferenceProvenance {
             )
         ) return null
 
-        val readback = storageReadback ?: return null
+        val readback = snapshotExactObject(storageReadback, storageReadbackKeys.size, true) ?: return null
         if (!hasExactKeys(readback, storageReadbackKeys) ||
             readback["scope"] != "installation-local" ||
             readback["installationDigest"] != activeInstallationDigest
@@ -199,6 +199,48 @@ object NativeSubtitlePreferenceProvenance {
                 "binding" to immutableBinding(stored["binding"])!!
             )
         )
+    }
+
+    /**
+     * Detach a caller-owned map exactly once before validation. Custom maps may
+     * change cardinality or throw when reread; those inputs fail closed.
+     */
+    private fun snapshotExactObject(
+        value: Map<*, *>?,
+        maxEntries: Int,
+        detachBinding: Boolean
+    ): Map<String, Any?>? {
+        try {
+            val source = value ?: return null
+            val expectedSize = source.size
+            if (expectedSize !in 1..maxEntries) return null
+            val copy = LinkedHashMap<String, Any?>(expectedSize)
+            val iterator = source.entries.iterator()
+            var count = 0
+            while (iterator.hasNext()) {
+                if (count >= expectedSize) return null
+                val entry = iterator.next()
+                val key = entry.key as? String ?: return null
+                if (copy.containsKey(key)) return null
+                val detached = if (detachBinding && key == "binding") {
+                    snapshotExactObject(
+                        entry.value as? Map<*, *>,
+                        bindingKeys.size,
+                        false
+                    ) ?: return null
+                } else {
+                    entry.value
+                }
+                copy[key] = detached
+                count++
+            }
+            if (count != expectedSize) return null
+            return Collections.unmodifiableMap(copy)
+        } catch (_: RuntimeException) {
+            return null
+        } catch (_: LinkageError) {
+            return null
+        }
     }
 
     private fun sameBinding(candidate: Any?, expected: Any?): Boolean {

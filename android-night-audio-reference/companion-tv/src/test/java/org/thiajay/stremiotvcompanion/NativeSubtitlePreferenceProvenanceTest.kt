@@ -6,6 +6,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.AbstractMap
+import java.util.AbstractSet
+import java.util.SimpleImmutableEntry
 import org.thiajay.stremiotvcompanion.NativeSubtitlePreferenceProvenance.SessionPreference
 
 class NativeSubtitlePreferenceProvenanceTest {
@@ -177,6 +180,64 @@ class NativeSubtitlePreferenceProvenanceTest {
         assertEquals(choiceEvent(), originalEvent)
     }
 
+    @Test fun callerMapsAreSnapshottedOnceBeforeValidation() {
+        val evidence = TwoAccessMap(sameInstallationReceipt())
+        assertTrue(verify(session, "eng", evidence, installation))
+        assertEquals(2, evidence.entryReads)
+
+        val event = TwoAccessMap(choiceEvent())
+        val issued = issue(localChoiceEvent = event)
+        assertEquals("explicit-local-choice", issued?.get("kind"))
+        assertEquals(2, event.entryReads)
+    }
+
+    @Test fun throwingTopLevelAndNestedMapsFailClosedWithoutEscaping() {
+        assertFalse(verify(session, "eng", ThrowingEntriesMap(), installation))
+        assertNull(issue(localChoiceEvent = ThrowingEntriesMap()))
+        assertNull(promote(sameInstallationReceipt(), ThrowingEntriesMap()))
+        assertFalse(
+            verify(
+                session,
+                "eng",
+                sameInstallationReceipt(mapOf("binding" to ThrowingEntriesMap())),
+                installation
+            )
+        )
+    }
+
+    @Test fun iteratorCardinalityDriftFailsClosed() {
+        val receipt = sameInstallationReceipt()
+        val topLevelDrift = CardinalityDriftMap(
+            receipt.entries.map { it.key to it.value },
+            receipt.size - 1
+        )
+        assertFalse(verify(session, "eng", topLevelDrift, installation))
+
+        val binding = NativeSubtitlePreferenceProvenance.preferenceBinding(session, "eng")
+        val bindingDrift = CardinalityDriftMap(
+            binding.entries.map { it.key to it.value },
+            binding.size - 1
+        )
+        assertFalse(
+            verify(
+                session,
+                "eng",
+                sameInstallationReceipt(mapOf("binding" to bindingDrift)),
+                installation
+            )
+        )
+    }
+
+    @Test fun detachedReceiptCannotBeChangedByLaterCallerMutation() {
+        val event = choiceEvent().toMutableMap()
+        val receipt = issue(localChoiceEvent = event)!!
+        event["surface"] = "player-overlay"
+        event["choice"] = "disabled"
+        assertEquals("first-run", receipt["surface"])
+        assertEquals("enabled", receipt["choice"])
+        assertTrue(verify(session, "eng", receipt, installation))
+    }
+
     private fun verify(
         preference: SessionPreference?,
         globalLanguage: String?,
@@ -250,6 +311,47 @@ class NativeSubtitlePreferenceProvenanceTest {
         "preferenceRevision" to receipt["preferenceRevision"],
         "binding" to receipt["binding"]
     ).apply { putAll(overrides) }
+
+    private class ThrowingEntriesMap : AbstractMap<String, Any?>() {
+        override val entries: Set<Map.Entry<String, Any?>>
+            get() = throw IllegalStateException("hostile map")
+    }
+
+    private class TwoAccessMap(
+        source: Map<String, Any?>
+    ) : AbstractMap<String, Any?>() {
+        private val detached = LinkedHashSet<Map.Entry<String, Any?>>().apply {
+            source.forEach { (key, value) ->
+                add(SimpleImmutableEntry(key, value))
+            }
+        }
+        var entryReads = 0
+            private set
+
+        override val entries: Set<Map.Entry<String, Any?>>
+            get() {
+                entryReads++
+                if (entryReads > 2) throw IllegalStateException("caller map reread")
+                return detached
+            }
+    }
+
+    private class CardinalityDriftMap(
+        source: List<Pair<String, Any?>>,
+        private val advertisedSize: Int
+    ) : AbstractMap<String, Any?>() {
+        private val detached = source.map { (key, value) ->
+            SimpleImmutableEntry<String, Any?>(key, value)
+        }
+        override val entries: Set<Map.Entry<String, Any?>> =
+            object : AbstractSet<Map.Entry<String, Any?>>() {
+                override val size: Int
+                    get() = advertisedSize
+
+                override fun iterator(): Iterator<Map.Entry<String, Any?>> =
+                    detached.iterator()
+            }
+    }
 
     private fun promote(
         receipt: Map<*, *>,

@@ -1153,8 +1153,31 @@ if (
     not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation'])
 ):
     fail.append('native_subtitle_provenance_unwired_regressions')
+if not all(x in native_subtitle_provenance for x in [
+    'private fun snapshotExactObject(',
+    'val expectedSize = source.size',
+    'if (expectedSize !in 1..maxEntries) return null',
+    'if (count >= expectedSize) return null',
+    'if (count != expectedSize) return null',
+    'Collections.unmodifiableMap(copy)'
+]):
+    fail.append('native_subtitle_provenance_single_snapshot')
+if not all(x in native_subtitle_provenance for x in [
+    'snapshotExactObject(preferenceProvenance, explicitChoiceKeys.size, true)',
+    'snapshotExactObject(localChoiceEvent, choiceEventKeys.size, false)',
+    'snapshotExactObject(storedReceipt, explicitChoiceKeys.size, true)',
+    'snapshotExactObject(storageReadback, storageReadbackKeys.size, true)'
+]):
+    fail.append('native_subtitle_provenance_snapshot_entrypoints')
+if not all(x in native_subtitle_provenance for x in [
+    'catch (_: RuntimeException)',
+    'catch (_: LinkageError)'
+]) or 'catch (_: Throwable)' in native_subtitle_provenance:
+    fail.append('native_subtitle_provenance_exception_boundary')
+if not all(x in native_subtitle_provenance_test for x in ['callerMapsAreSnapshottedOnceBeforeValidation','throwingTopLevelAndNestedMapsFailClosedWithoutEscaping','iteratorCardinalityDriftFailsClosed','detachedReceiptCannotBeChangedByLaterCallerMutation']):
+    fail.append('native_subtitle_provenance_hostile_map_regressions')
 if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':254,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':258,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
