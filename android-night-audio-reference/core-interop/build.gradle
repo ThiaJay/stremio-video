@@ -1,0 +1,23 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'org.thiajay.stremiotvcore'
+    compileSdk 36
+    defaultConfig { minSdk 26 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions { jvmTarget = '21' }
+}
+
+dependencies {
+    // Compile-only: NEVER packaged into the existing zero-permission proof APK.
+    // This archived official SDK may not support the new DismissSkipSegment ABI.
+    compileOnly 'com.github.Stremio:stremio-core-kotlin:1.15.0'
+    compileOnly 'pro.streem.pbandk:pbandk-runtime:0.16.0'
+    testImplementation 'junit:junit:4.13.2'
+}

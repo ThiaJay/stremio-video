@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original neutral lab-only TV banner. Not Stremio branding or a release asset. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#101722" android:pathData="M0,0 L320,0 L320,180 L0,180 Z" />
+    <path android:fillColor="#00A6A6" android:pathData="M26,35 L124,35 L124,145 L26,145 Z" />
+    <path android:fillColor="#112733" android:pathData="M32,41 L118,41 L118,139 L32,139 Z" />
+    <path android:fillColor="#E9F8FA" android:pathData="M57,63 L57,117 L101,90 Z" />
+    <path android:fillColor="#E9F8FA" android:pathData="M151,58 L287,58 L287,68 L151,68 Z" />
+    <path android:fillColor="#54CED7" android:pathData="M151,82 L277,82 L277,90 L151,90 Z" />
+    <path android:fillColor="#54CED7" android:pathData="M151,101 L260,101 L260,109 L151,109 Z" />
+    <path android:fillColor="#E9F8FA" android:pathData="M151,127 L215,127 L215,135 L151,135 Z" />
+</vector>

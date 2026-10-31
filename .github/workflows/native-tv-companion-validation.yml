@@ -1,0 +1,413 @@
+name: Isolated Fire TV companion Media3 build
+on:
+  push:
+    branches:
+      - feature/stremio-companion-tv-20261012
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/native-tv-companion-validation.yml'
+  pull_request:
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/native-tv-companion-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  companion-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: '8.11.1'
+      - name: Install only required Android SDK components
+        run: sdkmanager --install 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' >/dev/null
+      - name: Verify tested bridge source matches accepted Season 0-safe contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '789e29b997b503ee6cac03d638a7da023ecef551c866fbafe36287ce36862715  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+      - name: Validate exact source contract and safety guard
+        run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
+      - name: Compile and run original + extended JVM test suite, then build Android APK
+        run: |
+          gradle -p android-night-audio-reference \
+            :processor:testDebugUnitTest \
+            :companion-tv:compileDebugKotlin \
+            :companion-tv:testDebugUnitTest \
+            :companion-tv:assembleDebug \
+            --no-daemon --stacktrace
+      - name: Run Android companion lint without suppressing errors
+        run: gradle -p android-night-audio-reference :companion-tv:lintDebug --no-daemon
+      - name: Verify JVM test suite genuinely executed
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('android-night-audio-reference/companion-tv/build/test-results/testDebugUnitTest')
+          docs=list(root.glob('TEST-*.xml'))
+          assert docs, 'No unit test result files produced'
+          tests=failures=errors=0
+          names=[]
+          for file in docs:
+              tree=ET.parse(file).getroot()
+              tests+=int(tree.get('tests',0))
+              failures+=int(tree.get('failures',0))
+              errors+=int(tree.get('errors',0))
+              names += [node.get('name','') for node in tree.findall('.//testcase')]
+          assert tests>=333 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'startsExplicitlyOffWithFixedSyntheticBinding' in names, 'Synthetic subtitle Off-default regression not executed'
+          assert 'enabledChoiceChangesOnlyEnabledValue' in names, 'Synthetic subtitle enabled-choice regression not executed'
+          assert 'explicitOffChangesOnlyEnabledValue' in names, 'Synthetic subtitle explicit-Off regression not executed'
+          assert 'staleExpectedSnapshotCannotApply' in names, 'Synthetic subtitle stale-snapshot regression not executed'
+          assert 'exactIssuedRollbackRestoresBeforeSnapshot' in names, 'Synthetic subtitle exact rollback regression not executed'
+          assert 'forgedAndCrossHostTransitionsCannotRollback' in names, 'Synthetic subtitle transition provenance regression not executed'
+          assert 'newerChoiceRevokesOlderRollbackObject' in names, 'Synthetic subtitle stale rollback regression not executed'
+          assert 'foreignThreadCannotReadApplyRollbackOrClose' in names, 'Synthetic subtitle thread-confinement regression not executed'
+          assert 'closeRevokesEveryFutureOperation' in names, 'Synthetic subtitle close regression not executed'
+          assert 'enabledApplicationCommitsOnlyAfterExactPreferenceReadback' in names, 'Subtitle preference application readback regression not executed'
+          assert 'explicitOffAppliesPreferenceThenClearsOnlyReceipt' in names, 'Subtitle preference explicit-Off transaction regression not executed'
+          assert 'alreadySelectedPreferenceMayRecordOnlyTheExplicitClick' in names, 'Subtitle preference no-op explicit-click regression not executed'
+          assert 'bindingMutationIsRejectedAndExactPreferenceRollbackSucceeds' in names, 'Subtitle preference binding-preservation regression not executed'
+          assert 'receiptCommitFailureRollsBackAppliedPreference' in names, 'Subtitle preference receipt-failure rollback regression not executed'
+          assert 'concurrentPreferenceDriftIsPreservedWithoutRollbackClaim' in names, 'Subtitle preference concurrent-drift regression not executed'
+          assert 'throwingApplicationPortFailsClosedBeforeReceipt' in names, 'Subtitle preference application exception regression not executed'
+          assert 'rollbackRefusalIsReportedWithoutOverwritingAppliedState' in names, 'Subtitle preference rollback-refusal regression not executed'
+          assert 'mismatchedTransitionCannotInventChoiceAuthority' in names, 'Subtitle preference transition provenance regression not executed'
+          assert 'ownerThreadAndCloseRevokeTransaction' in names, 'Subtitle preference transaction lifecycle regression not executed'
+          assert 'screenHoldsOneOutcomeUntilExplicitConsumption' in names, 'Subtitle choice screen outcome mailbox regression not executed'
+          assert 'refusedOutcomeIsHeldWithoutPromotionOrRerender' in names, 'Subtitle choice refused-outcome regression not executed'
+          assert 'duplicateOutcomePermanentlyPoisonsAndClosesPort' in names, 'Subtitle choice duplicate-outcome regression not executed'
+          assert 'renderOrClearRefusalPermanentlyPoisons' in names, 'Subtitle choice screen refusal regression not executed'
+          assert 'throwingPortOperationsAreContainedAndRevokeAuthority' in names, 'Subtitle choice screen exception regression not executed'
+          assert 'nullOrThrowingFactoryFailsClosed' in names, 'Subtitle choice screen construction regression not executed'
+          assert 'ownerThreadAndCloseRevokePendingOutcomeAndPort' in names, 'Subtitle choice screen lifecycle regression not executed'
+          assert 'widgetControllerBuildsTwoSemanticChoicesWithoutConsent' in names, 'Subtitle choice widget generation regression not executed'
+          assert 'semanticClickReturnsExactIntentAndRevokesGeneration' in names, 'Subtitle choice semantic callback regression not executed'
+          assert 'rawPointerOrLongPressNeverAuthorizesAndRevokesGeneration' in names, 'Subtitle choice raw-input refusal regression not executed'
+          assert 'selectedChoiceMismatchNeverAuthorizesAndRevokesGeneration' in names, 'Subtitle choice selection mismatch regression not executed'
+          assert 'forgedOrCrossControllerWidgetCannotAuthorize' in names, 'Subtitle choice widget provenance regression not executed'
+          assert 'replacementMakesEarlierWidgetStale' in names, 'Subtitle choice widget replacement regression not executed'
+          assert 'nullSurfaceClearAndCloseFailClosed' in names, 'Subtitle choice widget lifecycle regression not executed'
+          assert 'foreignThreadCannotRenderConsumeClearOrClose' in names, 'Subtitle choice widget thread regression not executed'
+          assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
+          assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
+          assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
+          assert 'secondVideoReadMustNotChangeEvenWhenIdentityIsStable' in names, 'Episode metadata race regression not executed'
+          assert 'dispatchedPayloadIsDeepDetachedFromMutableCoreObject' in names, 'Deep snapshot regression not executed'
+          assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'
+          assert 'futureEpisodeSuppressesUnsafeSeasonActions' in names, 'TV title-action future-episode regression not executed'
+          assert 'focusAndRemoteConfirmationDispatchExactSeriesAction' in names, 'TV title-action remote-focus regression not executed'
+          assert 'activatingOneActionRevokesEverySiblingFromThatGeneration' in names, 'TV title-action generation revocation regression not executed'
+          assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'
+          assert 'accountDriftRefusesPresentedAction' in names, 'TV title-action account-drift regression not executed'
+          assert 'staleAndForgedActionsCannotExecute' in names, 'TV title-action issuance regression not executed'
+          assert 'ownerThreadAndCloseFailClosed' in names, 'TV title-action lifecycle regression not executed'
+          assert 'snapshotAndDispatchExceptionsFailClosed' in names, 'TV title-action exception regression not executed'
+          assert 'canonicalReadbackRearmsOnlyOppositeWatchedDirection' in names, 'TV alternating watched-state lifecycle regression not executed'
+          assert 'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches' in names, 'TV canonical watched readback gate regression not executed'
+          assert 'pendingReadbackCannotCrossAccountOrLibraryIdentity' in names, 'TV canonical watched readback identity regression not executed'
+          assert 'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration' in names, 'TV malformed watched readback regression not executed'
+          assert 'unknownCanonicalWatchedIdNeverReopensGeneration' in names, 'TV unknown watched ID regression not executed'
+          assert 'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping' in names, 'TV throwing watched readback regression not executed'
+          assert 'detachesSnapshotAndWatchedIdsFromHostCollections' in names, 'Canonical adapter detachment regression not executed'
+          assert 'watchedReadbackRequiresMatchingObservedSnapshot' in names, 'Canonical adapter snapshot binding regression not executed'
+          assert 'failedSnapshotRefreshCannotReviveEarlierLease' in names, 'Canonical adapter failed-refresh lease regression not executed'
+          assert 'mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba' in names, 'Canonical adapter readback ABA regression not executed'
+          assert 'failedDispatchPreconditionsConsumeLeaseBeforeIdentityAba' in names, 'Canonical adapter dispatch ABA regression not executed'
+          assert 'dispatchAcceptsOnlyExactTitleWatchedCommands' in names, 'Canonical adapter command allowlist regression not executed'
+          assert 'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall' in names, 'Canonical adapter lease regression not executed'
+          assert 'dispatchBindsHostCallToObservedSessionEpoch' in names, 'Canonical adapter atomic session epoch regression not executed'
+          assert 'sessionEpochDriftFailsClosed' in names, 'Canonical adapter epoch regression not executed'
+          assert 'closedAdapterNeverTouchesHostCallbacks' in names, 'Canonical adapter closed-host isolation regression not executed'
+          assert 'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess' in names, 'Owned screen exception cleanup regression not executed'
+          assert 'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle' in names, 'Owned screen lifecycle transfer regression not executed'
+          assert 'externalScreenConstructionFailuresAreContainedWithoutOwnership' in names, 'External screen construction containment regression not executed'
+          assert 'foreignThreadCloseRevokesWithoutHostAccess' in names, 'Canonical adapter asynchronous close regression not executed'
+          assert 'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes' in names, 'Canonical adapter in-flight close serialization regression not executed'
+          assert 'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess' in names, 'Screen-owned account foreign teardown regression not executed'
+          assert 'externalScreenAccountLeaseNeverOwnsCallerPort' in names, 'External account ownership regression not executed'
+          assert 'screenOwnedLeaseTerminationRequestIsStickyAndRevokesAccount' in names, 'Screen termination request regression not executed'
+          assert 'externalScreenLeaseTerminationNeverOwnsCallerPort' in names, 'External screen termination ownership regression not executed'
+          assert 'throwingHostCollectionsAndCallbacksFailClosed' in names, 'Canonical adapter exception regression not executed'
+          assert 'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting' in names, 'Mobile title-action presentation regression not executed'
+          assert 'semanticAccessibilityActivationDispatchesExactSeriesAction' in names, 'Mobile semantic activation regression not executed'
+          assert 'mobileActivationRevokesEverySiblingFromThatGeneration' in names, 'Mobile title-action generation revocation regression not executed'
+          assert 'rawPointerAndLongPressEventsNeverImplyConsent' in names, 'Mobile raw-pointer refusal regression not executed'
+          assert 'mobileUnwatchRequiresAcknowledgementAndConsumesIssuance' in names, 'Mobile unwatch acknowledgement regression not executed'
+          assert 'futureEpisodeStillSuppressesUnsafeMobileSeasonActions' in names, 'Mobile future-episode regression not executed'
+          assert 'staleSelectedAndForgedMobileActionsFailClosed' in names, 'Mobile issuance provenance regression not executed'
+          assert 'accountDriftAndRejectedDispatchFailClosedOnMobile' in names, 'Mobile account-drift regression not executed'
+          assert 'mobileOwnerThreadAndCloseRevokeOutstandingActions' in names, 'Mobile lifecycle regression not executed'
+          assert 'mobileAcceptedDispatchCannotReissueBeforeCanonicalReadback' in names, 'Mobile canonical watched readback gate regression not executed'
+          assert 'hostRenderPublishesFourDisplayModelsWithoutWriting' in names, 'Mobile host render regression not executed'
+          assert 'exactSemanticViewActionDispatchesAndClearsWholeGeneration' in names, 'Mobile host semantic activation regression not executed'
+          assert 'rawPointerAndLongPressCallbacksNeverImplyHostConsent' in names, 'Mobile host pointer refusal regression not executed'
+          assert 'staleOrForgedViewObjectsRevokeCurrentPresentation' in names, 'Mobile host object provenance regression not executed'
+          assert 'unwatchAcknowledgementPassesOnlyThroughExactIssuedViewAction' in names, 'Mobile host unwatch acknowledgement regression not executed'
+          assert 'accountDriftAndRejectedDispatchClearHostPresentation' in names, 'Mobile host account drift regression not executed'
+          assert 'futureEpisodeFilteringSurvivesRealHostBoundary' in names, 'Mobile host future episode regression not executed'
+          assert 'rejectedOrThrowingViewPortPermanentlyPoisonsBinding' in names, 'Mobile host UI failure regression not executed'
+          assert 'hostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'Mobile host lifecycle regression not executed'
+          assert 'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback' in names, 'Mobile host watched readback hold regression not executed'
+          assert 'tvHostRenderPublishesFourFocusableModelsWithoutWriting' in names, 'TV host render regression not executed'
+          assert 'enterOnExactFocusedTvActionDispatchesAndClearsGeneration' in names, 'TV host ENTER regression not executed'
+          assert 'dpadCenterIsTheOnlyAlternateAcceptedTvConfirmation' in names, 'TV host DPAD_CENTER regression not executed'
+          assert 'focusMismatchAndOtherRemoteKeysFailClosedAndRevoke' in names, 'TV host focus/key refusal regression not executed'
+          assert 'staleOrForgedTvViewObjectsRevokeCurrentPresentation' in names, 'TV host object provenance regression not executed'
+          assert 'tvUnwatchRequiresAcknowledgementOnExactIssuedAction' in names, 'TV host unwatch acknowledgement regression not executed'
+          assert 'tvAccountDriftAndRejectedDispatchClearPresentation' in names, 'TV host account drift regression not executed'
+          assert 'futureEpisodeFilteringSurvivesTvHostBoundary' in names, 'TV host future episode regression not executed'
+          assert 'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding' in names, 'TV host UI failure regression not executed'
+          assert 'clearFailureAfterAppliedTvActionClosesWithoutReplay' in names, 'TV host clear failure regression not executed'
+          assert 'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks' in names, 'TV host lifecycle regression not executed'
+          assert 'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback' in names, 'TV host watched readback hold regression not executed'
+          assert 'widgetControllerBuildsFocusableModelsWithoutActivation' in names, 'Android TV widget generation regression not executed'
+          assert 'actionUpEnterReturnsExactIntentAndRevokesWidgetGeneration' in names, 'Android TV widget ENTER regression not executed'
+          assert 'actionUpDpadCenterReturnsExactIntent' in names, 'Android TV widget DPAD_CENTER regression not executed'
+          assert 'keyDownDoesNotConsumeWidgetGeneration' in names, 'Android TV widget key sequence regression not executed'
+          assert 'focusMismatchAndOtherRemoteKeyRevokeWidgetGeneration' in names, 'Android TV widget focus/key refusal regression not executed'
+          assert 'staleAndForgedWidgetObjectsCannotActivate' in names, 'Android TV widget provenance regression not executed'
+          assert 'malformedOrNonFocusableWidgetGenerationFailsClosed' in names, 'Android TV widget malformed-generation regression not executed'
+          assert 'widgetOwnerThreadClearAndCloseFailClosed' in names, 'Android TV widget lifecycle regression not executed'
+          assert 'mobileWidgetControllerBuildsDisplayModelsWithoutActivation' in names, 'Android mobile widget generation regression not executed'
+          assert 'semanticMobileClickReturnsExactIntentAndRevokesGeneration' in names, 'Android mobile semantic click regression not executed'
+          assert 'nonSemanticMobileEventNeverActivatesAndRevokesGeneration' in names, 'Android mobile non-semantic refusal regression not executed'
+          assert 'mobileSelectionMismatchRevokesWidgetGeneration' in names, 'Android mobile selection mismatch regression not executed'
+          assert 'staleAndForgedMobileWidgetObjectsCannotActivate' in names, 'Android mobile widget provenance regression not executed'
+          assert 'malformedMobileWidgetGenerationFailsClosed' in names, 'Android mobile malformed-generation regression not executed'
+          assert 'mobileWidgetPreservesDestructiveAcknowledgementMetadata' in names, 'Android mobile acknowledgement metadata regression not executed'
+          assert 'mobileWidgetOwnerThreadClearAndCloseFailClosed' in names, 'Android mobile widget lifecycle regression not executed'
+          assert 'mobileRelayRefusesBeforeBindingAndDelegatesAfterBinding' in names, 'Mobile view relay bind regression not executed'
+          assert 'mobileRelayCloseClearsAndPermanentlyRevokes' in names, 'Mobile view relay close regression not executed'
+          assert 'mobileRelayRejectingPortPermanentlyPoisons' in names, 'Mobile view relay rejection regression not executed'
+          assert 'mobileRelayThrowingPortPermanentlyPoisons' in names, 'Mobile view relay exception regression not executed'
+          assert 'tvRelayRefusesBeforeBindingAndDelegatesAfterBinding' in names, 'TV view relay bind regression not executed'
+          assert 'tvRelayCloseClearsAndPermanentlyRevokes' in names, 'TV view relay close regression not executed'
+          assert 'tvRelayRejectingPortPermanentlyPoisons' in names, 'TV view relay rejection regression not executed'
+          assert 'tvRelayThrowingPortPermanentlyPoisons' in names, 'TV view relay exception regression not executed'
+          assert 'foreignThreadCannotTakeOverOrCloseEitherRelay' in names, 'View relay owner-thread regression not executed'
+          assert 'finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement' in names, 'Seek race regression not executed'
+          assert 'latePlaybackOrNextEpisodePopupCannotSeekBackwards' in names, 'Late segment rewind regression not executed'
+          assert 'narrativeSeasonZeroCanBeInsertedWithoutIdentityRewrite' in names, 'Story Order Season 0 identity regression not executed'
+          assert 'missingRegularEpisodeFailsClosed' in names, 'Story Order completeness regression not executed'
+          assert 'nextStoryUsesStableIdAndReturnsOriginalCanonicalObject' in names, 'Story Order continuation identity regression not executed'
+          assert 'storyContinuationNeverOverridesInvalidUnknownOrTerminalState' in names, 'Story Order fail-closed continuation regression not executed'
+          assert 'callerMutationCannotChangeDetachedStoryPresentation' in names, 'Story Order detached snapshot regression not executed'
+          assert 'changingCardinalityFailsClosedWithoutEscaping' in names, 'Story Order changing-cardinality regression not executed'
+          assert 'throwingCanonicalCollectionFailsClosedWithoutEscaping' in names, 'Story Order throwing-collection regression not executed'
+          assert 'mobileStoryModePresentsNarrativeSpecialWithStableIdentity' in names, 'Android mobile Story Order identity regression not executed'
+          assert 'mobileCanonicalModePreservesOrdinarySequenceAndAncillaryEntry' in names, 'Android mobile canonical-mode regression not executed'
+          assert 'malformedHintsFallBackToCanonicalAndDisableStoryNext' in names, 'Android mobile malformed-hint fallback regression not executed'
+          assert 'semanticSelectionRequiresExactIssuedRowAndStableId' in names, 'Android mobile semantic-selection regression not executed'
+          assert 'rawPointerAndForgedRowsNeverAuthorizeSelection' in names, 'Android mobile selection provenance regression not executed'
+          assert 'mobileNextUsesPresentedStableIdentityAndSurvivesCallerMutation' in names, 'Android mobile continuation identity regression not executed'
+          assert 'ownerThreadAndCloseFailClosed' in names, 'Android mobile Story Order lifecycle regression not executed'
+          assert 'hostRendersStoryRowsWithoutSelecting' in names, 'Android mobile Story Order host render regression not executed'
+          assert 'exactSemanticActionReturnsOriginalCanonicalAndRevokesGeneration' in names, 'Android mobile Story Order host activation regression not executed'
+          assert 'canonicalModeAndMalformedHintsPreserveOrdinaryRows' in names, 'Android mobile Story Order canonical fallback host regression not executed'
+          assert 'rawStaleAndForgedActionsFailClosed' in names, 'Android mobile Story Order view provenance regression not executed'
+          assert 'viewReplacementAndClearFailuresPoisonHost' in names, 'Android mobile Story Order view failure regression not executed'
+          assert 'hostNextUsesPresentedStoryIdentityOnly' in names, 'Android mobile Story Order host continuation regression not executed'
+          assert 'oversizedMobilePresentationFailsClosedBeforeView' in names, 'Android mobile Story Order UI bound regression not executed'
+          assert 'hostOwnerThreadAndCloseRevokeOutstandingActions' in names, 'Android mobile Story Order host lifecycle regression not executed'
+          assert 'seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes' in names, 'Synthetic watched series regression not executed'
+          assert 'seasonActionIsBoundedToRequestedSyntheticSeason' in names, 'Synthetic watched season regression not executed'
+          assert 'malformedOrStaleDispatchNeverMutatesSyntheticState' in names, 'Synthetic watched malformed dispatch regression not executed'
+          assert 'observationsAndReadbackListsAreDetached' in names, 'Synthetic watched detachment regression not executed'
+          assert 'tvHostBindingAppliesOnlyLocalSyntheticSeriesState' in names, 'Synthetic Android TV title-action composition regression not executed'
+          assert 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' in names, 'Classification terminal-stop composition regression not executed'
+          assert 'classifierAlwaysEmitsExactPreservationEnvelope' in names, 'Native classifier preservation envelope regression not executed'
+          assert 'invalidSanitisedFactsFailClosed' in names, 'Native classifier invalid-input regression not executed'
+          assert 'terminalEpisodeResourceContainerAndDecoderStopsWinBeforeDelegation' in names, 'Native classifier terminal-first regression not executed'
+          assert 'providerSourceAndTransportOwnExactlyOneSameEpisodeRetry' in names, 'Native classifier retry-exclusivity regression not executed'
+          assert 'exactPlaybackDelegationOccursOnlyAfterClassificationClears' in names, 'Native classifier delegation-order regression not executed'
+          assert 'classifierOutputComposesWithNativeBudgetWithoutParallelRetry' in names, 'Native classifier-policy composition regression not executed'
+          assert 'classifierAuthenticityCannotBeRecreatedFromMatchingFields' in names, 'Classifier provenance-seal regression not executed'
+          assert 'networkSignalsMapToOneBoundedTransportRetry' in names, 'Media3 transport intake regression not executed'
+          assert 'genericHttpErrorNeverInventsResponseStatusOrCredentialFailure' in names, 'Media3 HTTP non-inference regression not executed'
+          assert 'parserSignalsStopWithoutInventingMatroskaEvidence' in names, 'Media3 parser intake regression not executed'
+          assert 'decoderAudioAndDrmSignalsRemainTerminal' in names, 'Media3 terminal decoder intake regression not executed'
+          assert 'unrequestedEpisodeAdvanceWinsBeforeRetryableTransport' in names, 'Media3 episode-stop precedence regression not executed'
+          assert 'firstTransportFailureExecutesOnceAndReservesEpisodeBudget' in names, 'Media3 retry execution regression not executed'
+          assert 'repeatedPreparationCannotMintAnotherAttemptBeforeOrAfterExecution' in names, 'Media3 retry issuance-budget regression not executed'
+          assert 'rejectedPortExecutionStillConsumesSameEpisodeBudget' in names, 'Media3 rejected retry one-shot regression not executed'
+          assert 'finalSnapshotDriftRefusesAndBudgetStaysReserved' in names, 'Media3 retry final-snapshot regression not executed'
+          assert 'episodeBudgetCannotResetThroughGenerationOrSourceChange' in names, 'Media3 episode-budget reset regression not executed'
+          assert 'terminalAndUnknownMedia3CodesNeverPrepare' in names, 'Media3 terminal intake actuation regression not executed'
+          assert 'episodeAdvanceAndInvalidStateFailClosed' in names, 'Media3 retry invalid-state regression not executed'
+          assert 'preparedLeaseCannotCrossActuatorInstance' in names, 'Media3 retry cross-instance regression not executed'
+          assert 'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse' in names, 'Media3 retry lifecycle regression not executed'
+          assert 'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption' in names, 'Media3 retry exception-containment regression not executed'
+          assert 'sharedBudgetSurvivesActuatorCloseAndReplacement' in names, 'Media3 retry shared-budget replacement regression not executed'
+          assert 'retrySnapshotExposesNoCallerControlledAttemptCounter' in names, 'Media3 retry caller-counter regression not executed'
+          assert 'budgetIdentityThreadAndLifecycleFailClosed' in names, 'Media3 retry budget lifecycle regression not executed'
+          assert 'policyExposesNoPreclassifiedDecisionParameter' in names, 'Policy raw-facts entry regression not executed'
+          assert 'actuatorExposesNoPreclassifiedDecisionParameter' in names, 'Actuator raw-facts entry regression not executed'
+          assert 'retryableSourceClassificationExclusivelyOwnsItsSingleAttempt' in names, 'Classifier-exclusive retry regression not executed'
+          assert 'delegatedRecoveryRequiresExplicitLedgerAndMatchingContext' in names, 'Playback recovery ledger identity regression not executed'
+          assert 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' in names, 'Dolby Vision recovery order regression not executed'
+          assert 'exactPlaybackPlanExecutesOnlyOnce' in names, 'One-shot native recovery actuation regression not executed'
+          assert 'finalLeaseRejectsVideoSourceOrGenerationDrift' in names, 'Native recovery final media lease regression not executed'
+          assert 'finalLeaseRejectsWatchedOrResumeFingerprintDrift' in names, 'Native recovery account-state lease regression not executed'
+          assert 'rejectedPortExecutionStillConsumesLease' in names, 'Rejected native recovery one-shot regression not executed'
+          assert 'preparedLeaseCannotCrossActuatorInstanceOrBeReissued' in names, 'Actuator instance-bound replay regression not executed'
+          assert 'preparationAndExecutionStayOnConstructionThread' in names, 'Actuator player-thread ownership regression not executed'
+          assert 'unadvertisedNativeCapabilityCannotPrepare' in names, 'Unadvertised native recovery capability regression not executed'
+          assert 'capabilityChangeBeforeExecutionRefuses' in names, 'Native recovery capability drift regression not executed'
+          assert 'malformedCapabilitySetFailsClosed' in names, 'Malformed native recovery capability regression not executed'
+          assert 'recoveryCapabilitiesAreSnapshottedOnceAndFailuresFailClosed' in names, 'Native recovery capability snapshot regression not executed'
+          assert 'ownerThreadCloseRevokesOutstandingLeaseAndFutureUse' in names, 'Owner-thread actuator lifecycle revocation regression not executed'
+          assert 'foreignThreadCannotCloseOrRevokeOwnerLease' in names, 'Foreign-thread actuator close regression not executed'
+          assert 'throwingSnapshotDuringPreparationFailsClosed' in names, 'Preparation snapshot exception regression not executed'
+          assert 'throwingFinalSnapshotRefusesWithoutExecution' in names, 'Final snapshot exception regression not executed'
+          assert 'throwingPortExecutionConsumesLeaseAndFailsClosed' in names, 'Native execution exception one-shot regression not executed'
+          assert 'issuedLeaseSetIsBoundedWithoutReplayEviction' in names, 'Bounded native recovery lease registry regression not executed'
+          assert 'sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults' in names, 'Native subtitle provenance regression sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults not executed'
+          assert 'explicitOffRemainsAuthoritativeWithoutInventingConsent' in names, 'Native subtitle provenance regression explicitOffRemainsAuthoritativeWithoutInventingConsent not executed'
+          assert 'sameInstallationReceiptMustBindExactPreferenceAndInstallation' in names, 'Native subtitle provenance regression sameInstallationReceiptMustBindExactPreferenceAndInstallation not executed'
+          assert 'malformedDigestAndRevisionFailClosed' in names, 'Native subtitle provenance regression malformedDigestAndRevisionFailClosed not executed'
+          assert 'receiptCannotSurviveBoundLanguageOrSourceChange' in names, 'Native subtitle provenance regression receiptCannotSurviveBoundLanguageOrSourceChange not executed'
+          assert 'bindingIsNormalisedDetachedAndClosed' in names, 'Native subtitle provenance regression bindingIsNormalisedDetachedAndClosed not executed'
+          assert 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession' in names, 'Native subtitle provenance regression explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession not executed'
+          assert 'explicitChoiceEventUsesExactClosedSchema' in names, 'Native subtitle provenance regression explicitChoiceEventUsesExactClosedSchema not executed'
+          assert 'sameInstallationReceiptCannotMasqueradeAsUiChoice' in names, 'Native subtitle provenance regression sameInstallationReceiptCannotMasqueradeAsUiChoice not executed'
+          assert 'exactInstallationLocalReadbackPromotesReceipt' in names, 'Native subtitle provenance regression exactInstallationLocalReadbackPromotesReceipt not executed'
+          assert 'promotionRejectsScopeInstallationRevisionAndBindingDrift' in names, 'Native subtitle provenance regression promotionRejectsScopeInstallationRevisionAndBindingDrift not executed'
+          assert 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation' in names, 'Native subtitle provenance regression promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation not executed'
+          assert 'callerMapsAreSnapshottedOnceBeforeValidation' in names, 'Native subtitle provenance hostile-map regression callerMapsAreSnapshottedOnceBeforeValidation not executed'
+          assert 'throwingTopLevelAndNestedMapsFailClosedWithoutEscaping' in names, 'Native subtitle provenance hostile-map regression throwingTopLevelAndNestedMapsFailClosedWithoutEscaping not executed'
+          assert 'iteratorCardinalityDriftFailsClosed' in names, 'Native subtitle provenance hostile-map regression iteratorCardinalityDriftFailsClosed not executed'
+          assert 'detachedReceiptCannotBeChangedByLaterCallerMutation' in names, 'Native subtitle provenance hostile-map regression detachedReceiptCannotBeChangedByLaterCallerMutation not executed'
+          assert 'canonicalReceiptRoundTripsExactly' in names, 'Native subtitle receipt codec round-trip regression not executed'
+          assert 'mapOrderCannotChangeCanonicalEncoding' in names, 'Native subtitle receipt codec deterministic-order regression not executed'
+          assert 'reviewedSurfacesHaveDistinctCanonicalValues' in names, 'Native subtitle receipt codec surface regression not executed'
+          assert 'malformedPrefixBase64AndTrailingBytesFailClosed' in names, 'Native subtitle receipt codec malformed-envelope regression not executed'
+          assert 'nonCanonicalPaddingAndVersionFailClosed' in names, 'Native subtitle receipt codec canonical-version regression not executed'
+          assert 'invalidDigestAndRevisionBoundsCannotEncode' in names, 'Native subtitle receipt codec numeric-bound regression not executed'
+          assert 'bindingRequiresExactClosedSchemaAndEnabledChoice' in names, 'Native subtitle receipt codec schema regression not executed'
+          assert 'nonCanonicalOrOversizedTextFailsClosed' in names, 'Native subtitle receipt codec text-bound regression not executed'
+          assert 'malformedUtf8FailsClosed' in names, 'Native subtitle receipt codec UTF-8 regression not executed'
+          assert 'decodedTopLevelAndBindingAreImmutable' in names, 'Native subtitle receipt codec immutability regression not executed'
+          assert 'absentStorageLoadsNoPreference' in names, 'Native subtitle store regression absentStorageLoadsNoPreference not executed'
+          assert 'firstExplicitChoicePersistsAndPromotes' in names, 'Native subtitle store regression firstExplicitChoicePersistsAndPromotes not executed'
+          assert 'repeatedChoiceIncrementsRevision' in names, 'Native subtitle store regression repeatedChoiceIncrementsRevision not executed'
+          assert 'existingInstallationDigestIsReused' in names, 'Native subtitle store regression existingInstallationDigestIsReused not executed'
+          assert 'invalidOrThrowingDigestSourceLeavesStorageUntouched' in names, 'Native subtitle store regression invalidOrThrowingDigestSourceLeavesStorageUntouched not executed'
+          assert 'receiptWithoutInstallationDigestFailsWithoutMutation' in names, 'Native subtitle store regression receiptWithoutInstallationDigestFailsWithoutMutation not executed'
+          assert 'corruptStoredReceiptFailsWithoutMutation' in names, 'Native subtitle store regression corruptStoredReceiptFailsWithoutMutation not executed'
+          assert 'unstablePrewriteTupleFailsWithoutMutation' in names, 'Native subtitle store regression unstablePrewriteTupleFailsWithoutMutation not executed'
+          assert 'digestCompareAndSetRefusalDoesNotWriteReceipt' in names, 'Native subtitle store regression digestCompareAndSetRefusalDoesNotWriteReceipt not executed'
+          assert 'receiptCompareAndSetRefusalRollsBackGeneratedDigest' in names, 'Native subtitle store regression receiptCompareAndSetRefusalRollsBackGeneratedDigest not executed'
+          assert 'falsePositiveReceiptWriteRollsBackExactTuple' in names, 'Native subtitle store regression falsePositiveReceiptWriteRollsBackExactTuple not executed'
+          assert 'unknownConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store regression unknownConcurrentDriftIsPreservedWithoutRollbackClaim not executed'
+          assert 'corruptConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store corrupt concurrent-drift regression not executed'
+          assert 'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest' in names, 'Native subtitle store regression explicitOffClearsOnlyReceiptAndKeepsInstallationDigest not executed'
+          assert 'explicitOffRefusalLeavesReceiptUntouched' in names, 'Native subtitle store regression explicitOffRefusalLeavesReceiptUntouched not executed'
+          assert 'loadingRequiresStableExactReadbackAndBinding' in names, 'Native subtitle store regression loadingRequiresStableExactReadbackAndBinding not executed'
+          assert 'foreignThreadAndClosedStoreFailClosed' in names, 'Native subtitle store regression foreignThreadAndClosedStoreFailClosed not executed'
+          assert 'exactPreferencesObjectHasOneProcessLocalOwner' in names, 'Subtitle store owner exclusivity regression not executed'
+          assert 'distinctPreferencesObjectsHaveIndependentOwners' in names, 'Subtitle store owner identity isolation regression not executed'
+          assert 'loadWithoutReceiptDoesNotGenerateOrWriteIdentity' in names, 'Subtitle store owner passive-load regression not executed'
+          assert 'explicitChoiceComposesDigestStorageAndCanonicalStore' in names, 'Subtitle store owner composition regression not executed'
+          assert 'entropyRefusalLeavesEveryPreferenceUntouched' in names, 'Subtitle store owner entropy refusal regression not executed'
+          assert 'explicitOffClearsOnlyReceiptAndKeepsIdentity' in names, 'Subtitle store owner explicit-Off regression not executed'
+          assert 'foreignThreadCannotUseCloseOrReleaseOwnerLease' in names, 'Subtitle store owner foreign-thread regression not executed'
+          assert 'closeRevokesOperationsAndFreshOwnerCanReadReceipt' in names, 'Subtitle store owner lifecycle handoff regression not executed'
+          assert 'corruptStoredTypeFailsClosedWithoutOverwrite' in names, 'Subtitle store owner corrupt-storage regression not executed'
+          assert 'enabledChoiceRequiresExactIssuedLeaseAndStableSnapshot' in names, 'Subtitle choice exact-lease regression not executed'
+          assert 'duplicatePreparationCannotMintParallelConsent' in names, 'Subtitle choice duplicate-preparation regression not executed'
+          assert 'forgedOrCrossSessionLeaseRevokesDisplayedGeneration' in names, 'Subtitle choice cross-session provenance regression not executed'
+          assert 'finalSnapshotDriftConsumesLeaseBeforeStorage' in names, 'Subtitle choice final-snapshot regression not executed'
+          assert 'unstableAndThrowingSnapshotsFailClosedWithoutMutation' in names, 'Subtitle choice snapshot containment regression not executed'
+          assert 'explicitOffRequiresPresentedOffAndClearsOnlyReceipt' in names, 'Subtitle choice explicit-Off regression not executed'
+          assert 'cancellationConsumesOnlyTheExactPresentedLease' in names, 'Subtitle choice cancellation regression not executed'
+          assert 'foreignThreadCannotPrepareCommitCancelOrClose' in names, 'Subtitle choice owner-thread regression not executed'
+          assert 'closeRevokesPendingChoiceAndReleasesStorageOwner' in names, 'Subtitle choice lifecycle regression not executed'
+          print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
+          PY
+      - name: Enforce compile-only official Core SDK and no account/API writes
+        run: python3 android-night-audio-reference/core-interop/tools/check_core_compat.py
+      - name: Compile official Stremio Core read-only ABI and run isolated JVM tests
+        run: |
+          gradle -p android-night-audio-reference \
+            :core-interop:compileDebugKotlin \
+            :core-interop:testDebugUnitTest \
+            --no-daemon --stacktrace
+      - name: Require all read-only native Core session guards to execute
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('android-night-audio-reference/core-interop/build/test-results/testDebugUnitTest')
+          reports=list(root.glob('TEST-*.xml'))
+          assert reports, 'Read-only Core ABI JUnit results absent'
+          count=errors=failures=0
+          names=[]
+          for report in reports:
+              tree=ET.parse(report).getroot()
+              count+=int(tree.get('tests','0'))
+              errors+=int(tree.get('errors','0'))
+              failures+=int(tree.get('failures','0'))
+              names += [testcase.get('name','') for testcase in tree.findall('.//testcase')]
+          assert count>=8 and not errors and not failures,(count,errors,failures)
+          for required in ('accountSwitchOrEpochChangeFailsClosed',
+                           'newVideoWithSameMetadataFailsClosed',
+                           'noPlayableUrlIsInferredFromObservedProviderLists'):
+              assert required in names, 'Core safety test missing: '+required
+          print('Verified isolated official Core Kotlin interop JUnit:',count,'failures:',failures)
+          PY
+      - name: Verify standalone package and no permissions or forbidden automatic source intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=android-night-audio-reference/companion-tv/build/outputs/apk/debug/companion-tv-debug.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$aapt" dump badging "$apk" > /tmp/companion-badging.txt
+          grep -F "package: name='org.thiajay.stremiotvcompanion'" /tmp/companion-badging.txt
+          grep -F "sdkVersion:'26'" /tmp/companion-badging.txt
+          grep -F "launchable-activity: name='org.thiajay.stremiotvcompanion.MobileStoryOrderLabActivity'" /tmp/companion-badging.txt
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml > /tmp/companion-manifest-tree.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines=Path('/tmp/companion-manifest-tree.txt').read_text().splitlines()
+          matches=[i for i,line in enumerate(lines) if '"android.software.leanback"' in line]
+          assert len(matches)==1, ('leanback_feature_count',len(matches))
+          i=matches[0]
+          block='\n'.join(lines[max(0,i-2):min(len(lines),i+5)])
+          assert re.search(r'android:required.*(?:0x0|false)',block), block
+          print('Verified packaged Leanback feature is optional')
+          PY
+          "$aapt" dump permissions "$apk" > /tmp/companion-permissions.txt
+          if grep -E 'uses-permission:' /tmp/companion-permissions.txt; then
+            echo 'Unreviewed Android permission. Refusing admission.'
+            exit 1
+          fi
+          if grep -Fq 'android.intent.action.VIEW' /tmp/companion-manifest-tree.txt; then
+            echo 'External playback intent unexpectedly exposed in offline-only candidate.'
+            exit 1
+          fi
+          unzip -t "$apk" >/dev/null
+          sha256sum "$apk"
+          echo 'Android companion source and debug APK built; no upload, release, device or account action performed.'
+# Never upload debug APK, release assets, credentials, private data or the synthetic sample.
+
+
