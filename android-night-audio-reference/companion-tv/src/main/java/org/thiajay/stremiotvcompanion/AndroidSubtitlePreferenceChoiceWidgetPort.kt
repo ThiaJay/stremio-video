@@ -29,13 +29,13 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
     private val container: ViewGroup,
     private val session: AndroidSubtitlePreferenceChoiceSession,
     private val onOutcome: (AndroidSubtitlePreferenceChoiceOutcome) -> Unit
-) {
+) : AndroidSubtitlePreferenceChoiceScreenPort {
     private val ownerThread = Thread.currentThread()
     private val controller = AndroidSubtitlePreferenceChoiceWidgetController()
     private val ownedViews = ArrayList<View>()
     private var closed = false
 
-    fun render(surface: AndroidSubtitlePreferenceChoiceSession.Surface): Boolean {
+    override fun render(surface: AndroidSubtitlePreferenceChoiceSession.Surface): Boolean {
         if (!onMainOwnerThread() || closed) return false
         val widgets = controller.replace(surface) ?: return false
         val candidateViews = try {
@@ -62,13 +62,13 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
         }
     }
 
-    fun clear(): Boolean {
+    override fun clear(): Boolean {
         if (!onMainOwnerThread() || closed) return false
         if (!controller.clear() || !removeOwnedViews()) return poison()
         return true
     }
 
-    fun close(): Boolean {
+    override fun close(): Boolean {
         if (!onMainOwnerThread() || closed) return false
         closed = true
         val controllerClosed = controller.close()

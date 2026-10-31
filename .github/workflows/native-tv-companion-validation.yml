@@ -70,7 +70,14 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=307 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=314 and failures==0 and errors==0, (tests,failures,errors)
+          assert 'screenHoldsOneOutcomeUntilExplicitConsumption' in names, 'Subtitle choice screen outcome mailbox regression not executed'
+          assert 'refusedOutcomeIsHeldWithoutPromotionOrRerender' in names, 'Subtitle choice refused-outcome regression not executed'
+          assert 'duplicateOutcomePermanentlyPoisonsAndClosesPort' in names, 'Subtitle choice duplicate-outcome regression not executed'
+          assert 'renderOrClearRefusalPermanentlyPoisons' in names, 'Subtitle choice screen refusal regression not executed'
+          assert 'throwingPortOperationsAreContainedAndRevokeAuthority' in names, 'Subtitle choice screen exception regression not executed'
+          assert 'nullOrThrowingFactoryFailsClosed' in names, 'Subtitle choice screen construction regression not executed'
+          assert 'ownerThreadAndCloseRevokePendingOutcomeAndPort' in names, 'Subtitle choice screen lifecycle regression not executed'
           assert 'widgetControllerBuildsTwoSemanticChoicesWithoutConsent' in names, 'Subtitle choice widget generation regression not executed'
           assert 'semanticClickReturnsExactIntentAndRevokesGeneration' in names, 'Subtitle choice semantic callback regression not executed'
           assert 'rawPointerOrLongPressNeverAuthorizesAndRevokesGeneration' in names, 'Subtitle choice raw-input refusal regression not executed'

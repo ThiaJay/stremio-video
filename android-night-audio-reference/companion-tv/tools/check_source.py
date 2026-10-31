@@ -29,6 +29,8 @@ ANDROID_SUBTITLE_CHOICE_SESSION_TEST=ROOT/'src/test/java/org/thiajay/stremiotvco
 ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetController.kt'
 ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetControllerTest.kt'
 ANDROID_SUBTITLE_CHOICE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetPort.kt'
+ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceScreenOwner.kt'
+ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceScreenOwnerTest.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
@@ -159,6 +161,8 @@ android_subtitle_choice_session_test=ANDROID_SUBTITLE_CHOICE_SESSION_TEST.read_t
 android_subtitle_choice_widget_controller=ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER.is_file() else ''
 android_subtitle_choice_widget_controller_test=ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST.is_file() else ''
 android_subtitle_choice_widget_port=ANDROID_SUBTITLE_CHOICE_WIDGET_PORT.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_PORT.is_file() else ''
+android_subtitle_choice_screen_owner=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER.read_text() if ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER.is_file() else ''
+android_subtitle_choice_screen_owner_test=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.is_file() else ''
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
@@ -1586,9 +1590,51 @@ if not all(x in android_subtitle_choice_widget_controller_test for x in [
     'assertFalse(closed.get())'
 ]):
     fail.append('android_subtitle_choice_widget_controller_adversarial_assertions')
-if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if not all(x in android_subtitle_choice_screen_owner for x in [
+    'interface AndroidSubtitlePreferenceChoiceScreenPort',
+    'class AndroidSubtitlePreferenceChoiceScreenOwner private constructor()',
+    'private var pendingOutcome: AndroidSubtitlePreferenceChoiceOutcome? = null',
+    'if (!usable() || pendingOutcome != null) return false',
+    'fun consumeOutcome(): AndroidSubtitlePreferenceChoiceOutcome?',
+    'pendingOutcome = null',
+    'fun close(): Boolean',
+    'active?.close() == true',
+    'private fun receiveOutcome(outcome: AndroidSubtitlePreferenceChoiceOutcome)',
+    'AndroidSubtitlePreferenceChoiceWidgetPort.open(',
+    'internal fun openForTest('
+]):
+    fail.append('android_subtitle_choice_screen_owner_contract')
+if ('AndroidSubtitlePreferenceChoiceScreenOwner' in java_text or
+    'AndroidSubtitlePreferenceChoiceScreenOwner' in mobile_story_activity):
+    fail.append('android_subtitle_choice_screen_owner_must_remain_unwired')
+if any(x in android_subtitle_choice_screen_owner for x in [
+    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
+    'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)'
+]):
+    fail.append('android_subtitle_choice_screen_owner_forbidden_surface')
+if ': AndroidSubtitlePreferenceChoiceScreenPort' not in android_subtitle_choice_widget_port:
+    fail.append('android_subtitle_choice_widget_port_not_screen_owned')
+if not all(x in android_subtitle_choice_screen_owner_test for x in [
+    'screenHoldsOneOutcomeUntilExplicitConsumption',
+    'refusedOutcomeIsHeldWithoutPromotionOrRerender',
+    'duplicateOutcomePermanentlyPoisonsAndClosesPort',
+    'renderOrClearRefusalPermanentlyPoisons',
+    'throwingPortOperationsAreContainedAndRevokeAuthority',
+    'nullOrThrowingFactoryFailsClosed',
+    'ownerThreadAndCloseRevokePendingOutcomeAndPort'
+]):
+    fail.append('android_subtitle_choice_screen_owner_regressions')
+if not all(x in android_subtitle_choice_screen_owner_test for x in [
+    'assertFalse(owner.render(',
+    'assertFalse(owner.clear())',
+    'assertSame(outcome, owner.consumeOutcome())',
+    'assertEquals(1, fixture.port!!.closeCalls)',
+    'assertFalse(foreignClose.get())'
+]):
+    fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
+if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':323,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':337,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
