@@ -32,6 +32,8 @@ class NativeSubtitlePreferenceStoreTest {
         assertEquals(digest, port.installationDigest)
         assertEquals("explicit-local-choice", port.receipt?.get("kind"))
         assertEquals("first-run", port.receipt?.get("surface"))
+        assertTrue(port.receiptRaw?.startsWith("nsp1:") == true)
+        assertEquals(port.receiptRaw, NativeSubtitlePreferenceReceiptCodec.encode(port.receipt))
         assertEquals(1, port.digestCasCalls)
         assertEquals(1, port.receiptCasCalls)
     }
@@ -62,33 +64,33 @@ class NativeSubtitlePreferenceStoreTest {
             .recordExplicitLocalChoice(session, null, "first-run")
         assertRejected(invalid)
         assertNull(invalidPort.installationDigest)
-        assertNull(invalidPort.receipt)
+        assertNull(invalidPort.receiptRaw)
 
         val throwingPort = FakeStorage()
         val throwing = store(throwingPort) { throw IllegalStateException("no entropy") }
             .recordExplicitLocalChoice(session, null, "first-run")
         assertRejected(throwing)
         assertNull(throwingPort.installationDigest)
-        assertNull(throwingPort.receipt)
+        assertNull(throwingPort.receiptRaw)
     }
 
     @Test fun receiptWithoutInstallationDigestFailsWithoutMutation() {
         val port = FakeStorage(receipt = validReceipt(digest, 1L))
-        val before = port.receipt
+        val before = port.receiptRaw
         val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
         assertRejected(result)
         assertNull(port.installationDigest)
-        assertEquals(before, port.receipt)
+        assertEquals(before, port.receiptRaw)
         assertEquals(0, port.digestCasCalls)
         assertEquals(0, port.receiptCasCalls)
     }
 
     @Test fun corruptStoredReceiptFailsWithoutMutation() {
-        val corrupt = linkedMapOf<String, Any?>("kind" to "explicit-local-choice")
-        val port = FakeStorage(installationDigest = digest, receipt = corrupt)
+        val corrupt = "nsp1:not-canonical"
+        val port = FakeStorage(installationDigest = digest, receiptRaw = corrupt)
         val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
         assertRejected(result)
-        assertEquals(corrupt, port.receipt)
+        assertEquals(corrupt, port.receiptRaw)
         assertEquals(0, port.digestCasCalls)
         assertEquals(0, port.receiptCasCalls)
     }
@@ -110,7 +112,7 @@ class NativeSubtitlePreferenceStoreTest {
         val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
         assertRejected(result)
         assertNull(port.installationDigest)
-        assertNull(port.receipt)
+        assertNull(port.receiptRaw)
         assertEquals(0, port.receiptCasCalls)
     }
 
@@ -121,7 +123,7 @@ class NativeSubtitlePreferenceStoreTest {
         assertRejected(result)
         assertTrue(result.rollbackVerified)
         assertNull(port.installationDigest)
-        assertNull(port.receipt)
+        assertNull(port.receiptRaw)
         assertEquals(2, port.digestCasCalls)
     }
 
@@ -132,14 +134,15 @@ class NativeSubtitlePreferenceStoreTest {
         assertRejected(result)
         assertTrue(result.rollbackVerified)
         assertNull(port.installationDigest)
-        assertNull(port.receipt)
+        assertNull(port.receiptRaw)
     }
 
     @Test fun unknownConcurrentDriftIsPreservedWithoutRollbackClaim() {
         val foreign = validReceipt(otherDigest, 99L)
+        val foreignRaw = NativeSubtitlePreferenceReceiptCodec.encode(foreign)!!
         val port = FakeStorage()
         port.receiptCasHook = { _, _ ->
-            port.receipt = foreign
+            port.receiptRaw = foreignRaw
             false
         }
         val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
@@ -147,6 +150,19 @@ class NativeSubtitlePreferenceStoreTest {
         assertFalse(result.rollbackVerified)
         assertEquals(digest, port.installationDigest)
         assertEquals(foreign, port.receipt)
+    }
+
+    @Test fun corruptConcurrentDriftIsPreservedWithoutRollbackClaim() {
+        val port = FakeStorage()
+        port.receiptCasHook = { _, _ ->
+            port.receiptRaw = "nsp1:foreign-corrupt-value"
+            false
+        }
+        val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
+        assertFalse(result.ok)
+        assertFalse(result.rollbackVerified)
+        assertEquals(digest, port.installationDigest)
+        assertEquals("nsp1:foreign-corrupt-value", port.receiptRaw)
     }
 
     @Test fun explicitOffClearsOnlyReceiptAndKeepsInstallationDigest() {
@@ -158,7 +174,7 @@ class NativeSubtitlePreferenceStoreTest {
         assertTrue(result.rollbackVerified)
         assertNull(result.provenance)
         assertEquals(digest, port.installationDigest)
-        assertNull(port.receipt)
+        assertNull(port.receiptRaw)
     }
 
     @Test fun explicitOffRefusalLeavesReceiptUntouched() {
@@ -185,7 +201,10 @@ class NativeSubtitlePreferenceStoreTest {
                 .loadStoredPreference(session.copy(language = "spa"), null)
         )
 
-        val unstable = FakeStorage(installationDigest = digest, receipt = port.receipt)
+        val unstable = FakeStorage(
+            installationDigest = digest,
+            receiptRaw = port.receiptRaw
+        )
         unstable.digestReadHook = { count ->
             StorageRead(ok = true, value = if (count % 2 == 1) digest else otherDigest)
         }
@@ -247,19 +266,22 @@ class NativeSubtitlePreferenceStoreTest {
 
     private class FakeStorage(
         var installationDigest: String? = null,
-        var receipt: Map<String, Any?>? = null
+        receipt: Map<String, Any?>? = null,
+        var receiptRaw: String? = receipt?.let(NativeSubtitlePreferenceReceiptCodec::encode)
     ) : NativeSubtitlePreferenceStore.StoragePort {
+        var receipt: Map<String, Any?>?
+            get() = receiptRaw?.let(NativeSubtitlePreferenceReceiptCodec::decode)
+            set(value) {
+                receiptRaw = value?.let(NativeSubtitlePreferenceReceiptCodec::encode)
+            }
         var digestReads = 0
         var receiptReads = 0
         var digestCasCalls = 0
         var receiptCasCalls = 0
         var digestReadHook: ((Int) -> StorageRead<String>?)? = null
-        var receiptReadHook: ((Int) -> StorageRead<Map<*, *>>?)? = null
+        var receiptReadHook: ((Int) -> StorageRead<String>?)? = null
         var digestCasHook: ((String?, String?) -> Boolean)? = null
-        var receiptCasHook: ((
-            Map<String, Any?>?,
-            Map<String, Any?>?
-        ) -> Boolean)? = null
+        var receiptCasHook: ((String?, String?) -> Boolean)? = null
 
         override fun readInstallationDigest(): StorageRead<String>? {
             digestReads++
@@ -267,10 +289,10 @@ class NativeSubtitlePreferenceStoreTest {
                 ?: StorageRead(ok = true, value = installationDigest)
         }
 
-        override fun readPreferenceReceipt(): StorageRead<Map<*, *>>? {
+        override fun readPreferenceReceipt(): StorageRead<String>? {
             receiptReads++
             return receiptReadHook?.invoke(receiptReads)
-                ?: StorageRead(ok = true, value = receipt)
+                ?: StorageRead(ok = true, value = receiptRaw)
         }
 
         override fun compareAndSetInstallationDigest(
@@ -285,13 +307,13 @@ class NativeSubtitlePreferenceStoreTest {
         }
 
         override fun compareAndSetPreferenceReceipt(
-            expected: Map<String, Any?>?,
-            update: Map<String, Any?>?
+            expected: String?,
+            update: String?
         ): Boolean {
             receiptCasCalls++
             receiptCasHook?.let { return it(expected, update) }
-            if (receipt != expected) return false
-            receipt = update
+            if (receiptRaw != expected) return false
+            receiptRaw = update
             return true
         }
     }

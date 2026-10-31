@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=252 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=263 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -260,6 +260,16 @@ jobs:
           assert 'throwingTopLevelAndNestedMapsFailClosedWithoutEscaping' in names, 'Native subtitle provenance hostile-map regression throwingTopLevelAndNestedMapsFailClosedWithoutEscaping not executed'
           assert 'iteratorCardinalityDriftFailsClosed' in names, 'Native subtitle provenance hostile-map regression iteratorCardinalityDriftFailsClosed not executed'
           assert 'detachedReceiptCannotBeChangedByLaterCallerMutation' in names, 'Native subtitle provenance hostile-map regression detachedReceiptCannotBeChangedByLaterCallerMutation not executed'
+          assert 'canonicalReceiptRoundTripsExactly' in names, 'Native subtitle receipt codec round-trip regression not executed'
+          assert 'mapOrderCannotChangeCanonicalEncoding' in names, 'Native subtitle receipt codec deterministic-order regression not executed'
+          assert 'reviewedSurfacesHaveDistinctCanonicalValues' in names, 'Native subtitle receipt codec surface regression not executed'
+          assert 'malformedPrefixBase64AndTrailingBytesFailClosed' in names, 'Native subtitle receipt codec malformed-envelope regression not executed'
+          assert 'nonCanonicalPaddingAndVersionFailClosed' in names, 'Native subtitle receipt codec canonical-version regression not executed'
+          assert 'invalidDigestAndRevisionBoundsCannotEncode' in names, 'Native subtitle receipt codec numeric-bound regression not executed'
+          assert 'bindingRequiresExactClosedSchemaAndEnabledChoice' in names, 'Native subtitle receipt codec schema regression not executed'
+          assert 'nonCanonicalOrOversizedTextFailsClosed' in names, 'Native subtitle receipt codec text-bound regression not executed'
+          assert 'malformedUtf8FailsClosed' in names, 'Native subtitle receipt codec UTF-8 regression not executed'
+          assert 'decodedTopLevelAndBindingAreImmutable' in names, 'Native subtitle receipt codec immutability regression not executed'
           assert 'absentStorageLoadsNoPreference' in names, 'Native subtitle store regression absentStorageLoadsNoPreference not executed'
           assert 'firstExplicitChoicePersistsAndPromotes' in names, 'Native subtitle store regression firstExplicitChoicePersistsAndPromotes not executed'
           assert 'repeatedChoiceIncrementsRevision' in names, 'Native subtitle store regression repeatedChoiceIncrementsRevision not executed'
@@ -272,6 +282,7 @@ jobs:
           assert 'receiptCompareAndSetRefusalRollsBackGeneratedDigest' in names, 'Native subtitle store regression receiptCompareAndSetRefusalRollsBackGeneratedDigest not executed'
           assert 'falsePositiveReceiptWriteRollsBackExactTuple' in names, 'Native subtitle store regression falsePositiveReceiptWriteRollsBackExactTuple not executed'
           assert 'unknownConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store regression unknownConcurrentDriftIsPreservedWithoutRollbackClaim not executed'
+          assert 'corruptConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store corrupt concurrent-drift regression not executed'
           assert 'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest' in names, 'Native subtitle store regression explicitOffClearsOnlyReceiptAndKeepsInstallationDigest not executed'
           assert 'explicitOffRefusalLeavesReceiptUntouched' in names, 'Native subtitle store regression explicitOffRefusalLeavesReceiptUntouched not executed'
           assert 'loadingRequiresStableExactReadbackAndBinding' in names, 'Native subtitle store regression loadingRequiresStableExactReadbackAndBinding not executed'

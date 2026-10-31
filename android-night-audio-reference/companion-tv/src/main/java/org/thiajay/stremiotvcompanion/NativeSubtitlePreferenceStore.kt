@@ -1,14 +1,13 @@
 package org.thiajay.stremiotvcompanion
 
-import java.util.Collections
-
 /**
  * Pure, owner-thread installation-local storage transaction boundary for
  * NativeSubtitlePreferenceProvenance.
  *
- * The host must supply atomic compare-and-set operations for two typed slots.
- * This class has no Android storage, account, player, network or UI access and
- * is deliberately not wired into either synthetic Activity.
+ * The host supplies atomic compare-and-set operations for a digest slot and a
+ * canonical encoded-receipt slot. This class has no Android storage, account,
+ * player, network or UI access and is deliberately not wired into either
+ * synthetic Activity.
  */
 class NativeSubtitlePreferenceStore(
     private val storage: StoragePort,
@@ -31,29 +30,23 @@ class NativeSubtitlePreferenceStore(
 
     interface StoragePort {
         fun readInstallationDigest(): StorageRead<String>?
-        fun readPreferenceReceipt(): StorageRead<Map<*, *>>?
+        fun readPreferenceReceipt(): StorageRead<String>?
 
-        /**
-         * Atomically update only when the current slot still equals expected.
-         * A null update removes the slot.
-         */
         fun compareAndSetInstallationDigest(
             expected: String?,
             update: String?
         ): Boolean
 
-        /**
-         * Atomically update only when the current detached receipt still equals
-         * expected. A null update removes the slot.
-         */
+        /** Exact-string CAS; a null update removes the receipt slot. */
         fun compareAndSetPreferenceReceipt(
-            expected: Map<String, Any?>?,
-            update: Map<String, Any?>?
+            expected: String?,
+            update: String?
         ): Boolean
     }
 
     private data class StoredTuple(
         val installationDigest: String?,
+        val receiptRaw: String?,
         val receipt: Map<String, Any?>?
     )
 
@@ -86,7 +79,7 @@ class NativeSubtitlePreferenceStore(
         ) return rejected()
 
         val before = readStableTuple() ?: return rejected()
-        if (before.installationDigest == null && before.receipt != null) return rejected()
+        if (before.installationDigest == null && before.receiptRaw != null) return rejected()
 
         val installationDigest = before.installationDigest ?: safeDigest() ?: return rejected()
         if (!DIGEST.matches(installationDigest)) return rejected()
@@ -112,13 +105,14 @@ class NativeSubtitlePreferenceStore(
                 "choice" to "enabled"
             )
         ) ?: return rejected()
-        val target = StoredTuple(installationDigest, receipt)
+        val receiptRaw = NativeSubtitlePreferenceReceiptCodec.encode(receipt) ?: return rejected()
+        val target = StoredTuple(installationDigest, receiptRaw, receipt)
 
         if (before.installationDigest == null &&
             !safeCompareDigest(null, installationDigest)
         ) return rejected(rollback(before, target))
 
-        if (!safeCompareReceipt(before.receipt, receipt)) {
+        if (!safeCompareReceipt(before.receiptRaw, receiptRaw)) {
             return rejected(rollback(before, target))
         }
 
@@ -145,11 +139,11 @@ class NativeSubtitlePreferenceStore(
             return rejected()
         }
         val before = readStableTuple() ?: return rejected()
-        if (before.receipt == null) {
+        if (before.receiptRaw == null) {
             return CommitResult(ok = true, provenance = null, rollbackVerified = true)
         }
-        val target = before.copy(receipt = null)
-        if (!safeCompareReceipt(before.receipt, null)) {
+        val target = before.copy(receiptRaw = null, receipt = null)
+        if (!safeCompareReceipt(before.receiptRaw, null)) {
             return rejected(rollback(before, target))
         }
         if (readStableTuple() != target || readStableTuple() != target) {
@@ -200,11 +194,14 @@ class NativeSubtitlePreferenceStore(
             val digestRead = storage.readInstallationDigest() ?: return null
             val receiptRead = storage.readPreferenceReceipt() ?: return null
             if (!digestRead.ok || !receiptRead.ok) return null
+            val raw = receiptRead.value
+            val receipt = raw?.let(NativeSubtitlePreferenceReceiptCodec::decode) ?: run {
+                if (raw == null) null else return null
+            }
             StoredTuple(
                 installationDigest = digestRead.value,
-                receipt = receiptRead.value?.let(::snapshotReceipt) ?: run {
-                    if (receiptRead.value == null) null else return null
-                }
+                receiptRaw = raw,
+                receipt = receipt
             )
         } catch (_: RuntimeException) {
             null
@@ -221,16 +218,17 @@ class NativeSubtitlePreferenceStore(
         val current = readStableTuple() ?: return false
         val digestOwned = current.installationDigest == before.installationDigest ||
             current.installationDigest == target.installationDigest
-        val receiptOwned = current.receipt == before.receipt || current.receipt == target.receipt
+        val receiptOwned = current.receiptRaw == before.receiptRaw ||
+            current.receiptRaw == target.receiptRaw
         if (!digestOwned || !receiptOwned) return false
 
-        if (current.receipt != before.receipt &&
-            !safeCompareReceipt(current.receipt, before.receipt)
+        if (current.receiptRaw != before.receiptRaw &&
+            !safeCompareReceipt(current.receiptRaw, before.receiptRaw)
         ) return false
 
         val afterReceipt = readStableTuple() ?: return false
         if (afterReceipt.installationDigest != current.installationDigest ||
-            afterReceipt.receipt != before.receipt
+            afterReceipt.receiptRaw != before.receiptRaw
         ) return false
 
         if (afterReceipt.installationDigest != before.installationDigest &&
@@ -260,73 +258,13 @@ class NativeSubtitlePreferenceStore(
         }
     }
 
-    private fun safeCompareReceipt(
-        expected: Map<String, Any?>?,
-        update: Map<String, Any?>?
-    ): Boolean {
+    private fun safeCompareReceipt(expected: String?, update: String?): Boolean {
         return try {
             storage.compareAndSetPreferenceReceipt(expected, update)
         } catch (_: RuntimeException) {
             false
         } catch (_: LinkageError) {
             false
-        }
-    }
-
-    private fun snapshotReceipt(value: Map<*, *>): Map<String, Any?>? {
-        return try {
-            val size = value.size
-            if (size !in SAME_INSTALLATION_KEYS.size..EXPLICIT_CHOICE_KEYS.size) return null
-            val copy = LinkedHashMap<String, Any?>(size)
-            val iterator = value.entries.iterator()
-            var count = 0
-            while (iterator.hasNext()) {
-                if (count >= size) return null
-                val entry = iterator.next()
-                val key = entry.key as? String ?: return null
-                if (copy.containsKey(key)) return null
-                copy[key] = if (key == "binding") {
-                    snapshotBinding(entry.value as? Map<*, *> ?: return null) ?: return null
-                } else {
-                    entry.value
-                }
-                count++
-            }
-            if (count != size) return null
-            val expected = if (copy["kind"] == "explicit-local-choice") {
-                EXPLICIT_CHOICE_KEYS
-            } else {
-                SAME_INSTALLATION_KEYS
-            }
-            if (copy.keys != expected) return null
-            Collections.unmodifiableMap(copy)
-        } catch (_: RuntimeException) {
-            null
-        } catch (_: LinkageError) {
-            null
-        }
-    }
-
-    private fun snapshotBinding(value: Map<*, *>): Map<String, Any?>? {
-        return try {
-            if (value.size != BINDING_KEYS.size) return null
-            val copy = LinkedHashMap<String, Any?>(BINDING_KEYS.size)
-            val iterator = value.entries.iterator()
-            var count = 0
-            while (iterator.hasNext()) {
-                if (count >= BINDING_KEYS.size) return null
-                val entry = iterator.next()
-                val key = entry.key as? String ?: return null
-                if (key !in BINDING_KEYS || copy.containsKey(key)) return null
-                copy[key] = entry.value
-                count++
-            }
-            if (count != BINDING_KEYS.size || copy.keys != BINDING_KEYS) return null
-            Collections.unmodifiableMap(copy)
-        } catch (_: RuntimeException) {
-            null
-        } catch (_: LinkageError) {
-            null
         }
     }
 
@@ -346,21 +284,6 @@ class NativeSubtitlePreferenceStore(
     companion object {
         private val DIGEST = Regex("^[0-9a-f]{64}$")
         private val CHOICE_SURFACES = setOf("first-run", "subtitle-settings")
-        private val BINDING_KEYS = setOf(
-            "sessionEnabled",
-            "sessionLanguage",
-            "globalLanguage",
-            "sessionSource"
-        )
-        private val SAME_INSTALLATION_KEYS = setOf(
-            "schemaVersion",
-            "kind",
-            "installationDigest",
-            "preferenceRevision",
-            "binding"
-        )
-        private val EXPLICIT_CHOICE_KEYS =
-            SAME_INSTALLATION_KEYS + setOf("surface", "choice")
         private const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L
     }
 }
