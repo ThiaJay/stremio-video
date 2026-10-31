@@ -12,6 +12,8 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 MANIFEST=ROOT/'src/main/AndroidManifest.xml'
 ANDROID='{http://schemas.android.com/apk/res/android}'
 SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
+NATIVE_SUBTITLE_PROVENANCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenance.kt'
+NATIVE_SUBTITLE_PROVENANCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenanceTest.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
@@ -125,6 +127,8 @@ if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
 if 'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' not in BRIDGE.read_text():
     fail.append('series_watched_story_order_season_zero_exclusion_missing')
 java_text=SOURCE.read_text()
+native_subtitle_provenance=NATIVE_SUBTITLE_PROVENANCE.read_text() if NATIVE_SUBTITLE_PROVENANCE.is_file() else ''
+native_subtitle_provenance_test=NATIVE_SUBTITLE_PROVENANCE_TEST.read_text() if NATIVE_SUBTITLE_PROVENANCE_TEST.is_file() else ''
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
@@ -1104,7 +1108,57 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-if any(x in java_text+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+# Native subtitle preference provenance remains a pure, unwired translation of
+# Foundation PR #70. These checks prevent enabled/account/language state from
+# becoming implicit consent and keep private-client/device acceptance open.
+if not all(x in native_subtitle_provenance for x in [
+    '99ea3173184029bbd7ee5ae7dc33d31d553fc135',
+    'e63e9a35ec9e0bdeab0de17debaf5a3ce929d8d4',
+    'object NativeSubtitlePreferenceProvenance',
+    'This pure boundary performs no storage, account, player, network or UI work.'
+]):
+    fail.append('native_subtitle_provenance_contract_pin')
+if not all(x in native_subtitle_provenance for x in [
+    '^[0-9a-f]{64}
+    fail.append('account_network_or_credential_surface')
+print(json.dumps({'ok':not fail,'checks':254,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+                  'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
+sys.exit(1 if fail else 0)
+, 'MAX_SAFE_INTEGER', 'hasExactKeys',
+    '"same-installation-setting"', '"explicit-local-choice"',
+    '"schemaVersion"', '"preferenceRevision"', '"binding"'
+]):
+    fail.append('native_subtitle_provenance_exact_schema')
+if not all(x in native_subtitle_provenance for x in [
+    'lowercase(Locale.ROOT)', "replace('_', '-')",
+    'it == "embedded" || it == "external"', 'bindingKeys.all'
+]):
+    fail.append('native_subtitle_provenance_binding')
+if not all(x in native_subtitle_provenance for x in [
+    'setOf("first-run", "subtitle-settings")',
+    'event["choice"] != "enabled"',
+    'sessionPreference?.enabled != true',
+    'An enabled flag, account hydration or a preferred language is never consent.'
+]):
+    fail.append('native_subtitle_provenance_explicit_choice')
+if not all(x in native_subtitle_provenance for x in [
+    'readback["scope"] != "installation-local"',
+    'positiveRevision(readback["preferenceRevision"]) != revision',
+    '!sameBinding(readback["binding"], stored["binding"])',
+    '"kind" to "same-installation-setting"'
+]):
+    fail.append('native_subtitle_provenance_storage_promotion')
+if (
+    not all(x in native_subtitle_provenance for x in [
+        'Collections.unmodifiableMap(LinkedHashMap(value))',
+        'This function validates that event and cannot create it.',
+        'does not prove UI, signed package, private-client or device acceptance.'
+    ]) or
+    'NativeSubtitlePreferenceProvenance' in java_text or
+    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation'])
+):
+    fail.append('native_subtitle_provenance_unwired_regressions')
+if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
 print(json.dumps({'ok':not fail,'checks':248,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))

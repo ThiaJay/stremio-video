@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=220 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=232 and failures==0 and errors==0, (tests,failures,errors)
           assert 'retainedBridgeAllFiftyThreeAssertions' in names, 'Original Kotlin bridge regression not run'
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'
           assert 'individualEpisodeRequiresRealCanonicalSourceAndRemoteConfirmation' in names, 'Individual episode Core action not tested'
@@ -244,6 +244,18 @@ jobs:
           assert 'throwingFinalSnapshotRefusesWithoutExecution' in names, 'Final snapshot exception regression not executed'
           assert 'throwingPortExecutionConsumesLeaseAndFailsClosed' in names, 'Native execution exception one-shot regression not executed'
           assert 'issuedLeaseSetIsBoundedWithoutReplayEviction' in names, 'Bounded native recovery lease registry regression not executed'
+          assert 'sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults' in names, 'Native subtitle provenance regression sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults not executed'
+          assert 'explicitOffRemainsAuthoritativeWithoutInventingConsent' in names, 'Native subtitle provenance regression explicitOffRemainsAuthoritativeWithoutInventingConsent not executed'
+          assert 'sameInstallationReceiptMustBindExactPreferenceAndInstallation' in names, 'Native subtitle provenance regression sameInstallationReceiptMustBindExactPreferenceAndInstallation not executed'
+          assert 'malformedDigestAndRevisionFailClosed' in names, 'Native subtitle provenance regression malformedDigestAndRevisionFailClosed not executed'
+          assert 'receiptCannotSurviveBoundLanguageOrSourceChange' in names, 'Native subtitle provenance regression receiptCannotSurviveBoundLanguageOrSourceChange not executed'
+          assert 'bindingIsNormalisedDetachedAndClosed' in names, 'Native subtitle provenance regression bindingIsNormalisedDetachedAndClosed not executed'
+          assert 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession' in names, 'Native subtitle provenance regression explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession not executed'
+          assert 'explicitChoiceEventUsesExactClosedSchema' in names, 'Native subtitle provenance regression explicitChoiceEventUsesExactClosedSchema not executed'
+          assert 'sameInstallationReceiptCannotMasqueradeAsUiChoice' in names, 'Native subtitle provenance regression sameInstallationReceiptCannotMasqueradeAsUiChoice not executed'
+          assert 'exactInstallationLocalReadbackPromotesReceipt' in names, 'Native subtitle provenance regression exactInstallationLocalReadbackPromotesReceipt not executed'
+          assert 'promotionRejectsScopeInstallationRevisionAndBindingDrift' in names, 'Native subtitle provenance regression promotionRejectsScopeInstallationRevisionAndBindingDrift not executed'
+          assert 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation' in names, 'Native subtitle provenance regression promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation not executed'
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes
