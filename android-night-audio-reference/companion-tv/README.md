@@ -118,4 +118,14 @@ received or rendered. This remains source/build behaviour only, not visual
 subtitle acceptance, private-client adoption, signed installation or Android
 mobile/TV/Fire TV acceptance.
 
+The Activity also converts Media3's text-only `Tracks` callback into a bounded
+pure Kotlin observation. The exact local WebVTT MIME type, English language,
+synthetic label and selected/unselected state must be the only reported text
+track for the active player/video/source/load generation. Empty discovery is
+recorded as absent; duplicate, unexpected or oversized text-track input closes
+that generation. Runtime selection observation remains distinct from cue
+receipt and visible rendering. Hosted CI compiles this binding and exercises
+its deterministic contract but does not run Media3 playback or accept a
+runtime track report.
+
 

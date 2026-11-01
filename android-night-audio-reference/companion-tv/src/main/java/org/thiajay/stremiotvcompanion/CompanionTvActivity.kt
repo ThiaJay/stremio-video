@@ -17,6 +17,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
@@ -76,6 +77,7 @@ class CompanionTvActivity : Activity() {
     private var errorMessage: String? = null
     private var playbackFailed = false
     private val subtitleCueObserver = SyntheticSubtitleCueDeliveryObserver()
+    private val subtitleTrackObserver = SyntheticSubtitleTrackStateObserver()
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -173,6 +175,15 @@ class CompanionTvActivity : Activity() {
                 if (!fixtureLoaded) return
                 val cueTexts = cueGroup.cues.mapNotNull { it.text?.toString() }
                 subtitleCueObserver.observe(syntheticCueContext(), cueTexts)
+                updateUi()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                if (!fixtureLoaded) return
+                subtitleTrackObserver.observe(
+                    syntheticTrackContext(),
+                    syntheticTextTracks(tracks)
+                )
                 updateUi()
             }
         })
@@ -327,7 +338,12 @@ class CompanionTvActivity : Activity() {
         generation++
         player.stop()
         val cueContext = syntheticCueContext()
-        if (!subtitleCueObserver.begin(cueContext)) {
+        val trackContext = syntheticTrackContext()
+        val cueStarted = subtitleCueObserver.begin(cueContext)
+        val trackStarted = subtitleTrackObserver.begin(trackContext)
+        if (!cueStarted || !trackStarted) {
+            if (cueStarted) subtitleCueObserver.abandon(cueContext)
+            if (trackStarted) subtitleTrackObserver.abandon(trackContext)
             errorMessage = "Synthetic subtitle cue observation was refused."
             updateUi()
             return
@@ -355,6 +371,7 @@ class CompanionTvActivity : Activity() {
             player.playWhenReady = true
         } catch (_: Exception) {
             subtitleCueObserver.abandon(cueContext)
+            subtitleTrackObserver.abandon(trackContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -420,7 +437,23 @@ class CompanionTvActivity : Activity() {
                     "${observed.expectedCueCount}; visible output NOT accepted."
             } ?: "Synthetic cue delivery held closed; visible output NOT accepted."
         }
-        status.text = "$state  Skip mode $skipMode.  $dspStatus  $cueStatus"
+        val trackStatus = if (!fixtureLoaded) {
+            "Synthetic text-track state not active."
+        } else {
+            when (subtitleTrackObserver.snapshot(syntheticTrackContext())?.state) {
+                SyntheticSubtitleTrackStateObserver.State.NOT_REPORTED ->
+                    "Media3 text track not yet reported; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.ABSENT ->
+                    "Media3 text track absent; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.PRESENT_UNSELECTED ->
+                    "Media3 synthetic text track present and unselected; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.PRESENT_SELECTED ->
+                    "Media3 synthetic text track present and selected; visible output NOT accepted."
+                null ->
+                    "Synthetic text-track observation held closed; visible output NOT accepted."
+            }
+        }
+        status.text = "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus"
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -530,6 +563,7 @@ class CompanionTvActivity : Activity() {
 
     private fun stopFixture() {
         if (fixtureLoaded) subtitleCueObserver.abandon(syntheticCueContext())
+        if (fixtureLoaded) subtitleTrackObserver.abandon(syntheticTrackContext())
         player.stop()
         fixtureLoaded = false
         generation++
@@ -592,6 +626,7 @@ class CompanionTvActivity : Activity() {
         subtitleOwner?.close()
         subtitleOwner = null
         subtitleCueObserver.close()
+        subtitleTrackObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -627,5 +662,31 @@ class CompanionTvActivity : Activity() {
         videoId = FIXTURE_ID,
         sourceId = SYNTHETIC_SOURCE_ID
     )
+
+    private fun syntheticTrackContext() = SyntheticSubtitleTrackStateObserver.Context(
+        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+        loadGeneration = generation,
+        videoId = FIXTURE_ID,
+        sourceId = SYNTHETIC_SOURCE_ID
+    )
+
+    private fun syntheticTextTracks(
+        tracks: Tracks
+    ): List<SyntheticSubtitleTrackStateObserver.TextTrack> {
+        val textTracks = ArrayList<SyntheticSubtitleTrackStateObserver.TextTrack>()
+        for (group in tracks.groups) {
+            if (group.type != C.TRACK_TYPE_TEXT) continue
+            for (index in 0 until group.length) {
+                val format = group.getTrackFormat(index)
+                textTracks += SyntheticSubtitleTrackStateObserver.TextTrack(
+                    sampleMimeType = format.sampleMimeType,
+                    language = format.language,
+                    label = format.label,
+                    selected = group.isTrackSelected(index)
+                )
+            }
+        }
+        return textTracks
+    }
 }
 
