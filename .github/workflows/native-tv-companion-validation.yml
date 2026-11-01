@@ -70,9 +70,18 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=387 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=394 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
+          for required in (
+              'exactFixtureCuesCompleteOnlyTheActiveGeneration',
+              'emptyAndDuplicateCallbacksAreBoundedAndIdempotent',
+              'changedPlayerIdentityCannotAffectActiveObservation',
+              'unknownOrOversizedCueInputPoisonsOnlyThatGeneration',
+              'loadGenerationMustIncreaseAndNewGenerationStartsEmpty',
+              'abandonThreadOwnershipAndCloseFailClosed',
+              'malformedContextNeverStartsObservation'):
+              assert required in names, 'Synthetic cue observer test missing: '+required
           for required in (
               'explicitOffDisablesOnlyAutomaticTextSelection',
               'admittedEnabledReenablesAutomaticTextSelection',

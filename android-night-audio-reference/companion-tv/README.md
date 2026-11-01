@@ -109,8 +109,13 @@ MediaItem therefore has an actual synthetic text track without reading a
 network, provider, account or user subtitle file. The adapter changes only
 whether the text track type is disabled, preserves all unrelated
 track-selection parameters and stops when any manual text override exists.
-This establishes Android/Media3 compilation and deterministic fixture
-behaviour only. It is not visual subtitle acceptance, private-client adoption,
-signed installation or Android mobile/TV/Fire TV acceptance.
+An owner-thread observer accepts only the three fixed fixture cue strings for
+the exact player/video/source/load generation, rejects unknown or oversized
+input and cannot carry observations across a new load. The Activity reports
+callback receipt separately from visible output. Hosted compilation and JVM
+tests do not execute ExoPlayer playback, so they do not prove that any cue was
+received or rendered. This remains source/build behaviour only, not visual
+subtitle acceptance, private-client adoption, signed installation or Android
+mobile/TV/Fire TV acceptance.
 
 

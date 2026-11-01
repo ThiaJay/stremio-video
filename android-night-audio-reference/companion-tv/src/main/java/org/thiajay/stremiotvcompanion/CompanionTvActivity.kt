@@ -18,6 +18,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -74,6 +75,7 @@ class CompanionTvActivity : Activity() {
     private var nightAudioName = "Off"
     private var errorMessage: String? = null
     private var playbackFailed = false
+    private val subtitleCueObserver = SyntheticSubtitleCueDeliveryObserver()
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -164,6 +166,13 @@ class CompanionTvActivity : Activity() {
                         "No automatic retry or source change."
                 dsp.request(null)
                 nightAudioName = "Off"
+                updateUi()
+            }
+
+            override fun onCues(cueGroup: CueGroup) {
+                if (!fixtureLoaded) return
+                val cueTexts = cueGroup.cues.mapNotNull { it.text?.toString() }
+                subtitleCueObserver.observe(syntheticCueContext(), cueTexts)
                 updateUi()
             }
         })
@@ -317,6 +326,12 @@ class CompanionTvActivity : Activity() {
         fixtureLoaded = false
         generation++
         player.stop()
+        val cueContext = syntheticCueContext()
+        if (!subtitleCueObserver.begin(cueContext)) {
+            errorMessage = "Synthetic subtitle cue observation was refused."
+            updateUi()
+            return
+        }
         try {
             val clip: File = SyntheticAudioFixture.createIfMissing(cacheDir)
             val subtitles: File = SyntheticSubtitleFixture.createIfMissing(cacheDir)
@@ -339,6 +354,7 @@ class CompanionTvActivity : Activity() {
             player.prepare()
             player.playWhenReady = true
         } catch (_: Exception) {
+            subtitleCueObserver.abandon(cueContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -396,7 +412,15 @@ class CompanionTvActivity : Activity() {
             dsp.isPcmProcessingObserved() -> "Night Audio $nightAudioName: PCM processed; audible route NOT verified."
             else -> "Night Audio $nightAudioName: waiting for eligible PCM; no active output claim."
         }
-        status.text = "$state  Skip mode $skipMode.  $dspStatus"
+        val cueStatus = if (!fixtureLoaded) {
+            "Synthetic cue delivery not active."
+        } else {
+            subtitleCueObserver.snapshot(syntheticCueContext())?.let { observed ->
+                "Media3 synthetic cue delivery ${observed.deliveredCueCount}/" +
+                    "${observed.expectedCueCount}; visible output NOT accepted."
+            } ?: "Synthetic cue delivery held closed; visible output NOT accepted."
+        }
+        status.text = "$state  Skip mode $skipMode.  $dspStatus  $cueStatus"
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -505,6 +529,7 @@ class CompanionTvActivity : Activity() {
     }
 
     private fun stopFixture() {
+        if (fixtureLoaded) subtitleCueObserver.abandon(syntheticCueContext())
         player.stop()
         fixtureLoaded = false
         generation++
@@ -566,6 +591,7 @@ class CompanionTvActivity : Activity() {
         subtitlePlayback = null
         subtitleOwner?.close()
         subtitleOwner = null
+        subtitleCueObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -594,5 +620,12 @@ class CompanionTvActivity : Activity() {
             )
         )
     }
+
+    private fun syntheticCueContext() = SyntheticSubtitleCueDeliveryObserver.Context(
+        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+        loadGeneration = generation,
+        videoId = FIXTURE_ID,
+        sourceId = SYNTHETIC_SOURCE_ID
+    )
 }
 
