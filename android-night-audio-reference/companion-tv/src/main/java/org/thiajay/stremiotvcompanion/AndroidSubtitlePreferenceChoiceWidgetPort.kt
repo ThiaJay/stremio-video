@@ -37,6 +37,11 @@ class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(
     private val ownedViews = ArrayList<View>()
     private var closed = false
 
+    override fun loadStoredPreference(): Map<String, Any?>? {
+        if (!onMainOwnerThread() || closed) return null
+        return transaction.loadStoredPreference()
+    }
+
     override fun render(surface: AndroidSubtitlePreferenceChoiceSession.Surface): Boolean {
         if (!onMainOwnerThread() || closed) return false
         val widgets = controller.replace(surface) ?: return false

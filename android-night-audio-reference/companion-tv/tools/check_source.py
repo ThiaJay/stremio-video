@@ -235,6 +235,8 @@ if not all(x in mobile_story_activity for x in [
     'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
     'initialSubtitleSurface',
+    'initialSubtitlePreference',
+    'createdSubtitle.loadStoredPreference()',
     'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
     'current.consumeOutcome()'
 ]):
@@ -243,6 +245,8 @@ if not all(x in mobile_story_activity for x in [
     'Explicitly Off when no choice is stored.',
     'own app-private preference and provenance receipt',
     'The mobile and TV lab namespaces are independent.',
+    'Current enabled state has no matching same-installation receipt and is ',
+    'not admitted as consent.',
     'Production Stremio preferences were not read or changed.',
     'unverified rollback; ',
     'the subtitle lab is held closed.'
@@ -261,6 +265,8 @@ if not all(x in java_text for x in [
     'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
     'initialSubtitleSurface',
+    'initialSubtitlePreference',
+    'createdSubtitle.loadStoredPreference()',
     'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
     'pollSubtitleOutcome()',
     'current.consumeOutcome()'
@@ -270,6 +276,8 @@ if not all(x in java_text for x in [
     "this TV lab's app-private state, which starts explicitly Off.",
     "this TV lab's preference and provenance receipt may be stored.",
     'The TV and mobile lab namespaces are independent.',
+    'Current enabled TV state has no matching same-installation receipt and is ',
+    'not admitted as consent.',
     'Production Stremio preferences were not read or changed.',
     'unverified rollback; ',
     'the TV subtitle lab is held closed.'
@@ -1680,6 +1688,7 @@ if not all(x in android_subtitle_choice_transaction for x in [
     'session.prepareChoice(surface, choice)',
     'session.commitChoice(lease)',
     'session.loadStoredPreference()',
+    'fun loadStoredPreference(): Map<String, Any?>?',
     'if (current != transition.after) return false',
     'applicationPort.rollbackChoice(transition)',
     'return acknowledged && readStableSnapshot() == transition.before'
@@ -1704,6 +1713,8 @@ if not all(x in android_subtitle_choice_transaction_test for x in [
     'throwingApplicationPortFailsClosedBeforeReceipt',
     'rollbackRefusalIsReportedWithoutOverwritingAppliedState',
     'mismatchedTransitionCannotInventChoiceAuthority',
+    'storedPreferenceAdmissionIsOwnerThreadAndLifecycleBound',
+    'enabledSnapshotWithoutReceiptIsNeverAdmitted',
     'ownerThreadAndCloseRevokeTransaction'
 ]):
     fail.append('android_subtitle_choice_transaction_regressions')
@@ -1750,6 +1761,8 @@ if not all(x in android_subtitle_choice_widget_port for x in [
     'controller.consume(',
     'removeOwnedViews()',
     'transaction.applyAndCommitChoice(intent.surface, intent.choice)',
+    'override fun loadStoredPreference(): Map<String, Any?>?',
+    'transaction.loadStoredPreference()',
     'Looper.myLooper() === Looper.getMainLooper()',
     'transaction.close()',
     'applicationPort: AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort'
@@ -1789,6 +1802,8 @@ if not all(x in android_subtitle_choice_screen_owner for x in [
     'private var pendingOutcome: AndroidSubtitlePreferenceChoiceOutcome? = null',
     'if (!usable() || pendingOutcome != null) return false',
     'fun consumeOutcome(): AndroidSubtitlePreferenceChoiceOutcome?',
+    'fun loadStoredPreference(): Map<String, Any?>?',
+    'port?.loadStoredPreference()',
     'pendingOutcome = null',
     'fun close(): Boolean',
     'active?.close() == true',
@@ -1807,6 +1822,7 @@ if ': AndroidSubtitlePreferenceChoiceScreenPort' not in android_subtitle_choice_
 if not all(x in android_subtitle_choice_screen_owner_test for x in [
     'screenHoldsOneOutcomeUntilExplicitConsumption',
     'refusedOutcomeIsHeldWithoutPromotionOrRerender',
+    'storedPreferenceAdmissionIsLifecycleBound',
     'duplicateOutcomePermanentlyPoisonsAndClosesPort',
     'renderOrClearRefusalPermanentlyPoisons',
     'throwingPortOperationsAreContainedAndRevokeAuthority',
@@ -1818,13 +1834,14 @@ if not all(x in android_subtitle_choice_screen_owner_test for x in [
     'assertFalse(owner.render(',
     'assertFalse(owner.clear())',
     'assertSame(outcome, owner.consumeOutcome())',
+    'assertEquals(admitted, owner.loadStoredPreference())',
     'assertEquals(1, fixture.port!!.closeCalls)',
     'assertFalse(foreignClose.get())'
 ]):
     fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
 if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':350,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':357,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

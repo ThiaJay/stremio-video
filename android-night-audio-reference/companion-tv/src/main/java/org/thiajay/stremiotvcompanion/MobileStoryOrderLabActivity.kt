@@ -208,6 +208,8 @@ class MobileStoryOrderLabActivity : Activity() {
             PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE
         )
         val initialSubtitleSurface = createdSubtitleHost?.presentationSurface()
+        val initialSubtitlePreference =
+            createdSubtitleHost?.readPreferenceSnapshot()?.sessionPreference
         val createdSubtitle = createdSubtitleHost?.let { host ->
             AndroidSubtitlePreferenceChoiceScreenOwner.open(
                 getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
@@ -225,7 +227,21 @@ class MobileStoryOrderLabActivity : Activity() {
         } else {
             subtitleHost = createdSubtitleHost
             subtitleOwner = createdSubtitle
-            subtitleStatus.text =
+            val admission = if (initialSubtitlePreference?.enabled == true) {
+                createdSubtitle.loadStoredPreference()
+            } else {
+                null
+            }
+            val admissionStatus = when {
+                initialSubtitlePreference?.enabled != true ->
+                    "Current app-private state is explicit Off; no enabled choice is inferred."
+                admission?.get("kind") == "same-installation-setting" ->
+                    "Current enabled state has an exact same-installation choice receipt."
+                else ->
+                    "Current enabled state has no matching same-installation receipt and is " +
+                        "not admitted as consent."
+            }
+            subtitleStatus.text = admissionStatus + "\n" +
                 "Choose enabled or explicit Off for this app-private mobile lab preference. " +
                     "The mobile and TV lab namespaces are independent."
         }

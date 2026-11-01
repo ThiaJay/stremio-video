@@ -5,6 +5,7 @@ import android.os.Looper
 import android.view.ViewGroup
 
 interface AndroidSubtitlePreferenceChoiceScreenPort {
+    fun loadStoredPreference(): Map<String, Any?>?
     fun render(surface: AndroidSubtitlePreferenceChoiceSession.Surface): Boolean
     fun clear(): Boolean
     fun close(): Boolean
@@ -32,6 +33,17 @@ class AndroidSubtitlePreferenceChoiceScreenOwner private constructor() {
     private var pendingOutcome: AndroidSubtitlePreferenceChoiceOutcome? = null
     private var ready = false
     private var closed = false
+
+    fun loadStoredPreference(): Map<String, Any?>? {
+        if (!usable()) return null
+        return try {
+            port?.loadStoredPreference()
+        } catch (_: RuntimeException) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
 
     fun render(surface: AndroidSubtitlePreferenceChoiceSession.Surface): Boolean {
         if (!usable() || pendingOutcome != null) return false

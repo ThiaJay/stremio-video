@@ -18,7 +18,31 @@ class AndroidSubtitlePreferenceChoiceTransactionTest {
         assertTrue(result.ok)
         assertEquals(true, fixture.host.current.sessionPreference?.enabled)
         assertEquals("same-installation-setting", result.provenance?.get("kind"))
-        assertEquals(result.provenance, fixture.session.loadStoredPreference())
+        assertEquals(result.provenance, fixture.transaction.loadStoredPreference())
+        assertTrue(fixture.transaction.close())
+    }
+
+    @Test fun storedPreferenceAdmissionIsOwnerThreadAndLifecycleBound() {
+        val fixture = fixture(offSnapshot(), 0x1b)
+        val result = fixture.transaction.applyAndCommitChoice(FIRST_RUN, ENABLED)
+        val foreignLoad = AtomicReference<Map<String, Any?>?>()
+
+        Thread {
+            foreignLoad.set(fixture.transaction.loadStoredPreference())
+        }.apply { start(); join() }
+
+        assertTrue(result.ok)
+        assertEquals(result.provenance, fixture.transaction.loadStoredPreference())
+        assertNull(foreignLoad.get())
+        assertTrue(fixture.transaction.close())
+        assertNull(fixture.transaction.loadStoredPreference())
+    }
+
+    @Test fun enabledSnapshotWithoutReceiptIsNeverAdmitted() {
+        val fixture = fixture(enabledSnapshot(), 0x1c)
+
+        assertNull(fixture.transaction.loadStoredPreference())
+        assertTrue(fixture.preferences.snapshot().isEmpty())
         assertTrue(fixture.transaction.close())
     }
 

@@ -41,6 +41,16 @@ class AndroidSubtitlePreferenceChoiceTransaction internal constructor(
     private val ownerThread = Thread.currentThread()
     private var closed = false
 
+    /**
+     * Returns provenance only when the current preference still matches the
+     * exact installation-local receipt. An enabled value alone is never
+     * promoted to an accepted choice.
+     */
+    fun loadStoredPreference(): Map<String, Any?>? {
+        if (!usable()) return null
+        return session.loadStoredPreference()
+    }
+
     fun applyAndCommitChoice(
         surface: AndroidSubtitlePreferenceChoiceSession.Surface?,
         choice: AndroidSubtitlePreferenceChoiceSession.Choice?

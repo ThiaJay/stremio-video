@@ -40,6 +40,16 @@ class AndroidSubtitlePreferenceChoiceScreenOwnerTest {
         assertTrue(owner.close())
     }
 
+    @Test fun storedPreferenceAdmissionIsLifecycleBound() {
+        val admitted = mapOf<String, Any?>("kind" to "same-installation-setting")
+        val fixture = Fixture(storedPreference = admitted)
+        val owner = fixture.open()!!
+
+        assertEquals(admitted, owner.loadStoredPreference())
+        assertTrue(owner.close())
+        assertNull(owner.loadStoredPreference())
+    }
+
     @Test fun duplicateOutcomePermanentlyPoisonsAndClosesPort() {
         val fixture = Fixture()
         val owner = fixture.open()!!
@@ -128,7 +138,8 @@ class AndroidSubtitlePreferenceChoiceScreenOwnerTest {
         private val renderResult: Boolean = true,
         private val clearResult: Boolean = true,
         private val throwOnRender: Boolean = false,
-        private val throwOnClear: Boolean = false
+        private val throwOnClear: Boolean = false,
+        private val storedPreference: Map<String, Any?>? = null
     ) {
         var port: FakePort? = null
 
@@ -139,7 +150,8 @@ class AndroidSubtitlePreferenceChoiceScreenOwnerTest {
                     renderResult,
                     clearResult,
                     throwOnRender,
-                    throwOnClear
+                    throwOnClear,
+                    storedPreference
                 ).also { port = it }
             }
     }
@@ -149,9 +161,12 @@ class AndroidSubtitlePreferenceChoiceScreenOwnerTest {
         private val renderResult: Boolean,
         private val clearResult: Boolean,
         private val throwOnRender: Boolean,
-        private val throwOnClear: Boolean
+        private val throwOnClear: Boolean,
+        private val storedPreference: Map<String, Any?>?
     ) : AndroidSubtitlePreferenceChoiceScreenPort {
         var closeCalls = 0
+
+        override fun loadStoredPreference(): Map<String, Any?>? = storedPreference
 
         override fun render(
             surface: AndroidSubtitlePreferenceChoiceSession.Surface
