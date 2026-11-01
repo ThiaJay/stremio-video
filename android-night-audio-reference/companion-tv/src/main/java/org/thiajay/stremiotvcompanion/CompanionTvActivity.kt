@@ -57,6 +57,9 @@ class CompanionTvActivity : Activity() {
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var watchedStatus: TextView
     private var subtitleOwner: PersistentSyntheticSubtitlePreferenceScreenOwner? = null
+    private var subtitlePlayback: Media3SubtitlePlaybackPreferenceAdapter? = null
+    private var subtitlePendingTrigger:
+        NativeSubtitlePlaybackPreferenceActuator.Trigger? = null
     private lateinit var subtitleStatus: TextView
     private lateinit var storyOrderToggle: Button
     private lateinit var storyOrderSummary: TextView
@@ -68,6 +71,7 @@ class CompanionTvActivity : Activity() {
     private var skipMode = SkipMode.Ask
     private var nightAudioName = "Off"
     private var errorMessage: String? = null
+    private var playbackFailed = false
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -127,9 +131,32 @@ class CompanionTvActivity : Activity() {
         player = ExoPlayer.Builder(this, renderers).build()
         player.volume = 0.20f
         player.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) { updateUi() }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (subtitlePendingTrigger !=
+                    NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY) {
+                    subtitlePendingTrigger = if (
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                    ) {
+                        NativeSubtitlePlaybackPreferenceActuator.Trigger.EPISODE_TRANSITION
+                    } else {
+                        NativeSubtitlePlaybackPreferenceActuator.Trigger.INITIAL_LOAD
+                    }
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    subtitlePendingTrigger?.let { trigger ->
+                        subtitlePlayback?.reconcile(trigger)
+                        subtitlePendingTrigger = null
+                    }
+                }
+                updateUi()
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 val classification = NativeMedia3FailureIntake.classify(error.errorCode)
+                playbackFailed = true
                 errorMessage =
                     "Local synthetic playback stopped: ${classification.category}. " +
                         "No automatic retry or source change."
@@ -238,6 +265,22 @@ class CompanionTvActivity : Activity() {
                 "Synthetic subtitle choices unavailable. Production preferences remain untouched."
         } else {
             subtitleOwner = createdSubtitle
+            subtitlePlayback = Media3SubtitlePlaybackPreferenceAdapter.open(
+                player = player,
+                contextPort = Media3SubtitlePlaybackPreferenceAdapter.ContextPort {
+                    Media3SubtitlePlaybackPreferenceAdapter.Context(
+                        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+                        loadGeneration = generation,
+                        videoId = if (fixtureLoaded) FIXTURE_ID else "",
+                        sourceId = if (fixtureLoaded) SYNTHETIC_SOURCE_ID else "",
+                        transitioning = player.playbackState != Player.STATE_READY,
+                        nextEpisodeRequested = false
+                    )
+                },
+                preferencePort = NativeSubtitlePlaybackPreferenceActuator.PreferencePort {
+                    createdSubtitle.currentPlaybackPreference()
+                }
+            )
             val admissionStatus = when (initialSubtitle.admission) {
                 PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.EXPLICIT_OFF ->
                     "Current app-private TV state is explicit Off; no enabled choice is inferred."
@@ -259,6 +302,12 @@ class CompanionTvActivity : Activity() {
     }
 
     private fun startFixture() {
+        subtitlePendingTrigger = if (playbackFailed) {
+            NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY
+        } else {
+            NativeSubtitlePlaybackPreferenceActuator.Trigger.INITIAL_LOAD
+        }
+        playbackFailed = false
         errorMessage = null
         fixtureLoaded = false
         generation++
@@ -413,13 +462,23 @@ class CompanionTvActivity : Activity() {
                         "the TV subtitle lab is held closed."
             } + "\nProduction Stremio preferences were not read or changed."
 
+            if (outcome.result.ok && preference != null) {
+                subtitlePlayback?.reconcile(
+                    NativeSubtitlePlaybackPreferenceActuator.Trigger.PREFERENCE_CHANGE
+                )
+            }
+
             if (!outcome.result.rollbackVerified) {
+                subtitlePlayback?.close()
+                subtitlePlayback = null
                 current.close()
                 subtitleOwner = null
             } else if (!current.renderSettings()) {
                 subtitleStatus.text =
                     subtitleStatus.text.toString() +
                         "\nTV subtitle lab closed after a rejected re-render."
+                subtitlePlayback?.close()
+                subtitlePlayback = null
                 current.close()
                 subtitleOwner = null
             }
@@ -430,6 +489,7 @@ class CompanionTvActivity : Activity() {
         player.stop()
         fixtureLoaded = false
         generation++
+        subtitlePendingTrigger = null
         setNightAudio(null, "Off")
     }
 
@@ -483,6 +543,8 @@ class CompanionTvActivity : Activity() {
         ui.removeCallbacks(refresh)
         watchedOwner?.close()
         watchedOwner = null
+        subtitlePlayback?.close()
+        subtitlePlayback = null
         subtitleOwner?.close()
         subtitleOwner = null
         if (::player.isInitialized) player.release()
@@ -492,6 +554,8 @@ class CompanionTvActivity : Activity() {
 
     companion object {
         private const val FIXTURE_ID = "local:synthetic-media:12s"
+        private const val SYNTHETIC_SOURCE_ID = "local:synthetic-wav"
+        private const val SYNTHETIC_PLAYER_GENERATION = 1L
         private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS =
             "synthetic_tv_subtitle_receipt_v1"
         private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS =

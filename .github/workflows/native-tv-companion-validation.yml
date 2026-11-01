@@ -70,7 +70,17 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=375 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=385 and failures==0 and errors==0, (tests,failures,errors)
+          for required in (
+              'explicitOffDisablesOnlyAutomaticTextSelection',
+              'admittedEnabledReenablesAutomaticTextSelection',
+              'unadmittedEnabledCannotLeaveAutomaticSelectionEnabled',
+              'manualOverrideAlwaysBlocksPlayerMutation',
+              'unchangedPolicyRequiresNoMedia3Mutation',
+              'contextAndMediaDriftFailClosedBeforeMutation',
+              'rejectedAndConcurrentMedia3WritesAreNotAccepted',
+              'ownerThreadAndCloseRevokeAdapter'):
+              assert required in names, 'Media3 subtitle adapter test missing: '+required
           for required in (
               'explicitOffClearsOnlyAutomaticSelection',
               'explicitOffPreservesManualSelectionAcrossEpisodeTransition',
@@ -98,6 +108,8 @@ jobs:
               'explicitOffDoesNotReadOrManufactureReceiptAdmission',
               'enabledStateWithoutExactReceiptRemainsUnadmitted',
               'enabledStateIsAdmittedOnlyThroughScreenReceiptValidator',
+              'explicitOffPlaybackPreferenceDoesNotReadReceipt',
+              'enabledPlaybackPreferenceRequiresExactStoredReceipt',
               'compositeOwnsRenderOutcomeRerenderAndScreenFirstClose',
               'failedRenderPoisonsBothScreenAndStateLease',
               'constructionFailureAndForeignThreadCannotLeakAuthority'):

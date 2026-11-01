@@ -10,8 +10,9 @@ package org.thiajay.stremiotvcompanion
  * before the injected port is called. A changed video, source, load or player
  * generation, transition state, preference or receipt refuses the call.
  *
- * This class has no Media3, account, network, provider or production Stremio
- * binding and is not wired by either disclosed lab Activity.
+ * This class has no account, network, provider or production Stremio binding.
+ * The disclosed TV lab may compose it through a narrow Media3 adapter against
+ * synthetic local media only; the mobile lab and production clients do not.
  */
 internal class NativeSubtitlePlaybackPreferenceActuator(
     private val snapshotPort: SnapshotPort,
@@ -19,6 +20,7 @@ internal class NativeSubtitlePlaybackPreferenceActuator(
     private val actionPort: ActionPort
 ) {
     enum class Trigger {
+        PREFERENCE_CHANGE,
         INITIAL_LOAD,
         EPISODE_TRANSITION,
         RECOVERY

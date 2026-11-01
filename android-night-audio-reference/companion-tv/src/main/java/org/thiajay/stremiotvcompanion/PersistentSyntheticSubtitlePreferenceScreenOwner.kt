@@ -62,6 +62,26 @@ internal class PersistentSyntheticSubtitlePreferenceScreenOwner private construc
         return host.readPreferenceSnapshot()
     }
 
+    fun currentPlaybackPreference():
+        NativeSubtitlePlaybackPreferenceActuator.Preference? {
+        if (!usable()) return null
+        val preference = host.readPreferenceSnapshot()
+            ?.sessionPreference ?: return null
+        val enabled = preference.enabled
+        if (!enabled) {
+            return NativeSubtitlePlaybackPreferenceActuator.Preference(
+                enabled = false,
+                sameInstallationReceipt = false
+            )
+        }
+        val stored = screen.loadStoredPreference()
+        return NativeSubtitlePlaybackPreferenceActuator.Preference(
+            enabled = true,
+            sameInstallationReceipt =
+                stored?.get("kind") == "same-installation-setting"
+        )
+    }
+
     fun renderSettings(): Boolean {
         if (!usable()) return false
         val rendered = screen.render(

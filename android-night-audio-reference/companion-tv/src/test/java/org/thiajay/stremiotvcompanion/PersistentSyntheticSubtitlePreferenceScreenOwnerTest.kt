@@ -54,6 +54,42 @@ class PersistentSyntheticSubtitlePreferenceScreenOwnerTest {
         assertTrue(owner.close())
     }
 
+    @Test fun explicitOffPlaybackPreferenceDoesNotReadReceipt() {
+        val fixture = ScreenFixture(stored = admittedReceipt())
+        val owner = open(
+            FakeSharedPreferences(),
+            FakeSharedPreferences(),
+            TV,
+            fixture
+        )!!
+
+        assertEquals(
+            NativeSubtitlePlaybackPreferenceActuator.Preference(false, false),
+            owner.currentPlaybackPreference()
+        )
+        assertEquals(0, fixture.port!!.loadCalls)
+        assertTrue(owner.close())
+    }
+
+    @Test fun enabledPlaybackPreferenceRequiresExactStoredReceipt() {
+        val state = FakeSharedPreferences().apply { seed(TV_KEY, true) }
+        val admittedFixture = ScreenFixture(stored = admittedReceipt())
+        val admitted = open(state, FakeSharedPreferences(), TV, admittedFixture)!!
+        assertEquals(
+            NativeSubtitlePlaybackPreferenceActuator.Preference(true, true),
+            admitted.currentPlaybackPreference()
+        )
+        assertTrue(admitted.close())
+
+        val unadmittedFixture = ScreenFixture(stored = mapOf("kind" to "account-hydration"))
+        val unadmitted = open(state, FakeSharedPreferences(), TV, unadmittedFixture)!!
+        assertEquals(
+            NativeSubtitlePlaybackPreferenceActuator.Preference(true, false),
+            unadmitted.currentPlaybackPreference()
+        )
+        assertTrue(unadmitted.close())
+    }
+
     @Test fun compositeOwnsRenderOutcomeRerenderAndScreenFirstClose() {
         val state = FakeSharedPreferences()
         val receipt = FakeSharedPreferences()
