@@ -23,7 +23,7 @@ class MobileStoryOrderLabActivity : Activity() {
     private var storyOwner: AndroidMobileStoryOrderScreenOwner? = null
     private var watchedOwner: AndroidMobileTitleWatchedScreenOwner? = null
     private var subtitleOwner: AndroidSubtitlePreferenceChoiceScreenOwner? = null
-    private var subtitleHost: SyntheticSubtitlePreferenceHost? = null
+    private var subtitleHost: PersistentSyntheticSubtitlePreferenceHost? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var storyStatus: TextView
     private lateinit var watchedStatus: TextView
@@ -80,7 +80,7 @@ class MobileStoryOrderLabActivity : Activity() {
                     subtitleStatus.text = when {
                         outcome.result.ok && preference != null ->
                             "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
-                                " choice. Current in-memory state: " +
+                                " choice. Current app-private mobile lab state: " +
                                 (if (preference.enabled == true) "enabled." else "Off.")
                         outcome.result.rollbackVerified ->
                             "Synthetic choice was refused and exact rollback was verified."
@@ -158,8 +158,9 @@ class MobileStoryOrderLabActivity : Activity() {
 
         screen.addView(label("Synthetic subtitle preference choice", 20f, Color.WHITE))
         subtitleStatus = label(
-            "Explicitly Off by default. This isolated lab stores only its own provenance " +
-                "receipt and never reads or changes production Stremio preferences.",
+            "Explicitly Off when no choice is stored. This isolated lab stores only its " +
+                "own app-private preference and provenance receipt, and never reads or " +
+                "changes production Stremio preferences.",
             16f,
             Color.rgb(132, 225, 190)
         )
@@ -202,26 +203,31 @@ class MobileStoryOrderLabActivity : Activity() {
                     "synthetic watched set only."
         }
 
-        val createdSubtitleHost = SyntheticSubtitlePreferenceHost()
-        val createdSubtitle = AndroidSubtitlePreferenceChoiceScreenOwner.open(
-            getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
-            createdSubtitleHost,
-            createdSubtitleHost,
-            subtitleActions
+        val createdSubtitleHost = PersistentSyntheticSubtitlePreferenceHost.open(
+            getSharedPreferences(SYNTHETIC_SUBTITLE_STATE_PREFS, MODE_PRIVATE),
+            PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE
         )
-        if (createdSubtitle == null || !createdSubtitle.render(
-                AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN
-            )) {
+        val initialSubtitleSurface = createdSubtitleHost?.presentationSurface()
+        val createdSubtitle = createdSubtitleHost?.let { host ->
+            AndroidSubtitlePreferenceChoiceScreenOwner.open(
+                getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+                host,
+                host,
+                subtitleActions
+            )
+        }
+        if (createdSubtitleHost == null || initialSubtitleSurface == null ||
+            createdSubtitle == null || !createdSubtitle.render(initialSubtitleSurface)) {
             createdSubtitle?.close()
-            createdSubtitleHost.close()
+            createdSubtitleHost?.close()
             subtitleStatus.text =
                 "Synthetic subtitle choices unavailable. Production preferences remain untouched."
         } else {
             subtitleHost = createdSubtitleHost
             subtitleOwner = createdSubtitle
             subtitleStatus.text =
-                "Choose enabled or explicit Off for this process-local synthetic preference. " +
-                    "Only this lab's private provenance receipt may be stored."
+                "Choose enabled or explicit Off for this app-private mobile lab preference. " +
+                    "The mobile and TV lab namespaces are independent."
         }
 
         if (storyOwner != null || watchedOwner != null || subtitleOwner != null) {
@@ -257,6 +263,8 @@ class MobileStoryOrderLabActivity : Activity() {
         private const val OUTCOME_POLL_MS = 100L
         private const val SYNTHETIC_SUBTITLE_RECEIPT_PREFS =
             "synthetic_mobile_subtitle_receipt_v1"
+        private const val SYNTHETIC_SUBTITLE_STATE_PREFS =
+            "synthetic_mobile_subtitle_state_v1"
         private val SYNTHETIC_CANONICAL = listOf(
             CanonicalEpisode("local:mobile-story:1:1", 1, 1, "Episode one"),
             CanonicalEpisode("local:mobile-story:0:2", 0, 2, "Narrative special"),

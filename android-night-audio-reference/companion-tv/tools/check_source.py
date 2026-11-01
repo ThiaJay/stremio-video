@@ -35,6 +35,8 @@ ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvco
 ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceScreenOwnerTest.kt'
 SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceHost.kt'
 SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceHostTest.kt'
+PERSISTENT_SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHost.kt'
+PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHostTest.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
@@ -171,6 +173,8 @@ android_subtitle_choice_screen_owner=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER.read_t
 android_subtitle_choice_screen_owner_test=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.is_file() else ''
 synthetic_subtitle_host=SYNTHETIC_SUBTITLE_HOST.read_text() if SYNTHETIC_SUBTITLE_HOST.is_file() else ''
 synthetic_subtitle_host_test=SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
+persistent_synthetic_subtitle_host=PERSISTENT_SYNTHETIC_SUBTITLE_HOST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST.is_file() else ''
+persistent_synthetic_subtitle_host_test=PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
@@ -225,35 +229,47 @@ if ('Looper.getMainLooper()' not in mobile_story_activity or
     'ui.postDelayed(this, OUTCOME_POLL_MS)' not in mobile_story_activity):
     fail.append('mobile_lab_main_thread_mailbox_pump_missing')
 if not all(x in mobile_story_activity for x in [
-    'SyntheticSubtitlePreferenceHost()',
+    'PersistentSyntheticSubtitlePreferenceHost.open(',
+    'PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE',
+    'getSharedPreferences(SYNTHETIC_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
     'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN',
+    'initialSubtitleSurface',
     'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
     'current.consumeOutcome()'
 ]):
     fail.append('mobile_subtitle_lab_composition_or_mailbox_missing')
 if not all(x in mobile_story_activity for x in [
-    'Explicitly Off by default.',
-    "Only this lab's private provenance receipt may be stored.",
+    'Explicitly Off when no choice is stored.',
+    'own app-private preference and provenance receipt',
+    'The mobile and TV lab namespaces are independent.',
     'Production Stremio preferences were not read or changed.',
     'unverified rollback; ',
     'the subtitle lab is held closed.'
 ]):
     fail.append('mobile_subtitle_lab_disclosure_or_hold_missing')
+if ('private const val SYNTHETIC_SUBTITLE_RECEIPT_PREFS' not in mobile_story_activity or
+    '"synthetic_mobile_subtitle_receipt_v1"' not in mobile_story_activity or
+    'private const val SYNTHETIC_SUBTITLE_STATE_PREFS' not in mobile_story_activity or
+    '"synthetic_mobile_subtitle_state_v1"' not in mobile_story_activity or
+    '"synthetic_tv_subtitle_state_v1"' in mobile_story_activity):
+    fail.append('mobile_subtitle_lab_private_namespaces_missing')
 if not all(x in java_text for x in [
-    'SyntheticSubtitlePreferenceHost()',
+    'PersistentSyntheticSubtitlePreferenceHost.open(',
+    'PersistentSyntheticSubtitlePreferenceHost.Namespace.TV',
+    'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
     'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN',
+    'initialSubtitleSurface',
     'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
     'pollSubtitleOutcome()',
     'current.consumeOutcome()'
 ]):
     fail.append('tv_subtitle_lab_composition_or_mailbox_missing')
 if not all(x in java_text for x in [
-    "this process's explicitly Off synthetic state.",
-    "Only this TV lab's private provenance receipt may be stored.",
+    "this TV lab's app-private state, which starts explicitly Off.",
+    "this TV lab's preference and provenance receipt may be stored.",
+    'The TV and mobile lab namespaces are independent.',
     'Production Stremio preferences were not read or changed.',
     'unverified rollback; ',
     'the TV subtitle lab is held closed.'
@@ -268,6 +284,8 @@ if not all(x in java_text for x in [
     fail.append('tv_subtitle_lab_lifecycle_close_missing')
 if ('private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS' not in java_text or
     '"synthetic_tv_subtitle_receipt_v1"' not in java_text or
+    'private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS' not in java_text or
+    '"synthetic_tv_subtitle_state_v1"' not in java_text or
     '"synthetic_mobile_subtitle_receipt_v1"' in java_text):
     fail.append('tv_subtitle_lab_private_receipt_namespace_missing')
 if not all(x in synthetic_subtitle_host for x in [
@@ -306,6 +324,43 @@ if not all(x in synthetic_subtitle_host_test for x in [
     'closeRevokesEveryFutureOperation'
 ]):
     fail.append('synthetic_subtitle_host_regressions_missing')
+if not all(x in persistent_synthetic_subtitle_host for x in [
+    'internal class PersistentSyntheticSubtitlePreferenceHost private constructor',
+    'enum class Namespace(internal val key: String)',
+    'synthetic.mobile.subtitle.enabled.v1',
+    'synthetic.tv.subtitle.enabled.v1',
+    'AndroidSubtitlePreferenceChoiceSession.SnapshotPort',
+    'AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort',
+    'val first = readState()',
+    'val second = readState()',
+    'editor.commit()',
+    'if (transition !== issued.transition)',
+    'if (current != issued.after)',
+    'if (leases[namespace] === token) leases.remove(namespace)'
+]):
+    fail.append('persistent_synthetic_subtitle_host_exact_contract_missing')
+if any(x in persistent_synthetic_subtitle_host for x in [
+    'AccountManager', 'java.net.', 'http://', 'https://', 'getAuthKey',
+    'System.getenv', 'Log.d(', 'clear()', 'MODE_MULTI_PROCESS'
+]):
+    fail.append('persistent_synthetic_subtitle_host_forbidden_surface')
+if not all(x in persistent_synthetic_subtitle_host_test for x in [
+    'absentStateStartsOffOnFirstRunWithoutWriting',
+    'enabledChoicePersistsAcrossFreshOwner',
+    'explicitOffPersistsAcrossFreshOwner',
+    'mobileAndTvNamespacesRemainIndependent',
+    'exactRollbackRestoresAbsentStorageShape',
+    'exactRollbackRestoresStoredEnabledValue',
+    'staleExpectedSnapshotCannotWrite',
+    'forgedAndCrossNamespaceTransitionsCannotRollback',
+    'commitRefusalPreservesPriorStateAndUnrelatedKeys',
+    'corruptTypeFailsClosedWithoutOverwrite',
+    'postCommitDriftIsPreservedAndCannotBeRolledBack',
+    'acceptedTransactionPersistsStateAndInstallationReceipt',
+    'receiptCommitFailureRestoresExactAbsentState',
+    'ownerThreadCloseAndNamespaceLeaseFailClosed'
+]):
+    fail.append('persistent_synthetic_subtitle_host_regressions_missing')
 if ('class SyntheticTitleWatchedAccountHost' not in synthetic_watched_host or
     ': CanonicalWatchedAccountHostPort' not in synthetic_watched_host or
     'private val epoch = 1L' not in synthetic_watched_host):
