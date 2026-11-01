@@ -13,7 +13,8 @@ import android.content.SharedPreferences
  * the lease is consumed before any write is attempted.
  *
  * Object provenance cannot prove that a callback came from a genuine Android
- * view. The class is composed only by the disclosed synthetic mobile lab; a
+ * view. The class is composed only by the disclosed synthetic mobile and
+ * Android TV labs; a
  * private client still owns real UI wiring, accessibility acceptance, lifecycle
  * integration and device validation.
  */

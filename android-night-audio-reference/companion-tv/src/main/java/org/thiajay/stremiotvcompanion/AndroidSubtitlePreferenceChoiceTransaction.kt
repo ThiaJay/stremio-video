@@ -12,7 +12,8 @@ package org.thiajay.stremiotvcompanion
  * equals the transaction-owned after snapshot; concurrent drift is preserved.
  *
  * This is not an account-write path and contains no production preference
- * implementation. It is composed only by the disclosed synthetic mobile lab.
+ * implementation. It is composed only by the disclosed synthetic mobile and
+ * Android TV labs.
  */
 class AndroidSubtitlePreferenceChoiceTransaction internal constructor(
     private val session: AndroidSubtitlePreferenceChoiceSession,

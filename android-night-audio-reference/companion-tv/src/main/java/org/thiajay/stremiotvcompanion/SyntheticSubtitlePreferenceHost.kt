@@ -1,7 +1,8 @@
 package org.thiajay.stremiotvcompanion
 
 /**
- * In-memory subtitle preference authority for the separate mobile lab only.
+ * In-memory subtitle preference authority for the separate mobile and Android
+ * TV labs only.
  *
  * It starts explicitly Off, has no account, network, provider, player or
  * production preference surface, and never reads official Stremio state. The

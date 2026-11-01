@@ -56,6 +56,9 @@ class CompanionTvActivity : Activity() {
     private var watchedOwner: AndroidTvTitleWatchedScreenOwner? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var watchedStatus: TextView
+    private var subtitleOwner: AndroidSubtitlePreferenceChoiceScreenOwner? = null
+    private var subtitleHost: SyntheticSubtitlePreferenceHost? = null
+    private lateinit var subtitleStatus: TextView
     private lateinit var storyOrderToggle: Button
     private lateinit var storyOrderSummary: TextView
     private var storyOrderSelected = false
@@ -104,6 +107,7 @@ class CompanionTvActivity : Activity() {
         override fun run() {
             if (::player.isInitialized && ::status.isInitialized) updateUi()
             pollWatchedOutcome()
+            pollSubtitleOutcome()
             ui.postDelayed(this, 300L)
         }
     }
@@ -209,6 +213,38 @@ class CompanionTvActivity : Activity() {
             watchedStatus.text =
                 "Title actions ready. Any accepted action changes this process's local " +
                     "synthetic watched set only."
+        }
+        small(
+            "Subtitle choices below use the accepted Android preference owner against " +
+                "this process's explicitly Off synthetic state. Only this TV lab's " +
+                "private provenance receipt may be stored. Production Stremio " +
+                "preferences are never read or changed."
+        )
+        subtitleStatus = small("Preparing synthetic subtitle preference choices.")
+        val subtitleActions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        controls.addView(subtitleActions)
+        val createdSubtitleHost = SyntheticSubtitlePreferenceHost()
+        val createdSubtitle = AndroidSubtitlePreferenceChoiceScreenOwner.open(
+            getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+            createdSubtitleHost,
+            createdSubtitleHost,
+            subtitleActions
+        )
+        if (createdSubtitle == null || !createdSubtitle.render(
+                AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN
+            )) {
+            createdSubtitle?.close()
+            createdSubtitleHost.close()
+            subtitleStatus.text =
+                "Synthetic subtitle choices unavailable. Production preferences remain untouched."
+        } else {
+            subtitleHost = createdSubtitleHost
+            subtitleOwner = createdSubtitle
+            subtitleStatus.text =
+                "Choose enabled or explicit Off for this process-local synthetic " +
+                    "preference. Only this TV lab's private provenance receipt may be stored."
         }
         status = header("Ready. No media or account loaded.")
         small("No external media, credentials, Stremio account, history or source URL are read or written by this build.")
@@ -356,6 +392,41 @@ class CompanionTvActivity : Activity() {
         }
     }
 
+    private fun pollSubtitleOutcome() {
+        subtitleOwner?.let { current ->
+            val outcome = current.consumeOutcome() ?: return
+            val preference = subtitleHost?.readPreferenceSnapshot()?.sessionPreference
+            subtitleStatus.text = when {
+                outcome.result.ok && preference != null ->
+                    "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
+                        " choice. Current in-memory state: " +
+                        (if (preference.enabled == true) "enabled." else "Off.")
+                outcome.result.rollbackVerified ->
+                    "Synthetic choice was refused and exact rollback was verified."
+                else ->
+                    "Synthetic choice was refused with unverified rollback; " +
+                        "the TV subtitle lab is held closed."
+            } + "\nProduction Stremio preferences were not read or changed."
+
+            if (!outcome.result.rollbackVerified) {
+                current.close()
+                subtitleOwner = null
+                subtitleHost?.close()
+                subtitleHost = null
+            } else if (!current.render(
+                    AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS
+                )) {
+                subtitleStatus.text =
+                    subtitleStatus.text.toString() +
+                        "\nTV subtitle lab closed after a rejected re-render."
+                current.close()
+                subtitleOwner = null
+                subtitleHost?.close()
+                subtitleHost = null
+            }
+        }
+    }
+
     private fun stopFixture() {
         player.stop()
         fixtureLoaded = false
@@ -413,6 +484,10 @@ class CompanionTvActivity : Activity() {
         ui.removeCallbacks(refresh)
         watchedOwner?.close()
         watchedOwner = null
+        subtitleOwner?.close()
+        subtitleOwner = null
+        subtitleHost?.close()
+        subtitleHost = null
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -420,6 +495,8 @@ class CompanionTvActivity : Activity() {
 
     companion object {
         private const val FIXTURE_ID = "local:synthetic-media:12s"
+        private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS =
+            "synthetic_tv_subtitle_receipt_v1"
         private val STORY_CANONICAL = listOf(
             CanonicalEpisode("local:story:1:1", 1, 1, "Episode one"),
             CanonicalEpisode("local:story:0:2", 0, 2, "Narrative special"),

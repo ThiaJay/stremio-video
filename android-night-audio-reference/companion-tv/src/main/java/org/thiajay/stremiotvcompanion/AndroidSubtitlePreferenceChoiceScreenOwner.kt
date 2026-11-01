@@ -15,7 +15,7 @@ interface AndroidSubtitlePreferenceChoiceScreenPort {
  *
  * Exactly one typed outcome is held until the client explicitly consumes it.
  * Rendering or clearing over an unobserved outcome is refused. The owner is
- * composed only by the disclosed synthetic mobile lab. Its production
+ * composed only by the disclosed synthetic mobile and Android TV labs. Its production
  * constructor requires an injected client-owned preference-application port
  * and grants no account, player, provider, network or independent preference
  * authority.

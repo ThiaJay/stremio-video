@@ -241,6 +241,35 @@ if not all(x in mobile_story_activity for x in [
     'the subtitle lab is held closed.'
 ]):
     fail.append('mobile_subtitle_lab_disclosure_or_hold_missing')
+if not all(x in java_text for x in [
+    'SyntheticSubtitlePreferenceHost()',
+    'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
+    'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
+    'AndroidSubtitlePreferenceChoiceSession.Surface.FIRST_RUN',
+    'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
+    'pollSubtitleOutcome()',
+    'current.consumeOutcome()'
+]):
+    fail.append('tv_subtitle_lab_composition_or_mailbox_missing')
+if not all(x in java_text for x in [
+    "this process's explicitly Off synthetic state.",
+    "Only this TV lab's private provenance receipt may be stored.",
+    'Production Stremio preferences were not read or changed.',
+    'unverified rollback; ',
+    'the TV subtitle lab is held closed.'
+]):
+    fail.append('tv_subtitle_lab_disclosure_or_hold_missing')
+if not all(x in java_text for x in [
+    'subtitleOwner?.close()',
+    'subtitleHost?.close()',
+    'ui.removeCallbacks(refresh)',
+    'override fun onDestroy()'
+]):
+    fail.append('tv_subtitle_lab_lifecycle_close_missing')
+if ('private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS' not in java_text or
+    '"synthetic_tv_subtitle_receipt_v1"' not in java_text or
+    '"synthetic_mobile_subtitle_receipt_v1"' in java_text):
+    fail.append('tv_subtitle_lab_private_receipt_namespace_missing')
 if not all(x in synthetic_subtitle_host for x in [
     'internal class SyntheticSubtitlePreferenceHost',
     'AndroidSubtitlePreferenceChoiceSession.SnapshotPort',
@@ -1205,9 +1234,10 @@ if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'fina
     fail.append('native_recovery_final_state_drift_regressions_missing')
 if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
     fail.append('classifier_exclusive_actuator_regression_missing')
-# Native subtitle preference provenance remains a pure, unwired translation of
-# Foundation PR #70. These checks prevent enabled/account/language state from
-# becoming implicit consent and keep private-client/device acceptance open.
+# Native subtitle preference provenance remains a pure translation of
+# Foundation PR #70, reached only through the bounded synthetic lab stack.
+# These checks prevent enabled/account/language state from becoming implicit
+# consent and keep private-client/device acceptance open.
 if not all(x in native_subtitle_provenance for x in [
     '99ea3173184029bbd7ee5ae7dc33d31d553fc135',
     'e63e9a35ec9e0bdeab0de17debaf5a3ce929d8d4',
@@ -1544,8 +1574,6 @@ if not all(x in android_subtitle_choice_session for x in [
     'storeOwner.clearStoredReceiptForExplicitOff('
 ]):
     fail.append('android_subtitle_choice_session_contract')
-if 'AndroidSubtitlePreferenceChoiceSession' in java_text:
-    fail.append('android_subtitle_choice_session_must_remain_unwired')
 if 'catch (_: Throwable)' in android_subtitle_choice_session or any(x in android_subtitle_choice_session for x in [
     'import android.app.', 'import android.view.', 'import android.widget.',
     'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
@@ -1714,8 +1742,6 @@ if not all(x in android_subtitle_choice_screen_owner for x in [
     'internal fun openForTest('
 ]):
     fail.append('android_subtitle_choice_screen_owner_contract')
-if 'AndroidSubtitlePreferenceChoiceScreenOwner' in java_text:
-    fail.append('android_subtitle_choice_screen_owner_must_remain_unwired')
 if any(x in android_subtitle_choice_screen_owner for x in [
     'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
     'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)'
@@ -1743,7 +1769,7 @@ if not all(x in android_subtitle_choice_screen_owner_test for x in [
     fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
 if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':348,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':350,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
