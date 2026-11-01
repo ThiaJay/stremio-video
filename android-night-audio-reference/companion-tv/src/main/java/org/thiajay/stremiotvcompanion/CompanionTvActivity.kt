@@ -12,7 +12,9 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor
@@ -187,7 +189,9 @@ class CompanionTvActivity : Activity() {
         controls.addView(video, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 280.dp
         ))
-        val play = button("Play offline 12-second synthetic Media3 fixture") { startFixture() }
+        val play = button("Play offline synthetic Media3 fixture with local subtitles") {
+            startFixture()
+        }
         button("Pause / Resume") {
             if (fixtureLoaded) player.playWhenReady = !player.playWhenReady
         }
@@ -244,6 +248,7 @@ class CompanionTvActivity : Activity() {
             "Subtitle choices below use the accepted Android preference owner against " +
                 "this TV lab's app-private state, which starts explicitly Off. Only " +
                 "this TV lab's preference and provenance receipt may be stored. " +
+                "The player fixture has deterministic local English WebVTT cues. " +
                 "Production Stremio preferences are never read or changed."
         )
         subtitleStatus = small("Preparing synthetic subtitle preference choices.")
@@ -314,7 +319,21 @@ class CompanionTvActivity : Activity() {
         player.stop()
         try {
             val clip: File = SyntheticAudioFixture.createIfMissing(cacheDir)
-            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(clip)))
+            val subtitles: File = SyntheticSubtitleFixture.createIfMissing(cacheDir)
+            val subtitleConfiguration = MediaItem.SubtitleConfiguration.Builder(
+                Uri.fromFile(subtitles)
+            )
+                .setMimeType(MimeTypes.TEXT_VTT)
+                .setLanguage("en")
+                .setLabel("English (synthetic lab)")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+            player.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(Uri.fromFile(clip))
+                    .setSubtitleConfigurations(listOf(subtitleConfiguration))
+                    .build()
+            )
             player.volume = 0.20f
             fixtureLoaded = true
             player.prepare()
@@ -576,3 +595,4 @@ class CompanionTvActivity : Activity() {
         )
     }
 }
+

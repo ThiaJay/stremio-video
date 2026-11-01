@@ -19,4 +19,34 @@ class SyntheticFixtureTest {
             assertEquals(bytes.size.toLong(), file.length())
         } finally { dir.deleteRecursively() }
     }
+
+    @Test fun localWebVttHasDeterministicCuesAndIsIdempotent() {
+        val dir = Files.createTempDirectory("companion-subtitles-").toFile()
+        try {
+            val file = SyntheticSubtitleFixture.createIfMissing(dir)
+            val first = file.readText(Charsets.UTF_8)
+            assertTrue(first.startsWith("WEBVTT\n\n"))
+            assertEquals(3, Regex("\\d\\d:\\d\\d\\.\\d{3} --> ").findAll(first).count())
+            assertTrue(first.contains("Synthetic subtitle cue one."))
+            assertTrue(first.contains("Synthetic subtitle cue two."))
+            assertTrue(first.contains("Synthetic subtitle cue three."))
+            assertEquals(file.absolutePath, SyntheticSubtitleFixture.createIfMissing(dir).absolutePath)
+            assertEquals(first, file.readText(Charsets.UTF_8))
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles() {
+        val dir = Files.createTempDirectory("companion-subtitles-corrupt-").toFile()
+        try {
+            val file = SyntheticSubtitleFixture.createIfMissing(dir)
+            val unrelated = dir.resolve("unrelated.txt").apply { writeText("preserved") }
+            file.writeText("corrupt")
+
+            val repaired = SyntheticSubtitleFixture.createIfMissing(dir)
+
+            assertTrue(repaired.readText(Charsets.UTF_8).startsWith("WEBVTT\n\n"))
+            assertEquals("preserved", unrelated.readText())
+        } finally { dir.deleteRecursively() }
+    }
 }
+

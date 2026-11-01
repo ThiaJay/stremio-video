@@ -12,6 +12,8 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 MANIFEST=ROOT/'src/main/AndroidManifest.xml'
 ANDROID='{http://schemas.android.com/apk/res/android}'
 SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
+SYNTHETIC_FIXTURES=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticAudioFixture.kt'
+SYNTHETIC_FIXTURES_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticFixtureTest.kt'
 NATIVE_SUBTITLE_PROVENANCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenance.kt'
 NATIVE_SUBTITLE_PROVENANCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenanceTest.kt'
 NATIVE_SUBTITLE_STORE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceStore.kt'
@@ -156,6 +158,8 @@ if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
 if 'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' not in BRIDGE.read_text():
     fail.append('series_watched_story_order_season_zero_exclusion_missing')
 java_text=SOURCE.read_text()
+synthetic_fixtures=SYNTHETIC_FIXTURES.read_text() if SYNTHETIC_FIXTURES.is_file() else ''
+synthetic_fixtures_test=SYNTHETIC_FIXTURES_TEST.read_text() if SYNTHETIC_FIXTURES_TEST.is_file() else ''
 native_subtitle_provenance=NATIVE_SUBTITLE_PROVENANCE.read_text() if NATIVE_SUBTITLE_PROVENANCE.is_file() else ''
 native_subtitle_provenance_test=NATIVE_SUBTITLE_PROVENANCE_TEST.read_text() if NATIVE_SUBTITLE_PROVENANCE_TEST.is_file() else ''
 native_subtitle_store=NATIVE_SUBTITLE_STORE.read_text() if NATIVE_SUBTITLE_STORE.is_file() else ''
@@ -2006,9 +2010,40 @@ if not all(x in android_subtitle_choice_screen_owner_test for x in [
     'assertFalse(foreignClose.get())'
 ]):
     fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
-if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if not all(x in synthetic_fixtures for x in [
+    'object SyntheticSubtitleFixture',
+    'WEBVTT',
+    '00:00.500 --> 00:02.500',
+    '00:04.000 --> 00:06.000',
+    '00:08.000 --> 00:10.000',
+    'target.readText(Charsets.UTF_8) == CONTENT',
+    'Local subtitle fixture readback failed'
+]):
+    fail.append('synthetic_webvtt_fixture_contract_missing')
+if any(x in synthetic_fixtures for x in [
+    'java.net.', 'http://', 'https://', 'ContentResolver', 'AccountManager',
+    'getAuthKey', 'System.getenv', 'Log.d('
+]):
+    fail.append('synthetic_webvtt_fixture_forbidden_surface')
+if not all(x in synthetic_fixtures_test for x in [
+    'localWebVttHasDeterministicCuesAndIsIdempotent',
+    'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles',
+    'assertEquals("preserved", unrelated.readText())'
+]):
+    fail.append('synthetic_webvtt_fixture_regressions_missing')
+if not all(x in java_text for x in [
+    'SyntheticSubtitleFixture.createIfMissing(cacheDir)',
+    'MediaItem.SubtitleConfiguration.Builder(',
+    '.setMimeType(MimeTypes.TEXT_VTT)',
+    '.setLanguage("en")',
+    '.setSelectionFlags(C.SELECTION_FLAG_DEFAULT)',
+    '.setSubtitleConfigurations(listOf(subtitleConfiguration))'
+]):
+    fail.append('synthetic_webvtt_media3_binding_missing')
+if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':412,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':416,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
+
 

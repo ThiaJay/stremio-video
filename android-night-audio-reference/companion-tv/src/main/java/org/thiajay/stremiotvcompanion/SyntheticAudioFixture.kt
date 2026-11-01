@@ -49,3 +49,43 @@ object SyntheticAudioFixture {
         write(x and 255);write((x ushr 8) and 255);write((x ushr 16) and 255);write((x ushr 24) and 255)
     }
 }
+
+/** Creates only deterministic local WebVTT cues; never stores user subtitle data. */
+object SyntheticSubtitleFixture {
+    private const val FILE_NAME = "stremio-companion-synthetic-subtitles.vtt"
+    private const val TEMP_NAME = "stremio-companion-synthetic-subtitles.tmp"
+    private val CONTENT = """
+        WEBVTT
+
+        00:00.500 --> 00:02.500
+        Synthetic subtitle cue one.
+
+        00:04.000 --> 00:06.000
+        Synthetic subtitle cue two.
+
+        00:08.000 --> 00:10.000
+        Synthetic subtitle cue three.
+    """.trimIndent() + "\n"
+
+    fun createIfMissing(cache: File): File {
+        val target = File(cache, FILE_NAME)
+        if (target.isFile && target.readText(Charsets.UTF_8) == CONTENT) return target
+        val temp = File(cache, TEMP_NAME)
+        try {
+            temp.writeText(CONTENT, Charsets.UTF_8)
+            if (target.exists() && !target.delete()) {
+                throw IllegalStateException("Local subtitle fixture replacement failed")
+            }
+            if (!temp.renameTo(target)) {
+                throw IllegalStateException("Local subtitle fixture rename failed")
+            }
+            if (target.readText(Charsets.UTF_8) != CONTENT) {
+                throw IllegalStateException("Local subtitle fixture readback failed")
+            }
+            return target
+        } finally {
+            if (temp.exists()) temp.delete()
+        }
+    }
+}
+
