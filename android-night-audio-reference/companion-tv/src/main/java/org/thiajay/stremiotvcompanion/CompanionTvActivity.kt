@@ -79,6 +79,8 @@ class CompanionTvActivity : Activity() {
     private val subtitleCueObserver = SyntheticSubtitleCueDeliveryObserver()
     private val subtitleTrackObserver = SyntheticSubtitleTrackStateObserver()
     private val subtitlePlaybackEvidenceObserver = SyntheticSubtitlePlaybackEvidenceObserver()
+    private val subtitlePreferenceEvidenceObserver =
+        SyntheticSubtitlePreferenceEvidenceObserver()
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -158,6 +160,7 @@ class CompanionTvActivity : Activity() {
                         subtitlePendingTrigger = null
                     }
                 }
+                refreshSubtitlePreferenceEvidence()
                 updateUi()
             }
 
@@ -189,6 +192,7 @@ class CompanionTvActivity : Activity() {
                         )
                     }
                 }
+                refreshSubtitlePreferenceEvidence()
                 updateUi()
             }
 
@@ -203,6 +207,7 @@ class CompanionTvActivity : Activity() {
                         subtitlePlaybackEvidenceObserver.observeTrack(evidenceContext, observed.state)
                     }
                 }
+                refreshSubtitlePreferenceEvidence()
                 updateUi()
             }
         })
@@ -359,13 +364,20 @@ class CompanionTvActivity : Activity() {
         val cueContext = syntheticCueContext()
         val trackContext = syntheticTrackContext()
         val evidenceContext = syntheticPlaybackEvidenceContext()
+        val preferenceEvidenceContext = syntheticPreferenceEvidenceContext()
         val cueStarted = subtitleCueObserver.begin(cueContext)
         val trackStarted = subtitleTrackObserver.begin(trackContext)
         val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
-        if (!cueStarted || !trackStarted || !evidenceStarted) {
+        val preferenceEvidenceStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitlePreferenceEvidenceObserver.begin(preferenceEvidenceContext, it)
+        } == true
+        if (!cueStarted || !trackStarted || !evidenceStarted || !preferenceEvidenceStarted) {
             if (cueStarted) subtitleCueObserver.abandon(cueContext)
             if (trackStarted) subtitleTrackObserver.abandon(trackContext)
             if (evidenceStarted) subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
+            if (preferenceEvidenceStarted) {
+                subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
+            }
             errorMessage = "Synthetic subtitle playback observation was refused."
             updateUi()
             return
@@ -395,6 +407,7 @@ class CompanionTvActivity : Activity() {
             subtitleCueObserver.abandon(cueContext)
             subtitleTrackObserver.abandon(trackContext)
             subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
+            subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -484,8 +497,19 @@ class CompanionTvActivity : Activity() {
                     "visible output NOT accepted."
             } ?: "Synthetic subtitle callback correlation held closed; visible output NOT accepted."
         }
+        val preferenceEvidenceStatus = if (!fixtureLoaded) {
+            "Preference-bound subtitle callback evidence not active."
+        } else {
+            subtitlePreferenceEvidenceObserver.snapshot(syntheticPreferenceEvidenceContext())
+                ?.let { observed ->
+                    "Preference-bound subtitle callback evidence ${observed.status}; " +
+                        "visible output NOT accepted."
+                } ?: "Preference-bound subtitle callback evidence held closed; " +
+                "visible output NOT accepted."
+        }
         status.text =
-            "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  $playbackEvidenceStatus"
+            "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  " +
+                "$playbackEvidenceStatus  $preferenceEvidenceStatus"
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -574,6 +598,7 @@ class CompanionTvActivity : Activity() {
                 subtitlePlayback?.reconcile(
                     NativeSubtitlePlaybackPreferenceActuator.Trigger.PREFERENCE_CHANGE
                 )
+                refreshSubtitlePreferenceEvidence()
             }
 
             if (!outcome.result.rollbackVerified) {
@@ -598,6 +623,7 @@ class CompanionTvActivity : Activity() {
         if (fixtureLoaded) subtitleTrackObserver.abandon(syntheticTrackContext())
         if (fixtureLoaded) {
             subtitlePlaybackEvidenceObserver.abandon(syntheticPlaybackEvidenceContext())
+            subtitlePreferenceEvidenceObserver.abandon(syntheticPreferenceEvidenceContext())
         }
         player.stop()
         fixtureLoaded = false
@@ -663,6 +689,7 @@ class CompanionTvActivity : Activity() {
         subtitleCueObserver.close()
         subtitleTrackObserver.close()
         subtitlePlaybackEvidenceObserver.close()
+        subtitlePreferenceEvidenceObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -713,6 +740,34 @@ class CompanionTvActivity : Activity() {
             videoId = FIXTURE_ID,
             sourceId = SYNTHETIC_SOURCE_ID
         )
+
+    private fun syntheticPreferenceEvidenceContext() =
+        SyntheticSubtitlePreferenceEvidenceObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
+    private fun refreshSubtitlePreferenceEvidence() {
+        if (!fixtureLoaded || !::player.isInitialized) return
+        val preferenceContext = syntheticPreferenceEvidenceContext()
+        val playbackEvidence =
+            subtitlePlaybackEvidenceObserver.snapshot(syntheticPlaybackEvidenceContext())
+        val preference = subtitleOwner?.currentPlaybackPreference()
+        val origin = subtitlePlayback?.currentSelectionOrigin()
+        if (playbackEvidence == null || preference == null || origin == null) {
+            subtitlePreferenceEvidenceObserver.invalidate(preferenceContext)
+            return
+        }
+        subtitlePreferenceEvidenceObserver.observe(
+            preferenceContext,
+            preference,
+            origin,
+            playbackEvidence,
+            player.playbackState == Player.STATE_ENDED
+        )
+    }
 
     private fun syntheticTextTracks(
         tracks: Tracks

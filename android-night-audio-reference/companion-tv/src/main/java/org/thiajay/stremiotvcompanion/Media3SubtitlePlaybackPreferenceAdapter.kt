@@ -81,10 +81,27 @@ internal class Media3SubtitlePlaybackPreferenceAdapter private constructor(
         return actuator.execute(lease)
     }
 
+    /** Stable callback-evidence classification only; it never mutates Media3. */
+    fun currentSelectionOrigin(): NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin? {
+        if (!usable()) return null
+        val state = readStableMediaState() ?: return null
+        return selectionOrigin(state)
+    }
+
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
         closed = true
         return actuator.close()
+    }
+
+    private fun readStableMediaState(): MediaState? = try {
+        val first = mediaPort.readState()
+        val second = mediaPort.readState()
+        first?.takeIf { it == second }
+    } catch (_: RuntimeException) {
+        null
+    } catch (_: LinkageError) {
+        null
     }
 
     private fun usable(): Boolean = onOwnerThread() && !closed

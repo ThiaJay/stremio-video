@@ -136,4 +136,15 @@ cue counts, invalidated source observers, stale generations and foreign threads
 fail closed. Even a selected track plus all three callbacks is labelled as
 callback correlation only: it does not establish visible subtitle rendering.
 
+The callback correlation is additionally bound to the exact installation-local
+preference captured for that load. Admitted Enabled evidence requires stable
+automatic-selection origin plus the selected track and all three deterministic
+cue callbacks. A manual override can never be promoted as automatic preference
+evidence. Enabled without the same-installation receipt remains held. Explicit
+Off evidence requires the automatic selection to be cleared, the deterministic
+track to remain unselected with zero expected cues and playback to reach its
+natural synthetic end. Preference, context or playback-end regression closes
+the generation. These are callback-only states: visible rendering remains
+explicitly unaccepted, and hosted CI does not execute Media3 playback.
+
 

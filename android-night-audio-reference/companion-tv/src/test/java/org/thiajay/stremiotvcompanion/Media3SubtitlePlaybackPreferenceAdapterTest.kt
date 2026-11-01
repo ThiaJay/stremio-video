@@ -1,6 +1,7 @@
 package org.thiajay.stremiotvcompanion
 
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -96,6 +97,37 @@ class Media3SubtitlePlaybackPreferenceAdapterTest {
         assertTrue(driftAdapter.close())
     }
 
+    @Test fun stableSelectionOriginIsExposedWithoutMutation() {
+        val automatic = Fixture(preference(true, true), media())
+        val automaticAdapter = automatic.adapter()
+        assertEquals(AUTOMATIC, automaticAdapter.currentSelectionOrigin())
+        assertTrue(automatic.setCalls.isEmpty())
+        assertTrue(automaticAdapter.close())
+
+        val none = Fixture(preference(false), media(textDisabled = true))
+        val noneAdapter = none.adapter()
+        assertEquals(NONE, noneAdapter.currentSelectionOrigin())
+        assertTrue(noneAdapter.close())
+
+        val manual = Fixture(preference(true, true), media(manual = true))
+        val manualAdapter = manual.adapter()
+        assertEquals(MANUAL, manualAdapter.currentSelectionOrigin())
+        assertTrue(manualAdapter.close())
+    }
+
+    @Test fun unstableClosedAndForeignSelectionOriginReadsFailClosed() {
+        val fixture = Fixture(preference(true, true), media())
+        fixture.unstableMedia = true
+        val adapter = fixture.adapter()
+        assertNull(adapter.currentSelectionOrigin())
+        fixture.unstableMedia = false
+        val foreign = AtomicReference<NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin?>()
+        Thread { foreign.set(adapter.currentSelectionOrigin()) }.apply { start(); join() }
+        assertNull(foreign.get())
+        assertTrue(adapter.close())
+        assertNull(adapter.currentSelectionOrigin())
+    }
+
     @Test fun ownerThreadAndCloseRevokeAdapter() {
         val fixture = Fixture(preference(false), media(textDisabled = false))
         val adapter = fixture.adapter()
@@ -174,6 +206,9 @@ class Media3SubtitlePlaybackPreferenceAdapterTest {
         val EPISODE_TRANSITION =
             NativeSubtitlePlaybackPreferenceActuator.Trigger.EPISODE_TRANSITION
         val RECOVERY = NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY
+        val AUTOMATIC = NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin.AUTOMATIC
+        val MANUAL = NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin.MANUAL
+        val NONE = NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin.NONE
 
         fun preference(enabled: Boolean, admitted: Boolean = false) =
             NativeSubtitlePlaybackPreferenceActuator.Preference(enabled, admitted)
