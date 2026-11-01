@@ -2078,7 +2078,7 @@ if not all(x in synthetic_cue_observer_test for x in [
     fail.append('synthetic_subtitle_cue_observer_regressions_missing')
 if not all(x in java_text for x in [
     'override fun onCues(cueGroup: CueGroup)',
-    'subtitleCueObserver.observe(syntheticCueContext(), cueTexts)',
+    'subtitleCueObserver.observe(cueContext, cueTexts)',
     'subtitleCueObserver.begin(cueContext)',
     'visible output NOT accepted',
     'subtitleCueObserver.close()'
