@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=402 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=410 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -92,6 +92,16 @@ jobs:
               'ownerThreadAbandonAndCloseRevokeObservation',
               'malformedContextNeverStartsTrackObservation'):
               assert required in names, 'Synthetic track observer test missing: '+required
+          for required in (
+              'selectedTrackAndAllCuesCorrelateWithoutVisualClaim',
+              'cuesMayArriveBeforeTrackSelectionAndRemainBounded',
+              'absentOrUnselectedTrackNeverProducesCorrelatedAcceptance',
+              'malformedCueEvidencePoisonsOnlyItsGeneration',
+              'cueCountRegressionPoisonsActiveGeneration',
+              'notReportedTrackAndExplicitInvalidationFailClosed',
+              'generationThreadAbandonAndCloseAreEnforced',
+              'malformedContextNeverStartsPlaybackEvidence'):
+              assert required in names, 'Synthetic playback evidence test missing: '+required
           for required in (
               'explicitOffDisablesOnlyAutomaticTextSelection',
               'admittedEnabledReenablesAutomaticTextSelection',

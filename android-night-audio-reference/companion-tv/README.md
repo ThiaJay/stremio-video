@@ -128,4 +128,12 @@ receipt and visible rendering. Hosted CI compiles this binding and exercises
 its deterministic contract but does not run Media3 playback or accept a
 runtime track report.
 
+The Activity also correlates the selected synthetic text track and monotonically
+increasing deterministic cue callbacks within the same player/video/source/load
+generation. Cues may arrive before the track callback without creating a false
+selection claim. Absent or unselected tracks, malformed cue totals, regressing
+cue counts, invalidated source observers, stale generations and foreign threads
+fail closed. Even a selected track plus all three callbacks is labelled as
+callback correlation only: it does not establish visible subtitle rendering.
+
 

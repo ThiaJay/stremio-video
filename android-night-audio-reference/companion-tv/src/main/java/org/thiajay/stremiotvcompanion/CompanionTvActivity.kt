@@ -78,6 +78,7 @@ class CompanionTvActivity : Activity() {
     private var playbackFailed = false
     private val subtitleCueObserver = SyntheticSubtitleCueDeliveryObserver()
     private val subtitleTrackObserver = SyntheticSubtitleTrackStateObserver()
+    private val subtitlePlaybackEvidenceObserver = SyntheticSubtitlePlaybackEvidenceObserver()
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -174,16 +175,34 @@ class CompanionTvActivity : Activity() {
             override fun onCues(cueGroup: CueGroup) {
                 if (!fixtureLoaded) return
                 val cueTexts = cueGroup.cues.mapNotNull { it.text?.toString() }
-                subtitleCueObserver.observe(syntheticCueContext(), cueTexts)
+                val cueContext = syntheticCueContext()
+                val evidenceContext = syntheticPlaybackEvidenceContext()
+                when (subtitleCueObserver.observe(cueContext, cueTexts)) {
+                    SyntheticSubtitleCueDeliveryObserver.Observation.REFUSED ->
+                        subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
+                    else -> subtitleCueObserver.snapshot(cueContext)?.let { observed ->
+                        subtitlePlaybackEvidenceObserver.observeCues(
+                            evidenceContext,
+                            observed.deliveredCueCount,
+                            observed.expectedCueCount,
+                            observed.allExpectedCuesObserved
+                        )
+                    }
+                }
                 updateUi()
             }
 
             override fun onTracksChanged(tracks: Tracks) {
                 if (!fixtureLoaded) return
-                subtitleTrackObserver.observe(
-                    syntheticTrackContext(),
-                    syntheticTextTracks(tracks)
-                )
+                val trackContext = syntheticTrackContext()
+                val evidenceContext = syntheticPlaybackEvidenceContext()
+                if (!subtitleTrackObserver.observe(trackContext, syntheticTextTracks(tracks))) {
+                    subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
+                } else {
+                    subtitleTrackObserver.snapshot(trackContext)?.let { observed ->
+                        subtitlePlaybackEvidenceObserver.observeTrack(evidenceContext, observed.state)
+                    }
+                }
                 updateUi()
             }
         })
@@ -339,12 +358,15 @@ class CompanionTvActivity : Activity() {
         player.stop()
         val cueContext = syntheticCueContext()
         val trackContext = syntheticTrackContext()
+        val evidenceContext = syntheticPlaybackEvidenceContext()
         val cueStarted = subtitleCueObserver.begin(cueContext)
         val trackStarted = subtitleTrackObserver.begin(trackContext)
-        if (!cueStarted || !trackStarted) {
+        val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
+        if (!cueStarted || !trackStarted || !evidenceStarted) {
             if (cueStarted) subtitleCueObserver.abandon(cueContext)
             if (trackStarted) subtitleTrackObserver.abandon(trackContext)
-            errorMessage = "Synthetic subtitle cue observation was refused."
+            if (evidenceStarted) subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
+            errorMessage = "Synthetic subtitle playback observation was refused."
             updateUi()
             return
         }
@@ -372,6 +394,7 @@ class CompanionTvActivity : Activity() {
         } catch (_: Exception) {
             subtitleCueObserver.abandon(cueContext)
             subtitleTrackObserver.abandon(trackContext)
+            subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -453,7 +476,16 @@ class CompanionTvActivity : Activity() {
                     "Synthetic text-track observation held closed; visible output NOT accepted."
             }
         }
-        status.text = "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus"
+        val playbackEvidenceStatus = if (!fixtureLoaded) {
+            "Synthetic subtitle callback correlation not active."
+        } else {
+            subtitlePlaybackEvidenceObserver.snapshot(syntheticPlaybackEvidenceContext())?.let { observed ->
+                "Media3 subtitle callback correlation ${observed.status}; " +
+                    "visible output NOT accepted."
+            } ?: "Synthetic subtitle callback correlation held closed; visible output NOT accepted."
+        }
+        status.text =
+            "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  $playbackEvidenceStatus"
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -564,6 +596,9 @@ class CompanionTvActivity : Activity() {
     private fun stopFixture() {
         if (fixtureLoaded) subtitleCueObserver.abandon(syntheticCueContext())
         if (fixtureLoaded) subtitleTrackObserver.abandon(syntheticTrackContext())
+        if (fixtureLoaded) {
+            subtitlePlaybackEvidenceObserver.abandon(syntheticPlaybackEvidenceContext())
+        }
         player.stop()
         fixtureLoaded = false
         generation++
@@ -627,6 +662,7 @@ class CompanionTvActivity : Activity() {
         subtitleOwner = null
         subtitleCueObserver.close()
         subtitleTrackObserver.close()
+        subtitlePlaybackEvidenceObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -669,6 +705,14 @@ class CompanionTvActivity : Activity() {
         videoId = FIXTURE_ID,
         sourceId = SYNTHETIC_SOURCE_ID
     )
+
+    private fun syntheticPlaybackEvidenceContext() =
+        SyntheticSubtitlePlaybackEvidenceObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
 
     private fun syntheticTextTracks(
         tracks: Tracks

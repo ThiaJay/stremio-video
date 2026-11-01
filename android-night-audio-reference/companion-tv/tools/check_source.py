@@ -18,6 +18,8 @@ SYNTHETIC_CUE_OBSERVER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/Synthe
 SYNTHETIC_CUE_OBSERVER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleCueDeliveryObserverTest.kt'
 SYNTHETIC_TRACK_OBSERVER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleTrackStateObserver.kt'
 SYNTHETIC_TRACK_OBSERVER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleTrackStateObserverTest.kt'
+SYNTHETIC_PLAYBACK_EVIDENCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePlaybackEvidenceObserver.kt'
+SYNTHETIC_PLAYBACK_EVIDENCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePlaybackEvidenceObserverTest.kt'
 NATIVE_SUBTITLE_PROVENANCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenance.kt'
 NATIVE_SUBTITLE_PROVENANCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenanceTest.kt'
 NATIVE_SUBTITLE_STORE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceStore.kt'
@@ -168,6 +170,8 @@ synthetic_cue_observer=SYNTHETIC_CUE_OBSERVER.read_text() if SYNTHETIC_CUE_OBSER
 synthetic_cue_observer_test=SYNTHETIC_CUE_OBSERVER_TEST.read_text() if SYNTHETIC_CUE_OBSERVER_TEST.is_file() else ''
 synthetic_track_observer=SYNTHETIC_TRACK_OBSERVER.read_text() if SYNTHETIC_TRACK_OBSERVER.is_file() else ''
 synthetic_track_observer_test=SYNTHETIC_TRACK_OBSERVER_TEST.read_text() if SYNTHETIC_TRACK_OBSERVER_TEST.is_file() else ''
+synthetic_playback_evidence=SYNTHETIC_PLAYBACK_EVIDENCE.read_text() if SYNTHETIC_PLAYBACK_EVIDENCE.is_file() else ''
+synthetic_playback_evidence_test=SYNTHETIC_PLAYBACK_EVIDENCE_TEST.read_text() if SYNTHETIC_PLAYBACK_EVIDENCE_TEST.is_file() else ''
 native_subtitle_provenance=NATIVE_SUBTITLE_PROVENANCE.read_text() if NATIVE_SUBTITLE_PROVENANCE.is_file() else ''
 native_subtitle_provenance_test=NATIVE_SUBTITLE_PROVENANCE_TEST.read_text() if NATIVE_SUBTITLE_PROVENANCE_TEST.is_file() else ''
 native_subtitle_store=NATIVE_SUBTITLE_STORE.read_text() if NATIVE_SUBTITLE_STORE.is_file() else ''
@@ -2115,9 +2119,44 @@ if not all(x in java_text for x in [
     'subtitleTrackObserver.close()'
 ]):
     fail.append('synthetic_subtitle_track_observer_activity_binding_missing')
-if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if not all(x in synthetic_playback_evidence for x in [
+    'class SyntheticSubtitlePlaybackEvidenceObserver',
+    'context.loadGeneration <= highestLoadGeneration',
+    'Status.CUES_WITHOUT_TRACK_REPORT',
+    'Status.SELECTED_ALL_CUES',
+    'selectedTrackAndAllCuesObserved = status == Status.SELECTED_ALL_CUES',
+    'delivered < deliveredCueCount',
+    'Thread.currentThread() === ownerThread'
+]):
+    fail.append('synthetic_subtitle_playback_evidence_contract_missing')
+if any(x in synthetic_playback_evidence for x in [
+    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
+    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d('
+]):
+    fail.append('synthetic_subtitle_playback_evidence_forbidden_surface')
+if not all(x in synthetic_playback_evidence_test for x in [
+    'selectedTrackAndAllCuesCorrelateWithoutVisualClaim',
+    'cuesMayArriveBeforeTrackSelectionAndRemainBounded',
+    'absentOrUnselectedTrackNeverProducesCorrelatedAcceptance',
+    'malformedCueEvidencePoisonsOnlyItsGeneration',
+    'cueCountRegressionPoisonsActiveGeneration',
+    'notReportedTrackAndExplicitInvalidationFailClosed',
+    'generationThreadAbandonAndCloseAreEnforced',
+    'malformedContextNeverStartsPlaybackEvidence'
+]):
+    fail.append('synthetic_subtitle_playback_evidence_regressions_missing')
+if not all(x in java_text for x in [
+    'subtitlePlaybackEvidenceObserver.observeCues(',
+    'subtitlePlaybackEvidenceObserver.observeTrack(evidenceContext, observed.state)',
+    'subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)',
+    'subtitlePlaybackEvidenceObserver.begin(evidenceContext)',
+    'Media3 subtitle callback correlation',
+    'subtitlePlaybackEvidenceObserver.close()'
+]):
+    fail.append('synthetic_subtitle_playback_evidence_activity_binding_missing')
+if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':424,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':428,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
