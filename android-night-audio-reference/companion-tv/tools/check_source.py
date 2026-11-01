@@ -37,6 +37,8 @@ SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/Synth
 SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceHostTest.kt'
 PERSISTENT_SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHost.kt'
 PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHostTest.kt'
+PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceScreenOwner.kt'
+PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceScreenOwnerTest.kt'
 STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
 STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
 MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
@@ -175,6 +177,8 @@ synthetic_subtitle_host=SYNTHETIC_SUBTITLE_HOST.read_text() if SYNTHETIC_SUBTITL
 synthetic_subtitle_host_test=SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
 persistent_synthetic_subtitle_host=PERSISTENT_SYNTHETIC_SUBTITLE_HOST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST.is_file() else ''
 persistent_synthetic_subtitle_host_test=PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
+persistent_synthetic_subtitle_screen_owner=PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER.is_file() else ''
+persistent_synthetic_subtitle_screen_owner_test=PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST.is_file() else ''
 story=STORY.read_text() if STORY.is_file() else ''
 story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
 mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
@@ -201,7 +205,6 @@ if ('ui.removeCallbacks(outcomePump)' not in mobile_story_activity or
     'storyOwner?.close()' not in mobile_story_activity or
     'watchedOwner?.close()' not in mobile_story_activity or
     'subtitleOwner?.close()' not in mobile_story_activity or
-    'subtitleHost?.close()' not in mobile_story_activity or
     'override fun onDestroy()' not in mobile_story_activity):
     fail.append('mobile_lab_lifecycle_close_missing')
 if ('local:mobile-story:1:1' not in mobile_story_activity or
@@ -229,15 +232,14 @@ if ('Looper.getMainLooper()' not in mobile_story_activity or
     'ui.postDelayed(this, OUTCOME_POLL_MS)' not in mobile_story_activity):
     fail.append('mobile_lab_main_thread_mailbox_pump_missing')
 if not all(x in mobile_story_activity for x in [
-    'PersistentSyntheticSubtitlePreferenceHost.open(',
+    'PersistentSyntheticSubtitlePreferenceScreenOwner.open(',
     'PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE',
     'getSharedPreferences(SYNTHETIC_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
-    'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'initialSubtitleSurface',
-    'initialSubtitlePreference',
-    'createdSubtitle.loadStoredPreference()',
-    'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
+    'val initialSubtitle = createdSubtitle?.initialState()',
+    'createdSubtitle.renderInitial()',
+    'current.currentPreference()',
+    'current.renderSettings()',
     'current.consumeOutcome()'
 ]):
     fail.append('mobile_subtitle_lab_composition_or_mailbox_missing')
@@ -259,15 +261,14 @@ if ('private const val SYNTHETIC_SUBTITLE_RECEIPT_PREFS' not in mobile_story_act
     '"synthetic_tv_subtitle_state_v1"' in mobile_story_activity):
     fail.append('mobile_subtitle_lab_private_namespaces_missing')
 if not all(x in java_text for x in [
-    'PersistentSyntheticSubtitlePreferenceHost.open(',
+    'PersistentSyntheticSubtitlePreferenceScreenOwner.open(',
     'PersistentSyntheticSubtitlePreferenceHost.Namespace.TV',
     'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
-    'AndroidSubtitlePreferenceChoiceScreenOwner.open(',
     'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'initialSubtitleSurface',
-    'initialSubtitlePreference',
-    'createdSubtitle.loadStoredPreference()',
-    'AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS',
+    'val initialSubtitle = createdSubtitle?.initialState()',
+    'createdSubtitle.renderInitial()',
+    'current.currentPreference()',
+    'current.renderSettings()',
     'pollSubtitleOutcome()',
     'current.consumeOutcome()'
 ]):
@@ -285,7 +286,6 @@ if not all(x in java_text for x in [
     fail.append('tv_subtitle_lab_disclosure_or_hold_missing')
 if not all(x in java_text for x in [
     'subtitleOwner?.close()',
-    'subtitleHost?.close()',
     'ui.removeCallbacks(refresh)',
     'override fun onDestroy()'
 ]):
@@ -369,6 +369,44 @@ if not all(x in persistent_synthetic_subtitle_host_test for x in [
     'ownerThreadCloseAndNamespaceLeaseFailClosed'
 ]):
     fail.append('persistent_synthetic_subtitle_host_regressions_missing')
+if not all(x in persistent_synthetic_subtitle_screen_owner for x in [
+    'internal class PersistentSyntheticSubtitlePreferenceScreenOwner private constructor',
+    'if (statePreferences === receiptPreferences) return null',
+    'PersistentSyntheticSubtitlePreferenceHost.open(',
+    'val surface = host.presentationSurface()',
+    'val preference = host.readPreferenceSnapshot()?.sessionPreference',
+    'val stored = screen.loadStoredPreference()',
+    'Admission.ENABLED_SAME_INSTALLATION',
+    'Admission.ENABLED_UNADMITTED',
+    'val screenClosed = screen.close()',
+    'val hostClosed = host.close()',
+    'private val ownerThread = Thread.currentThread()'
+]):
+    fail.append('persistent_synthetic_subtitle_screen_owner_contract_missing')
+if any(x in persistent_synthetic_subtitle_screen_owner for x in [
+    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
+    'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)'
+]):
+    fail.append('persistent_synthetic_subtitle_screen_owner_forbidden_surface')
+if not all(x in persistent_synthetic_subtitle_screen_owner_test for x in [
+    'identicalStateAndReceiptObjectIsRefusedBeforeLease',
+    'explicitOffDoesNotReadOrManufactureReceiptAdmission',
+    'enabledStateWithoutExactReceiptRemainsUnadmitted',
+    'enabledStateIsAdmittedOnlyThroughScreenReceiptValidator',
+    'compositeOwnsRenderOutcomeRerenderAndScreenFirstClose',
+    'failedRenderPoisonsBothScreenAndStateLease',
+    'constructionFailureAndForeignThreadCannotLeakAuthority'
+]):
+    fail.append('persistent_synthetic_subtitle_screen_owner_regressions_missing')
+if not all(x in persistent_synthetic_subtitle_screen_owner_test for x in [
+    'assertNull(open(preferences, preferences, MOBILE, ScreenFixture()))',
+    'assertEquals(0, fixture.port!!.loadCalls)',
+    'assertEquals(ENABLED_UNADMITTED, owner.initialState()!!.admission)',
+    'assertEquals(ENABLED_SAME_INSTALLATION, owner.initialState()!!.admission)',
+    'assertTrue(screenClosedWhileStateLeased.get())',
+    'assertFalse(foreignClose.get())'
+]):
+    fail.append('persistent_synthetic_subtitle_screen_owner_adversarial_assertions')
 if ('class SyntheticTitleWatchedAccountHost' not in synthetic_watched_host or
     ': CanonicalWatchedAccountHostPort' not in synthetic_watched_host or
     'private val epoch = 1L' not in synthetic_watched_host):
@@ -1839,9 +1877,9 @@ if not all(x in android_subtitle_choice_screen_owner_test for x in [
     'assertFalse(foreignClose.get())'
 ]):
     fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
-if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':357,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':365,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

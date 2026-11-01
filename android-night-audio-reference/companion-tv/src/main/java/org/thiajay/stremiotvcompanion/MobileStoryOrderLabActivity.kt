@@ -22,8 +22,7 @@ class MobileStoryOrderLabActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private var storyOwner: AndroidMobileStoryOrderScreenOwner? = null
     private var watchedOwner: AndroidMobileTitleWatchedScreenOwner? = null
-    private var subtitleOwner: AndroidSubtitlePreferenceChoiceScreenOwner? = null
-    private var subtitleHost: PersistentSyntheticSubtitlePreferenceHost? = null
+    private var subtitleOwner: PersistentSyntheticSubtitlePreferenceScreenOwner? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var storyStatus: TextView
     private lateinit var watchedStatus: TextView
@@ -76,7 +75,7 @@ class MobileStoryOrderLabActivity : Activity() {
                 active = true
                 val outcome = current.consumeOutcome()
                 if (outcome != null) {
-                    val preference = subtitleHost?.readPreferenceSnapshot()?.sessionPreference
+                    val preference = current.currentPreference()?.sessionPreference
                     subtitleStatus.text = when {
                         outcome.result.ok && preference != null ->
                             "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
@@ -92,18 +91,12 @@ class MobileStoryOrderLabActivity : Activity() {
                     if (!outcome.result.rollbackVerified) {
                         current.close()
                         subtitleOwner = null
-                        subtitleHost?.close()
-                        subtitleHost = null
-                    } else if (!current.render(
-                            AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS
-                        )) {
+                    } else if (!current.renderSettings()) {
                         subtitleStatus.text =
                             subtitleStatus.text.toString() +
                                 "\nSubtitle lab closed after a rejected re-render."
                         current.close()
                         subtitleOwner = null
-                        subtitleHost?.close()
-                        subtitleHost = null
                     }
                 }
             }
@@ -203,41 +196,26 @@ class MobileStoryOrderLabActivity : Activity() {
                     "synthetic watched set only."
         }
 
-        val createdSubtitleHost = PersistentSyntheticSubtitlePreferenceHost.open(
+        val createdSubtitle = PersistentSyntheticSubtitlePreferenceScreenOwner.open(
             getSharedPreferences(SYNTHETIC_SUBTITLE_STATE_PREFS, MODE_PRIVATE),
-            PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE
+            getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+            PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE,
+            subtitleActions
         )
-        val initialSubtitleSurface = createdSubtitleHost?.presentationSurface()
-        val initialSubtitlePreference =
-            createdSubtitleHost?.readPreferenceSnapshot()?.sessionPreference
-        val createdSubtitle = createdSubtitleHost?.let { host ->
-            AndroidSubtitlePreferenceChoiceScreenOwner.open(
-                getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
-                host,
-                host,
-                subtitleActions
-            )
-        }
-        if (createdSubtitleHost == null || initialSubtitleSurface == null ||
-            createdSubtitle == null || !createdSubtitle.render(initialSubtitleSurface)) {
+        val initialSubtitle = createdSubtitle?.initialState()
+        if (createdSubtitle == null || initialSubtitle == null ||
+            !createdSubtitle.renderInitial()) {
             createdSubtitle?.close()
-            createdSubtitleHost?.close()
             subtitleStatus.text =
                 "Synthetic subtitle choices unavailable. Production preferences remain untouched."
         } else {
-            subtitleHost = createdSubtitleHost
             subtitleOwner = createdSubtitle
-            val admission = if (initialSubtitlePreference?.enabled == true) {
-                createdSubtitle.loadStoredPreference()
-            } else {
-                null
-            }
-            val admissionStatus = when {
-                initialSubtitlePreference?.enabled != true ->
+            val admissionStatus = when (initialSubtitle.admission) {
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.EXPLICIT_OFF ->
                     "Current app-private state is explicit Off; no enabled choice is inferred."
-                admission?.get("kind") == "same-installation-setting" ->
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_SAME_INSTALLATION ->
                     "Current enabled state has an exact same-installation choice receipt."
-                else ->
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_UNADMITTED ->
                     "Current enabled state has no matching same-installation receipt and is " +
                         "not admitted as consent."
             }
@@ -259,8 +237,6 @@ class MobileStoryOrderLabActivity : Activity() {
         watchedOwner = null
         subtitleOwner?.close()
         subtitleOwner = null
-        subtitleHost?.close()
-        subtitleHost = null
         super.onDestroy()
     }
 

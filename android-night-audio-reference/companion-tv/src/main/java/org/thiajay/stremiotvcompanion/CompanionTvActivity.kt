@@ -56,8 +56,7 @@ class CompanionTvActivity : Activity() {
     private var watchedOwner: AndroidTvTitleWatchedScreenOwner? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
     private lateinit var watchedStatus: TextView
-    private var subtitleOwner: AndroidSubtitlePreferenceChoiceScreenOwner? = null
-    private var subtitleHost: PersistentSyntheticSubtitlePreferenceHost? = null
+    private var subtitleOwner: PersistentSyntheticSubtitlePreferenceScreenOwner? = null
     private lateinit var subtitleStatus: TextView
     private lateinit var storyOrderToggle: Button
     private lateinit var storyOrderSummary: TextView
@@ -225,41 +224,26 @@ class CompanionTvActivity : Activity() {
             orientation = LinearLayout.VERTICAL
         }
         controls.addView(subtitleActions)
-        val createdSubtitleHost = PersistentSyntheticSubtitlePreferenceHost.open(
+        val createdSubtitle = PersistentSyntheticSubtitlePreferenceScreenOwner.open(
             getSharedPreferences(SYNTHETIC_TV_SUBTITLE_STATE_PREFS, MODE_PRIVATE),
-            PersistentSyntheticSubtitlePreferenceHost.Namespace.TV
+            getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+            PersistentSyntheticSubtitlePreferenceHost.Namespace.TV,
+            subtitleActions
         )
-        val initialSubtitleSurface = createdSubtitleHost?.presentationSurface()
-        val initialSubtitlePreference =
-            createdSubtitleHost?.readPreferenceSnapshot()?.sessionPreference
-        val createdSubtitle = createdSubtitleHost?.let { host ->
-            AndroidSubtitlePreferenceChoiceScreenOwner.open(
-                getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
-                host,
-                host,
-                subtitleActions
-            )
-        }
-        if (createdSubtitleHost == null || initialSubtitleSurface == null ||
-            createdSubtitle == null || !createdSubtitle.render(initialSubtitleSurface)) {
+        val initialSubtitle = createdSubtitle?.initialState()
+        if (createdSubtitle == null || initialSubtitle == null ||
+            !createdSubtitle.renderInitial()) {
             createdSubtitle?.close()
-            createdSubtitleHost?.close()
             subtitleStatus.text =
                 "Synthetic subtitle choices unavailable. Production preferences remain untouched."
         } else {
-            subtitleHost = createdSubtitleHost
             subtitleOwner = createdSubtitle
-            val admission = if (initialSubtitlePreference?.enabled == true) {
-                createdSubtitle.loadStoredPreference()
-            } else {
-                null
-            }
-            val admissionStatus = when {
-                initialSubtitlePreference?.enabled != true ->
+            val admissionStatus = when (initialSubtitle.admission) {
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.EXPLICIT_OFF ->
                     "Current app-private TV state is explicit Off; no enabled choice is inferred."
-                admission?.get("kind") == "same-installation-setting" ->
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_SAME_INSTALLATION ->
                     "Current enabled TV state has an exact same-installation choice receipt."
-                else ->
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_UNADMITTED ->
                     "Current enabled TV state has no matching same-installation receipt and is " +
                         "not admitted as consent."
             }
@@ -416,7 +400,7 @@ class CompanionTvActivity : Activity() {
     private fun pollSubtitleOutcome() {
         subtitleOwner?.let { current ->
             val outcome = current.consumeOutcome() ?: return
-            val preference = subtitleHost?.readPreferenceSnapshot()?.sessionPreference
+            val preference = current.currentPreference()?.sessionPreference
             subtitleStatus.text = when {
                 outcome.result.ok && preference != null ->
                     "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
@@ -432,18 +416,12 @@ class CompanionTvActivity : Activity() {
             if (!outcome.result.rollbackVerified) {
                 current.close()
                 subtitleOwner = null
-                subtitleHost?.close()
-                subtitleHost = null
-            } else if (!current.render(
-                    AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS
-                )) {
+            } else if (!current.renderSettings()) {
                 subtitleStatus.text =
                     subtitleStatus.text.toString() +
                         "\nTV subtitle lab closed after a rejected re-render."
                 current.close()
                 subtitleOwner = null
-                subtitleHost?.close()
-                subtitleHost = null
             }
         }
     }
@@ -507,8 +485,6 @@ class CompanionTvActivity : Activity() {
         watchedOwner = null
         subtitleOwner?.close()
         subtitleOwner = null
-        subtitleHost?.close()
-        subtitleHost = null
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()

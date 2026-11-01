@@ -63,3 +63,15 @@ CI must run the native SDK compilation, test and manifest audit on the **exact c
 
 **Install gate:** never install or distribute this MVP as a final Stremio client. It is a development candidate. Its source, tests and expected APK identity are preserved for independent review and later approved device tests.
 
+### Persistent subtitle screen composition boundary
+
+The disclosed mobile and Android TV subtitle labs now open state persistence,
+same-installation receipt admission and the Android screen through one
+owner-thread lifecycle authority. State and receipt `SharedPreferences` objects
+must be distinct. Enabled state remains unadmitted unless the exact receipt
+validator accepts the current complete preference snapshot, while explicit Off
+does not manufacture or require a receipt. The Android screen is always closed
+before the persistent state lease is released. This remains isolated lab
+composition only: it is not private-client adoption, update migration, signed
+delivery or device acceptance.
+
