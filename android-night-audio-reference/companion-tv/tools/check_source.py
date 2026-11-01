@@ -421,7 +421,7 @@ if not all(x in persistent_synthetic_subtitle_screen_owner for x in [
     'fun currentPlaybackPreference()',
     'val preference = host.readPreferenceSnapshot()',
     '?.sessionPreference ?: return null',
-    'val enabled = preference.enabled',
+    'val enabled = preference.enabled ?: return null',
     'stored?.get("kind") == "same-installation-setting"',
     'Admission.ENABLED_SAME_INSTALLATION',
     'Admission.ENABLED_UNADMITTED',

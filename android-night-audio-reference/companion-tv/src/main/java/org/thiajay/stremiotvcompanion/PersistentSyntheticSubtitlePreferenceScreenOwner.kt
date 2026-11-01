@@ -67,7 +67,7 @@ internal class PersistentSyntheticSubtitlePreferenceScreenOwner private construc
         if (!usable()) return null
         val preference = host.readPreferenceSnapshot()
             ?.sessionPreference ?: return null
-        val enabled = preference.enabled
+        val enabled = preference.enabled ?: return null
         if (!enabled) {
             return NativeSubtitlePlaybackPreferenceActuator.Preference(
                 enabled = false,
