@@ -7,7 +7,11 @@ import java.util.IdentityHashMap
  * App-private subtitle preference authority for the disclosed mobile and TV
  * labs only.
  *
- * Each lab has a distinct fixed key. An absent key is explicitly Off and is
+ * Each lab has a distinct current key. Opening under the v2 source performs one
+ * bounded v1-to-v2 migration while the namespace lease is held. A lone legacy
+ * boolean is moved atomically with stable exact readback; collisions, corrupt
+ * types, ambiguous commits and concurrent drift fail closed without claiming
+ * migration. An absent current and legacy key is explicitly Off and is
  * presented as first-run; an explicit choice is synchronously committed and
  * read back before a transition is issued. Rollback restores the exact prior
  * storage shape, including absence, only while the current storage still
@@ -23,12 +27,23 @@ internal class PersistentSyntheticSubtitlePreferenceHost private constructor(
 ) : AndroidSubtitlePreferenceChoiceSession.SnapshotPort,
     AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort {
 
-    enum class Namespace(internal val key: String) {
-        MOBILE("org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v1"),
-        TV("org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v1")
+    enum class Namespace(internal val legacyKey: String, internal val key: String) {
+        MOBILE(
+            "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v1",
+            "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v2"
+        ),
+        TV(
+            "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v1",
+            "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v2"
+        )
     }
 
     private data class StoredState(val present: Boolean, val enabled: Boolean)
+
+    private data class MigrationState(
+        val legacy: StoredState,
+        val current: StoredState
+    )
 
     private data class IssuedTransition(
         val transition: AndroidSubtitlePreferenceChoiceTransaction.Transition,
@@ -125,9 +140,76 @@ internal class PersistentSyntheticSubtitlePreferenceHost private constructor(
     }
 
     private fun readState(): StoredState {
-        val present = preferences.contains(namespace.key)
-        val enabled = if (present) preferences.getBoolean(namespace.key, false) else false
+        return readState(namespace.key)
+    }
+
+    private fun readState(key: String): StoredState {
+        val present = preferences.contains(key)
+        val enabled = if (present) preferences.getBoolean(key, false) else false
         return StoredState(present, enabled)
+    }
+
+    private fun migrateLegacyState(): Boolean {
+        if (!usable()) return false
+        val before = readStableMigrationState() ?: return false
+        if (before.current.present) return !before.legacy.present
+        if (!before.legacy.present) return true
+
+        val after = MigrationState(
+            legacy = StoredState(present = false, enabled = false),
+            current = StoredState(present = true, enabled = before.legacy.enabled)
+        )
+        val committed = writeMigrationState(after)
+        val exactReadback = readStableMigrationState()
+        if (committed && exactReadback == after) return true
+        if (exactReadback == after) restoreMigrationState(before, after)
+        return false
+    }
+
+    private fun readStableMigrationState(): MigrationState? {
+        return try {
+            val first = MigrationState(
+                legacy = readState(namespace.legacyKey),
+                current = readState(namespace.key)
+            )
+            val second = MigrationState(
+                legacy = readState(namespace.legacyKey),
+                current = readState(namespace.key)
+            )
+            first.takeIf { it == second }
+        } catch (_: RuntimeException) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    private fun writeMigrationState(state: MigrationState): Boolean {
+        return try {
+            val editor = preferences.edit()
+            writeSlot(editor, namespace.legacyKey, state.legacy)
+            writeSlot(editor, namespace.key, state.current)
+            editor.commit()
+        } catch (_: RuntimeException) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
+
+    private fun writeSlot(
+        editor: SharedPreferences.Editor,
+        key: String,
+        state: StoredState
+    ) {
+        if (state.present) editor.putBoolean(key, state.enabled) else editor.remove(key)
+    }
+
+    private fun restoreMigrationState(before: MigrationState, owned: MigrationState) {
+        val current = readStableMigrationState() ?: return
+        if (current != owned) return
+        if (!writeMigrationState(before)) return
+        readStableMigrationState()
     }
 
     private fun writeState(state: StoredState): Boolean {
@@ -173,7 +255,17 @@ internal class PersistentSyntheticSubtitlePreferenceHost private constructor(
                 leases[namespace] = token
             }
             return try {
-                PersistentSyntheticSubtitlePreferenceHost(preferences, namespace, token)
+                val host = PersistentSyntheticSubtitlePreferenceHost(
+                    preferences,
+                    namespace,
+                    token
+                )
+                if (host.migrateLegacyState()) {
+                    host
+                } else {
+                    host.close()
+                    null
+                }
             } catch (_: RuntimeException) {
                 releaseLease(preferences, namespace, token)
                 null

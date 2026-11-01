@@ -334,11 +334,22 @@ if not all(x in synthetic_subtitle_host_test for x in [
     fail.append('synthetic_subtitle_host_regressions_missing')
 if not all(x in persistent_synthetic_subtitle_host for x in [
     'internal class PersistentSyntheticSubtitlePreferenceHost private constructor',
-    'enum class Namespace(internal val key: String)',
+    'enum class Namespace(internal val legacyKey: String, internal val key: String)',
     'synthetic.mobile.subtitle.enabled.v1',
+    'synthetic.mobile.subtitle.enabled.v2',
     'synthetic.tv.subtitle.enabled.v1',
+    'synthetic.tv.subtitle.enabled.v2',
     'AndroidSubtitlePreferenceChoiceSession.SnapshotPort',
     'AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort',
+    'private data class MigrationState',
+    'if (before.current.present) return !before.legacy.present',
+    'if (!before.legacy.present) return true',
+    'val committed = writeMigrationState(after)',
+    'if (committed && exactReadback == after) return true',
+    'if (exactReadback == after) restoreMigrationState(before, after)',
+    'writeSlot(editor, namespace.legacyKey, state.legacy)',
+    'writeSlot(editor, namespace.key, state.current)',
+    'if (host.migrateLegacyState())',
     'val first = readState()',
     'val second = readState()',
     'editor.commit()',
@@ -356,6 +367,12 @@ if not all(x in persistent_synthetic_subtitle_host_test for x in [
     'absentStateStartsOffOnFirstRunWithoutWriting',
     'enabledChoicePersistsAcrossFreshOwner',
     'explicitOffPersistsAcrossFreshOwner',
+    'legacyEnabledMigratesAtomicallyToCurrentKey',
+    'legacyExplicitOffMigratesWithoutBecomingFirstRun',
+    'currentAndLegacyCollisionFailsClosedWithoutMutation',
+    'corruptLegacyTypeFailsClosedWithoutMutation',
+    'migrationCommitRefusalPreservesLegacyAndUnrelatedState',
+    'postMigrationDriftIsPreservedWithoutAcceptance',
     'mobileAndTvNamespacesRemainIndependent',
     'exactRollbackRestoresAbsentStorageShape',
     'exactRollbackRestoresStoredEnabledValue',
@@ -1879,7 +1896,7 @@ if not all(x in android_subtitle_choice_screen_owner_test for x in [
     fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
 if any(x in java_text+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':365,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':374,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

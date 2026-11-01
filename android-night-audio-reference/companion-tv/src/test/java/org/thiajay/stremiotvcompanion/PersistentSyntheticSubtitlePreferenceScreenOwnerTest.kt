@@ -209,8 +209,8 @@ class PersistentSyntheticSubtitlePreferenceScreenOwnerTest {
         val ENABLED_UNADMITTED =
             PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_UNADMITTED
         const val MOBILE_KEY =
-            "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v1"
+            "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v2"
         const val TV_KEY =
-            "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v1"
+            "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v2"
     }
 }

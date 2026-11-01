@@ -49,6 +49,81 @@ class PersistentSyntheticSubtitlePreferenceHostTest {
         assertTrue(reopened.close())
     }
 
+    @Test fun legacyEnabledMigratesAtomicallyToCurrentKey() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_MOBILE_KEY, true)
+            seed("unrelated", "preserved")
+        }
+
+        val host = open(preferences, MOBILE)!!
+
+        assertNull(preferences.value(LEGACY_MOBILE_KEY))
+        assertEquals(true, preferences.value(MOBILE_KEY))
+        assertEquals("preserved", preferences.value("unrelated"))
+        assertEquals(SUBTITLE_SETTINGS, host.presentationSurface())
+        assertEquals(snapshot(true), host.readPreferenceSnapshot())
+        assertTrue(host.close())
+    }
+
+    @Test fun legacyExplicitOffMigratesWithoutBecomingFirstRun() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_TV_KEY, false)
+        }
+
+        val host = open(preferences, TV)!!
+
+        assertNull(preferences.value(LEGACY_TV_KEY))
+        assertEquals(false, preferences.value(TV_KEY))
+        assertEquals(SUBTITLE_SETTINGS, host.presentationSurface())
+        assertEquals(snapshot(false), host.readPreferenceSnapshot())
+        assertTrue(host.close())
+    }
+
+    @Test fun currentAndLegacyCollisionFailsClosedWithoutMutation() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_MOBILE_KEY, false)
+            seed(MOBILE_KEY, true)
+            seed("unrelated", 8)
+        }
+        val before = preferences.snapshot()
+
+        assertNull(open(preferences, MOBILE))
+        assertEquals(before, preferences.snapshot())
+    }
+
+    @Test fun corruptLegacyTypeFailsClosedWithoutMutation() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_TV_KEY, "corrupt")
+        }
+
+        assertNull(open(preferences, TV))
+        assertEquals(mapOf(LEGACY_TV_KEY to "corrupt"), preferences.snapshot())
+    }
+
+    @Test fun migrationCommitRefusalPreservesLegacyAndUnrelatedState() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_MOBILE_KEY, true)
+            seed("unrelated", 9)
+            setFailCommit(true)
+        }
+
+        assertNull(open(preferences, MOBILE))
+        assertEquals(
+            mapOf(LEGACY_MOBILE_KEY to true, "unrelated" to 9),
+            preferences.snapshot()
+        )
+    }
+
+    @Test fun postMigrationDriftIsPreservedWithoutAcceptance() {
+        val preferences = FakeSharedPreferences().apply {
+            seed(LEGACY_TV_KEY, true)
+            setMutateAfterCommitKey(TV_KEY)
+        }
+
+        assertNull(open(preferences, TV))
+        assertEquals("__drift__", preferences.value(TV_KEY))
+    }
+
     @Test fun mobileAndTvNamespacesRemainIndependent() {
         val preferences = FakeSharedPreferences()
         val mobile = open(preferences, MOBILE)!!
@@ -124,13 +199,9 @@ class PersistentSyntheticSubtitlePreferenceHostTest {
 
     @Test fun corruptTypeFailsClosedWithoutOverwrite() {
         val preferences = FakeSharedPreferences().apply { seed(TV_KEY, "corrupt") }
-        val host = open(preferences, TV)!!
 
-        assertNull(host.presentationSurface())
-        assertNull(host.readPreferenceSnapshot())
-        assertNull(host.applyChoice(FIRST_RUN, ENABLED, snapshot(false)))
+        assertNull(open(preferences, TV))
         assertEquals("corrupt", preferences.value(TV_KEY))
-        assertTrue(host.close())
     }
 
     @Test fun postCommitDriftIsPreservedAndCannotBeRolledBack() {
@@ -233,10 +304,14 @@ class PersistentSyntheticSubtitlePreferenceHostTest {
         val SUBTITLE_SETTINGS = AndroidSubtitlePreferenceChoiceSession.Surface.SUBTITLE_SETTINGS
         val ENABLED = AndroidSubtitlePreferenceChoiceSession.Choice.ENABLED
         val OFF = AndroidSubtitlePreferenceChoiceSession.Choice.OFF
-        const val MOBILE_KEY =
+        const val LEGACY_MOBILE_KEY =
             "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v1"
-        const val TV_KEY =
+        const val MOBILE_KEY =
+            "org.thiajay.stremiotvcompanion.synthetic.mobile.subtitle.enabled.v2"
+        const val LEGACY_TV_KEY =
             "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v1"
+        const val TV_KEY =
+            "org.thiajay.stremiotvcompanion.synthetic.tv.subtitle.enabled.v2"
         const val RECEIPT_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.receipt.v1"
     }
