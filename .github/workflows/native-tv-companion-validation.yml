@@ -540,9 +540,6 @@ jobs:
     needs: companion-validation
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      ANDROID_USER_HOME: ${{ runner.temp }}/companion-android-user
-      ANDROID_AVD_HOME: ${{ runner.temp }}/companion-avd
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -559,6 +556,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
         with:
           gradle-version: '8.11.1'
+      - name: Bind one Android tool and emulator home
+        shell: bash
+        run: |
+          printf 'ANDROID_USER_HOME=%s\n' "$RUNNER_TEMP/companion-android-user" >> "$GITHUB_ENV"
+          printf 'ANDROID_AVD_HOME=%s\n' "$RUNNER_TEMP/companion-avd" >> "$GITHUB_ENV"
       - name: Install exact Android 11 emulator and compile SDK components
         run: >-
           sdkmanager --install
