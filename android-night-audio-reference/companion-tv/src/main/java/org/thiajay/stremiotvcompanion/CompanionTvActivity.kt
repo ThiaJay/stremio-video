@@ -672,6 +672,25 @@ class CompanionTvActivity : Activity() {
         }
     }
 
+    /**
+     * Read-only instrumentation surface for the synthetic Story Order controls.
+     * It exposes only local fixture labels and never returns catalogue, account,
+     * playback, source or preference state.
+     */
+    internal fun boundedStoryOrderRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::storyOrderToggle.isInitialized ||
+            !::storyOrderSummary.isInitialized || !controls.isAttachedToWindow ||
+            !storyOrderToggle.isAttachedToWindow || !storyOrderSummary.isAttachedToWindow ||
+            storyOrderToggle.parent !== controls || storyOrderSummary.parent !== controls) {
+            return null
+        }
+        return listOf(
+            storyOrderToggle.text.toString(),
+            storyOrderSummary.text.toString()
+        ).joinToString(" | ").takeIf { it.isNotBlank() && it.length <= 4_096 }
+    }
+
     private fun updateStoryOrderDemo(message: String? = null) {
         val visible = StoryOrderContract.presentation(
             STORY_CANONICAL,

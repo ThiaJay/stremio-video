@@ -630,7 +630,7 @@ jobs:
           gradle -p android-night-audio-reference \
             :companion-tv:connectedDebugAndroidTest \
             --no-daemon --stacktrace
-      - name: Require API 30 subtitle and title-action tests with retained boundaries
+      - name: Require API 30 subtitle, title-action and Story Order tests with retained boundaries
         shell: bash
         run: |
           python3 - <<'PY'
@@ -651,10 +651,11 @@ jobs:
               'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
               'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
               'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
+              'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
           }
-          assert tests==3 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests==4 and failures==0 and errors==0, (tests,failures,errors)
           assert expected.issubset(set(names)), (expected,names)
-          print('Verified API 30 synthetic subtitle and title-action runtime:',tests,'failures:',failures,'errors:',errors)
+          print('Verified API 30 synthetic subtitle, title-action and Story Order runtime:',tests,'failures:',failures,'errors:',errors)
           print('Private-client, account, physical display, Fire TV and hardware acceptance remain false.')
           PY
 # Never upload emulator screenshots, APKs, logs, synthetic media or test artifacts.
