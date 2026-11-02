@@ -46,7 +46,9 @@ class MobileTitleWatchedInstrumentationTest {
         val status = awaitText(APPLIED, 5_000L)
         assertTrue(status, status.contains(EXPECTED_EPISODE_1))
         assertTrue(status, status.contains(EXPECTED_EPISODE_2))
-        assertFalse(status, status.contains(SEASON_ZERO_EPISODE))
+        assertTrue(status, status.contains(NARRATIVE_SPECIAL))
+        assertFalse(status, status.contains(FUTURE_EPISODE))
+        assertFalse(status, status.contains(ANCILLARY_SPECIAL))
 
         scenario.onActivity { activity ->
             val opposite = findViews(activity.window.decorView)
@@ -65,7 +67,9 @@ class MobileTitleWatchedInstrumentationTest {
         val cleared = awaitText(EMPTY_WATCHED_READBACK, 5_000L)
         assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_1))
         assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_2))
-        assertFalse(cleared, cleared.contains(SEASON_ZERO_EPISODE))
+        assertFalse(cleared, cleared.contains(NARRATIVE_SPECIAL))
+        assertFalse(cleared, cleared.contains(FUTURE_EPISODE))
+        assertFalse(cleared, cleared.contains(ANCILLARY_SPECIAL))
 
         scenario.onActivity { activity ->
             val opposite = findViews(activity.window.decorView)
@@ -128,6 +132,8 @@ class MobileTitleWatchedInstrumentationTest {
         const val EMPTY_WATCHED_READBACK = "Synthetic watched IDs: none"
         const val EXPECTED_EPISODE_1 = "local:mobile-watched:1:1"
         const val EXPECTED_EPISODE_2 = "local:mobile-watched:1:2"
-        const val SEASON_ZERO_EPISODE = "local:mobile-watched:0:2"
+        const val NARRATIVE_SPECIAL = "local:mobile-watched:0:2"
+        const val FUTURE_EPISODE = "local:mobile-watched:1:3"
+        const val ANCILLARY_SPECIAL = "local:mobile-watched:0:99"
     }
 }

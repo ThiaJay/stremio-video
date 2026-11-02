@@ -109,7 +109,7 @@ ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcom
 CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
 CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
 BUILD=ROOT/'build.gradle'
-CHECKSUM='789e29b997b503ee6cac03d638a7da023ecef551c866fbafe36287ce36862715'
+CHECKSUM='b0341307c1e6a1b1e731044808aa02cb369ab24c65a938ad93473654fbd90566'
 
 manifest=ET.parse(MANIFEST).getroot()
 fail=[]
@@ -174,8 +174,10 @@ else:
         fail.append('mobile_launcher_icon_invalid_xml')
 if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
     fail.append('tested_bridge_modified')
-if 'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' not in BRIDGE.read_text():
-    fail.append('series_watched_story_order_season_zero_exclusion_missing')
+bridge_text=BRIDGE.read_text()
+if ('return order.mapNotNull { byId[it] }' not in bridge_text or
+    'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' in bridge_text):
+    fail.append('series_watched_story_order_narrative_membership_missing')
 java_text=SOURCE.read_text()
 synthetic_fixtures=SYNTHETIC_FIXTURES.read_text() if SYNTHETIC_FIXTURES.is_file() else ''
 synthetic_fixtures_test=SYNTHETIC_FIXTURES_TEST.read_text() if SYNTHETIC_FIXTURES_TEST.is_file() else ''
@@ -592,14 +594,22 @@ if ('message.keys != setOf("action", "args")' not in synthetic_watched_host or
     '"MarkAsWatched"' not in synthetic_watched_host or
     '"MarkSeasonAsWatched"' not in synthetic_watched_host):
     fail.append('synthetic_watched_host_exact_dispatch_gate_missing')
-if ('.filter { it.season > 0 && released(it) }' not in synthetic_watched_host or
+if ('TvWatchedCoordinator()' not in synthetic_watched_host or
+    '.prepare(snapshot, WatchedScope.Series, markWatched)' not in synthetic_watched_host or
     '.filter { it.season == season && released(it) }' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_scope_or_season_zero_gate_missing')
+    fail.append('synthetic_watched_host_core_story_membership_or_season_gate_missing')
+if not all(x in synthetic_watched_host for x in [
+    '"local:mobile-watched:0:2"',
+    '"local:mobile-watched:1:3"',
+    '"local:mobile-watched:0:99"',
+    '"2035-01-03T00:00:00Z"'
+]):
+    fail.append('synthetic_watched_host_narrative_future_ancillary_fixture_missing')
 if ('snapshot.videos.map { it.copy() }' not in synthetic_watched_host or
     'watchedVideoIds = watched.toList()' not in synthetic_watched_host):
     fail.append('synthetic_watched_host_detached_observation_missing')
 if any(name not in synthetic_watched_host_test for name in [
-    'seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes',
+    'seriesActionUsesReleasedValidatedStoryMembership',
     'seasonActionIsBoundedToRequestedSyntheticSeason',
     'malformedOrStaleDispatchNeverMutatesSyntheticState',
     'tvHostBindingAppliesOnlyLocalSyntheticSeriesState',
@@ -2420,7 +2430,12 @@ if not all(x in title_watched_instrumentation for x in [
     'Applied to local synthetic watched state.',
     'local:mobile-watched:1:1',
     'local:mobile-watched:1:2',
-    'local:mobile-watched:0:2'
+    'local:mobile-watched:0:2',
+    'local:mobile-watched:1:3',
+    'local:mobile-watched:0:99',
+    'assertTrue(status, status.contains(NARRATIVE_SPECIAL))',
+    'assertFalse(status, status.contains(FUTURE_EPISODE))',
+    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))'
 ]):
     fail.append('synthetic_title_watched_api30_instrumentation_missing')
 if any(x in title_watched_instrumentation for x in [
@@ -2454,6 +2469,11 @@ if not all(x in mobile_title_watched_instrumentation for x in [
     'local:mobile-watched:1:1',
     'local:mobile-watched:1:2',
     'local:mobile-watched:0:2',
+    'local:mobile-watched:1:3',
+    'local:mobile-watched:0:99',
+    'assertTrue(status, status.contains(NARRATIVE_SPECIAL))',
+    'assertFalse(status, status.contains(FUTURE_EPISODE))',
+    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))',
     'filter { it.length <= 2_048 }'
 ]):
     fail.append('synthetic_mobile_title_watched_api30_instrumentation_missing')
@@ -2552,7 +2572,7 @@ if any(x in mobile_story_order_instrumentation for x in [
     fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
 if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':506,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':511,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

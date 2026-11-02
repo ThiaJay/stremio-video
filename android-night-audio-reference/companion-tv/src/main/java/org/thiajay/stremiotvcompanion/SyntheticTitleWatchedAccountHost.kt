@@ -5,6 +5,8 @@ import org.pss.stremio.tv.CanonicalEpisode
 import org.pss.stremio.tv.CanonicalWatchedAccountHostPort
 import org.pss.stremio.tv.CanonicalWatchedAccountObservation
 import org.pss.stremio.tv.SeriesAccountSnapshot
+import org.pss.stremio.tv.TvWatchedCoordinator
+import org.pss.stremio.tv.WatchedScope
 
 /**
  * Fixture-only watched-state host for the side-by-side mobile and TV labs.
@@ -28,7 +30,8 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
         storyOrder = listOf(
             "local:mobile-watched:1:1",
             "local:mobile-watched:0:2",
-            "local:mobile-watched:1:2"
+            "local:mobile-watched:1:2",
+            "local:mobile-watched:1:3"
         ),
         storyOrderVersion = 1,
         now = Instant.parse("2026-10-30T00:00:00Z")
@@ -62,9 +65,10 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
         when (inner["action"]) {
             "MarkAsWatched" -> {
                 markWatched = inner["args"] as? Boolean ?: return false
-                selected = snapshot.videos
-                    .filter { it.season > 0 && released(it) }
-                    .map { it.id }
+                selected = TvWatchedCoordinator()
+                    .prepare(snapshot, WatchedScope.Series, markWatched)
+                    ?.selectedIds
+                    ?: return false
             }
             "MarkSeasonAsWatched" -> {
                 val args = inner["args"] as? List<*> ?: return false
@@ -117,6 +121,18 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
                 1,
                 2,
                 "2025-01-03T00:00:00Z"
+            ),
+            CanonicalEpisode(
+                "local:mobile-watched:1:3",
+                1,
+                3,
+                "2035-01-03T00:00:00Z"
+            ),
+            CanonicalEpisode(
+                "local:mobile-watched:0:99",
+                0,
+                99,
+                "2025-01-04T00:00:00Z"
             )
         )
     }

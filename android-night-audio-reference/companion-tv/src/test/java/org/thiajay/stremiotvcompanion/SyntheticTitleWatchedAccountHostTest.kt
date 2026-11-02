@@ -12,19 +12,21 @@ import org.pss.stremio.tv.SessionBoundCanonicalWatchedAccountAdapter
 import org.pss.stremio.tv.TvWatchedCoordinator
 
 class SyntheticTitleWatchedAccountHostTest {
-    @Test fun seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes() {
+    @Test fun seriesActionUsesReleasedValidatedStoryMembership() {
         val host = SyntheticTitleWatchedAccountHost()
 
         assertTrue(host.dispatchTitleWatched(1L, command("MarkAsWatched", true)))
 
         assertEquals(
             listOf(
+                "local:mobile-watched:0:2",
                 "local:mobile-watched:1:1",
                 "local:mobile-watched:1:2"
             ),
             host.watchedIds()
         )
-        assertFalse(host.watchedIds().contains("local:mobile-watched:0:2"))
+        assertFalse(host.watchedIds().contains("local:mobile-watched:1:3"))
+        assertFalse(host.watchedIds().contains("local:mobile-watched:0:99"))
         assertEquals(1, host.acceptedDispatchCount())
     }
 
@@ -87,12 +89,14 @@ class SyntheticTitleWatchedAccountHostTest {
         )
         assertEquals(
             listOf(
+                "local:mobile-watched:0:2",
                 "local:mobile-watched:1:1",
                 "local:mobile-watched:1:2"
             ),
             host.watchedIds()
         )
-        assertFalse(host.watchedIds().contains("local:mobile-watched:0:2"))
+        assertFalse(host.watchedIds().contains("local:mobile-watched:1:3"))
+        assertFalse(host.watchedIds().contains("local:mobile-watched:0:99"))
         assertTrue(binding.close())
         assertTrue(account.close())
     }

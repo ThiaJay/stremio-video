@@ -68,7 +68,7 @@ fun main() {
         Instant.parse("2026-10-12T13:00:00Z"))
     val watched = TvWatchedCoordinator()
     val title = watched.prepare(state, WatchedScope.Series, true)
-    checkCase(title != null && title.selectedIds == listOf("s1e1", "s1e2", "s2e1", "s2e2"), "released story excludes future and every Season 0 item")
+    checkCase(title != null && title.selectedIds == listOf("s1e1", "s1e2", "s2e1", "s2e2", "special"), "released story includes narrative special and excludes future and ancillary Season 0")
     checkCase(watched.prepare(state, WatchedScope.Season(3), true) == null, "future season watched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(3), false) == null, "future season unwatched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(0), true) == null, "season zero refused")
@@ -96,7 +96,7 @@ fun main() {
     checkCase(watched.prepare(state.copy(readyMetaId="wrong"),WatchedScope.Series,true) == null,"wrong canonical identity")
     checkCase(watched.prepare(state.copy(accountFingerprint="bad"),WatchedScope.Series,true) == null,"account fingerprint required")
     checkCase(watched.prepare(state.copy(videos=canonical+canonical.first()),WatchedScope.Series,true) == null,"duplicate ID refused")
-    checkCase(watched.prepare(state.copy(storyOrder=listOf("s1e1","extra")),WatchedScope.Series,true)?.selectedIds?.contains("special") == false,"invalid Story Order fails to ordinary episodes")
+    checkCase(watched.prepare(state.copy(storyOrder=listOf("s1e1","extra")),WatchedScope.Series,true)?.selectedIds?.contains("special") == false,"invalid Story Order falls back to ordinary regular episodes")
     checkCase(canonical == before, "synthetic metadata unchanged")
     println("PASS: $assertions native TV skip and watched action safety assertions")
 }

@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' '789e29b997b503ee6cac03d638a7da023ecef551c866fbafe36287ce36862715  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+          printf '%s\n' 'b0341307c1e6a1b1e731044808aa02cb369ab24c65a938ad93473654fbd90566  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
       - name: Validate exact source contract and safety guard
         run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK
@@ -354,7 +354,7 @@ jobs:
           assert 'hostNextUsesPresentedStoryIdentityOnly' in names, 'Android mobile Story Order host continuation regression not executed'
           assert 'oversizedMobilePresentationFailsClosedBeforeView' in names, 'Android mobile Story Order UI bound regression not executed'
           assert 'hostOwnerThreadAndCloseRevokeOutstandingActions' in names, 'Android mobile Story Order host lifecycle regression not executed'
-          assert 'seriesActionMutatesOnlyReleasedRegularSyntheticEpisodes' in names, 'Synthetic watched series regression not executed'
+          assert 'seriesActionUsesReleasedValidatedStoryMembership' in names, 'Synthetic watched Story Order membership regression not executed'
           assert 'seasonActionIsBoundedToRequestedSyntheticSeason' in names, 'Synthetic watched season regression not executed'
           assert 'malformedOrStaleDispatchNeverMutatesSyntheticState' in names, 'Synthetic watched malformed dispatch regression not executed'
           assert 'observationsAndReadbackListsAreDetached' in names, 'Synthetic watched detachment regression not executed'

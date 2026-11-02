@@ -182,10 +182,10 @@ class TvWatchedCoordinator {
         if (!order.containsAll(regular.map { it.id })) return regular
         val byId = s.videos.associateBy { it.id }
         if (order.any { it !in byId }) return regular
-        // Story Order may place narrative or ancillary Season 0 entries among
-        // regular episodes for presentation. Series watched actions must still
-        // exclude every Season 0 item; only canonical regular episodes are writable.
-        return order.mapNotNull { byId[it] }.filter { it.season > 0 }
+        // Match the merged Core stable-ID contract: a valid Story Order defines
+        // narrative membership, so an explicitly listed Season 0 story special is
+        // writable while unlisted ancillary Season 0 material remains excluded.
+        return order.mapNotNull { byId[it] }
     }
 
     fun prepare(s: SeriesAccountSnapshot, scope: WatchedScope, watched: Boolean): WatchedPlan? {
