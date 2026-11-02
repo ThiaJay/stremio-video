@@ -621,7 +621,7 @@ class CompanionTvActivity : Activity() {
         val bounded = listOf(
             subtitleStatus.text.toString(),
             status.text.toString()
-        ).joinToString("\n")
+        ).joinToString(" | ")
         return bounded.takeIf { it.isNotBlank() && it.length <= 8_192 }
     }
 
