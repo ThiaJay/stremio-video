@@ -11,6 +11,7 @@ class MobileStoryOrderViewAction internal constructor(
     val title: String,
     val season: Int,
     val episodeNumber: Int?,
+    val watched: Boolean,
     private val row: MobileStoryOrderRow,
     private val provenanceSeal: Any
 ) {
@@ -38,7 +39,8 @@ interface MobileStoryOrderViewPort {
 class MobileStoryOrderHostBinding(
     canonical: List<CanonicalEpisode>,
     hints: StoryOrderHints?,
-    private val view: MobileStoryOrderViewPort
+    private val view: MobileStoryOrderViewPort,
+    watchedStableIds: Set<String> = emptySet()
 ) {
     companion object {
         const val MAX_PRESENTED_ROWS = 500
@@ -51,7 +53,7 @@ class MobileStoryOrderHostBinding(
 
     private val ownerThread = Thread.currentThread()
     private val bindingSeal = Any()
-    private val controller = MobileStoryOrderController(canonical, hints)
+    private val controller = MobileStoryOrderController(canonical, hints, watchedStableIds)
     private val issued = LinkedHashMap<String, Issued>()
     private var rendering = false
     private var closed = !controller.isOperational()
@@ -70,6 +72,7 @@ class MobileStoryOrderHostBinding(
                 title = row.title,
                 season = row.season,
                 episodeNumber = row.episodeNumber,
+                watched = row.watched,
                 row = row,
                 provenanceSeal = bindingSeal
             )

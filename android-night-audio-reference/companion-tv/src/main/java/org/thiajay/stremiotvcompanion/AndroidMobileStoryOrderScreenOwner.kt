@@ -13,17 +13,24 @@ import android.view.ViewGroup
 class AndroidMobileStoryOrderScreenOwner private constructor(
     container: ViewGroup,
     canonical: List<CanonicalEpisode>,
-    hints: StoryOrderHints?
+    hints: StoryOrderHints?,
+    watchedStableIds: Set<String>
 ) {
     companion object {
         fun create(
             container: ViewGroup,
             canonical: List<CanonicalEpisode>,
-            hints: StoryOrderHints?
+            hints: StoryOrderHints?,
+            watchedStableIds: Set<String> = emptySet()
         ): AndroidMobileStoryOrderScreenOwner? {
             if (Looper.myLooper() !== Looper.getMainLooper()) return null
             val owner = try {
-                AndroidMobileStoryOrderScreenOwner(container, canonical, hints)
+                AndroidMobileStoryOrderScreenOwner(
+                    container,
+                    canonical,
+                    hints,
+                    watchedStableIds
+                )
             } catch (_: Exception) {
                 null
             } catch (_: LinkageError) {
@@ -42,7 +49,12 @@ class AndroidMobileStoryOrderScreenOwner private constructor(
         onModeRequested = ::onModeRequested,
         onActivation = ::onActivation
     )
-    private val host = MobileStoryOrderHostBinding(canonical, hints, port)
+    private val host = MobileStoryOrderHostBinding(
+        canonical,
+        hints,
+        port,
+        watchedStableIds
+    )
 
     init {
         ready = host.isOperational()

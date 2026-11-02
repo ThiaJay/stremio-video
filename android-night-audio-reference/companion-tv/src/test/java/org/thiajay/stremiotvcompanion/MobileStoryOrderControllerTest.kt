@@ -109,6 +109,7 @@ class MobileStoryOrderControllerTest {
             title = current.title,
             season = current.season,
             episodeNumber = current.episodeNumber,
+            watched = current.watched,
             canonicalEpisode = regularOne,
             provenanceSeal = Any()
         )
@@ -119,6 +120,43 @@ class MobileStoryOrderControllerTest {
                 MobileStoryOrderController.SEMANTIC_SELECTION
             )
         )
+    }
+
+    @Test fun watchedMarkersStayBoundToStableIdsAcrossPresentationOrder() {
+        val controller = MobileStoryOrderController(
+            canonical,
+            hints,
+            setOf(narrativeSpecial.id, regularTwo.id)
+        )
+
+        val story = controller.present(MobileStoryOrderMode.STORY)!!
+        assertEquals(
+            mapOf(
+                regularOne.id to false,
+                narrativeSpecial.id to true,
+                regularTwo.id to true
+            ),
+            story.associate { it.stableVideoId to it.watched }
+        )
+
+        val ordinary = controller.present(MobileStoryOrderMode.CANONICAL)!!
+        assertEquals(
+            mapOf(
+                regularOne.id to false,
+                narrativeSpecial.id to true,
+                regularTwo.id to true,
+                ancillarySpecial.id to false
+            ),
+            ordinary.associate { it.stableVideoId to it.watched }
+        )
+
+        val invalid = MobileStoryOrderController(
+            canonical,
+            hints,
+            setOf("series:unknown")
+        )
+        assertNull(invalid.present(MobileStoryOrderMode.STORY))
+        assertTrue(!invalid.isOperational())
     }
 
     @Test fun mobileNextUsesPresentedStableIdentityAndSurvivesCallerMutation() {

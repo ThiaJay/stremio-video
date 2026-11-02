@@ -97,7 +97,8 @@ class AndroidMobileStoryOrderWidgetPort(
         } else {
             "S" + action.season + " E" + action.episodeNumber
         }
-        val label = coordinates + "  " + action.title
+        val label = coordinates + "  " + action.title +
+            if (action.watched) "  • Watched" else ""
         return Button(container.context).apply {
             id = View.generateViewId()
             text = label

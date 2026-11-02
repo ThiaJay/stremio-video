@@ -168,7 +168,8 @@ class MobileStoryOrderLabActivity : Activity() {
         val createdStory = AndroidMobileStoryOrderScreenOwner.create(
             storyRows,
             SYNTHETIC_CANONICAL,
-            SYNTHETIC_HINTS
+            SYNTHETIC_HINTS,
+            SYNTHETIC_STORY_WATCHED_IDS
         )
         if (createdStory == null || !createdStory.render(MobileStoryOrderMode.STORY)) {
             createdStory?.close()
@@ -258,6 +259,10 @@ class MobileStoryOrderLabActivity : Activity() {
             "synthetic_mobile_subtitle_receipt_v1"
         private const val SYNTHETIC_SUBTITLE_STATE_PREFS =
             "synthetic_mobile_subtitle_state_v1"
+        private val SYNTHETIC_STORY_WATCHED_IDS = setOf(
+            "local:mobile-story:0:2",
+            "local:mobile-story:1:2"
+        )
         private val SYNTHETIC_CANONICAL = listOf(
             CanonicalEpisode("local:mobile-story:1:1", 1, 1, "Episode one"),
             CanonicalEpisode("local:mobile-story:0:2", 0, 2, "Narrative special"),

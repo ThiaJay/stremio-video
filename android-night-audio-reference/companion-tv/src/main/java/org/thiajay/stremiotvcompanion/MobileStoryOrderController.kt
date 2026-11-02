@@ -18,6 +18,7 @@ class MobileStoryOrderRow internal constructor(
     val title: String,
     val season: Int,
     val episodeNumber: Int?,
+    val watched: Boolean,
     private val canonicalEpisode: CanonicalEpisode,
     private val provenanceSeal: Any
 ) {
@@ -34,10 +35,37 @@ class MobileStoryOrderRow internal constructor(
  */
 class MobileStoryOrderController(
     canonical: List<CanonicalEpisode>,
-    private val hints: StoryOrderHints?
+    private val hints: StoryOrderHints?,
+    watchedStableIds: Set<String> = emptySet()
 ) {
     companion object {
         const val SEMANTIC_SELECTION = "semantic-select"
+        const val MAX_WATCHED_IDS = 10_000
+        const val MAX_STABLE_ID_LENGTH = 240
+
+        private fun snapshotWatchedIds(
+            source: Set<String>,
+            canonical: List<CanonicalEpisode>
+        ): Set<String>? {
+            return try {
+                val copied = LinkedHashSet<String>()
+                val iterator = source.iterator()
+                while (iterator.hasNext()) {
+                    if (copied.size >= MAX_WATCHED_IDS) return null
+                    val id = iterator.next()
+                    if (id.isBlank() || id.length > MAX_STABLE_ID_LENGTH || !copied.add(id)) {
+                        return null
+                    }
+                }
+                val canonicalIds = canonical.mapTo(HashSet()) { it.id }
+                if (!canonicalIds.containsAll(copied)) return null
+                Collections.unmodifiableSet(copied)
+            } catch (_: Exception) {
+                null
+            } catch (_: LinkageError) {
+                null
+            }
+        }
     }
 
     private data class Issued(
@@ -49,10 +77,11 @@ class MobileStoryOrderController(
     private val controllerSeal = Any()
     private val canonicalSnapshot =
         StoryOrderContract.presentation(canonical, null, storyOrderSelected = false)
+    private val watchedSnapshot = snapshotWatchedIds(watchedStableIds, canonicalSnapshot)
     private val issued = LinkedHashMap<String, Issued>()
     private var activeEpisodes: List<CanonicalEpisode> = emptyList()
     private var effectiveStoryOrder = false
-    private var closed = canonicalSnapshot.isEmpty()
+    private var closed = canonicalSnapshot.isEmpty() || watchedSnapshot == null
 
     fun present(mode: MobileStoryOrderMode): List<MobileStoryOrderRow>? {
         if (!onOwnerThread() || closed) return null
@@ -81,6 +110,7 @@ class MobileStoryOrderController(
                 title = episode.title,
                 season = episode.season,
                 episodeNumber = episode.episode,
+                watched = watchedSnapshot!!.contains(episode.id),
                 canonicalEpisode = episode,
                 provenanceSeal = controllerSeal
             )

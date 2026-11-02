@@ -56,10 +56,20 @@ class MobileStoryOrderInstrumentationTest {
                 .filterIsInstance<Button>()
                 .map { it.text.toString() }
             assertTrue(labels.toString(), labels.any { it.contains(REGULAR_EPISODE_1) })
-            assertTrue(labels.toString(), labels.any { it.contains(NARRATIVE_SPECIAL_TITLE) })
-            assertTrue(labels.toString(), labels.any { it.contains(REGULAR_EPISODE_2) })
+            assertTrue(labels.toString(), labels.any {
+                it.contains(NARRATIVE_SPECIAL_TITLE) && it.contains(WATCHED_MARKER)
+            })
+            assertTrue(labels.toString(), labels.any {
+                it.contains(REGULAR_EPISODE_2) && it.contains(WATCHED_MARKER)
+            })
+            assertFalse(labels.toString(), labels.any {
+                it.contains(REGULAR_EPISODE_1) && it.contains(WATCHED_MARKER)
+            })
             if (shouldContainAncillary) {
                 assertTrue(labels.toString(), labels.any { it.contains(ANCILLARY_TITLE) })
+                assertFalse(labels.toString(), labels.any {
+                    it.contains(ANCILLARY_TITLE) && it.contains(WATCHED_MARKER)
+                })
             } else {
                 assertFalse(labels.toString(), labels.any { it.contains(ANCILLARY_TITLE) })
             }
@@ -114,6 +124,7 @@ class MobileStoryOrderInstrumentationTest {
         const val NARRATIVE_SPECIAL_LABEL = "S0 E2  Narrative special"
         const val REGULAR_EPISODE_2 = "S1 E2  Episode two"
         const val ANCILLARY_TITLE = "Ancillary extra"
+        const val WATCHED_MARKER = "• Watched"
         const val SELECTED_STABLE_ID =
             "Selected exact synthetic episode: local:mobile-story:0:2"
         const val ORIGINAL_OBJECT_MESSAGE =

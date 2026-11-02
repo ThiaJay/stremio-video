@@ -54,6 +54,33 @@ class MobileStoryOrderViewHostTest {
         assertTrue(host.isOperational())
     }
 
+    @Test fun hostPreservesWatchedMarkersByStableIdAcrossViewReplacement() {
+        val view = RecordingView()
+        val host = MobileStoryOrderHostBinding(
+            canonical,
+            hints,
+            view,
+            setOf(special.id, second.id)
+        )
+
+        assertTrue(host.render(MobileStoryOrderMode.STORY))
+        assertEquals(
+            mapOf(first.id to false, special.id to true, second.id to true),
+            view.actions.associate { it.stableVideoId to it.watched }
+        )
+
+        assertTrue(host.render(MobileStoryOrderMode.CANONICAL))
+        assertEquals(
+            mapOf(
+                first.id to false,
+                special.id to true,
+                second.id to true,
+                ancillary.id to false
+            ),
+            view.actions.associate { it.stableVideoId to it.watched }
+        )
+    }
+
     @Test fun exactSemanticActionReturnsOriginalCanonicalAndRevokesGeneration() {
         val view = RecordingView()
         val host = MobileStoryOrderHostBinding(canonical, hints, view)
@@ -114,6 +141,7 @@ class MobileStoryOrderViewHostTest {
             title = first.title,
             season = first.season,
             episodeNumber = first.episode,
+            watched = false,
             canonicalEpisode = first,
             provenanceSeal = Any()
         )
@@ -122,6 +150,7 @@ class MobileStoryOrderViewHostTest {
             title = current.title,
             season = current.season,
             episodeNumber = current.episodeNumber,
+            watched = current.watched,
             row = forgedRow,
             provenanceSeal = Any()
         )
