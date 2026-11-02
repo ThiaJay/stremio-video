@@ -534,8 +534,12 @@ jobs:
 
   companion-api30-window-runtime:
     needs: companion-validation
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      ANDROID_USER_HOME: ${{ runner.temp }}/companion-android-user
+      ANDROID_AVD_HOME: ${{ runner.temp }}/companion-avd
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -546,6 +550,7 @@ jobs:
           java-version: '21'
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
         with:
+          cmdline-tools-version: '14742923'
           packages: 'platform-tools'
           log-accepted-android-sdk-licenses: 'false'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
@@ -565,29 +570,57 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME"
           printf 'no\n' | avdmanager create avd \
             --force \
             --name stremio_companion_api30 \
             --package 'system-images;android-30;google_apis;x86_64' \
-            --device 'pixel_2'
+            --path "$ANDROID_AVD_HOME/stremio_companion_api30.avd"
+          emulator -list-avds | tee /tmp/companion-avds.txt
+          grep -Fx 'stremio_companion_api30' /tmp/companion-avds.txt
       - name: Execute local Media3 subtitle and PixelCopy runtime gates
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
           emulator -avd stremio_companion_api30 \
             -no-window -no-snapshot -no-boot-anim \
             -gpu swiftshader_indirect \
-            -camera-back none -camera-front none \
+            -camera-back none -camera-front none -no-audio \
             >/tmp/companion-emulator.log 2>&1 &
           emulator_pid=$!
           cleanup() {
             adb emu kill >/dev/null 2>&1 || true
+            kill "$emulator_pid" >/dev/null 2>&1 || true
             wait "$emulator_pid" 2>/dev/null || true
           }
           trap cleanup EXIT
-          adb wait-for-device
-          timeout 240 bash -c \
-            'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == "1" ]]; do sleep 2; done'
+          adb_ready=false
+          for _ in $(seq 1 90); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              cat /tmp/companion-emulator.log
+              echo 'API 30 emulator exited before becoming visible to ADB.'
+              exit 1
+            fi
+            if [[ "$(adb get-state 2>/dev/null || true)" == 'device' ]]; then
+              adb_ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$adb_ready" != true ]]; then
+            cat /tmp/companion-emulator.log
+            echo 'API 30 emulator was not visible to ADB within 180 seconds.'
+            exit 1
+          fi
+          if ! timeout 240 bash -c \
+            'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == "1" ]]; do sleep 2; done'; then
+            cat /tmp/companion-emulator.log
+            echo 'API 30 emulator did not complete boot within 240 seconds.'
+            exit 1
+          fi
           adb shell getprop ro.build.version.sdk | grep -Fx '30'
           gradle -p android-night-audio-reference \
             :companion-tv:connectedDebugAndroidTest \
