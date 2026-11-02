@@ -17,6 +17,8 @@ import org.pss.stremio.tv.WatchedScope
 internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPort {
     private val epoch = 1L
     private val watched = linkedSetOf<String>()
+    private var resumeVideoId: String? = "local:mobile-watched:0:99"
+    private var resumeTimeOffset = 42_000L
     private var acceptedDispatches = 0
 
     private val snapshot = SeriesAccountSnapshot(
@@ -46,7 +48,9 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
                 videos = snapshot.videos.map { it.copy() },
                 storyOrder = snapshot.storyOrder?.toList()
             ),
-            watchedVideoIds = watched.toList()
+            watchedVideoIds = watched.toList(),
+            resumeVideoId = resumeVideoId,
+            resumeTimeOffset = resumeTimeOffset
         )
 
     override fun dispatchTitleWatched(
@@ -84,11 +88,18 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
         }
         if (selected.isEmpty()) return false
         if (markWatched) watched.addAll(selected) else watched.removeAll(selected.toSet())
+        if (inner["action"] == "MarkAsWatched" && markWatched) {
+            // Mirror merged Core PR #38 only inside this synthetic fixture: title
+            // completion clears time_offset while preserving historical video_id.
+            resumeTimeOffset = 0L
+        }
         acceptedDispatches += 1
         return true
     }
 
     fun watchedIds(): List<String> = watched.toList()
+
+    fun resumeState(): Pair<String?, Long> = resumeVideoId to resumeTimeOffset
 
     fun acceptedDispatchCount(): Int = acceptedDispatches
 

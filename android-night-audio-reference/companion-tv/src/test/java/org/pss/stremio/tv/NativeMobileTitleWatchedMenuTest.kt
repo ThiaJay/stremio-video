@@ -30,6 +30,8 @@ class NativeMobileTitleWatchedMenuTest {
         val watchedIds = linkedSetOf<String>()
         var rejectDispatch = false
         var applyDispatchToReadback = true
+        var resumeVideoId: String? = "s1e2"
+        var resumeTimeOffset = 42_000L
 
         override fun currentSnapshot(): SeriesAccountSnapshot? = value
 
@@ -38,13 +40,23 @@ class NativeMobileTitleWatchedMenuTest {
             sent.add(message)
             if (applyDispatchToReadback) {
                 val inner = message["args"] as Map<*, *>
-                val watched = when (inner["action"]) {
-                    "MarkAsWatched" -> inner["args"] as Boolean
-                    "MarkSeasonAsWatched" -> (inner["args"] as List<*>)[1] as Boolean
+                val watched: Boolean
+                val scope = when (inner["action"]) {
+                    "MarkAsWatched" -> {
+                        watched = inner["args"] as Boolean
+                        WatchedScope.Series
+                    }
+                    "MarkSeasonAsWatched" -> {
+                        val args = inner["args"] as List<*>
+                        watched = args[1] as Boolean
+                        WatchedScope.Season(args[0] as Int)
+                    }
                     else -> return false
                 }
-                val ids = value?.videos?.map { it.id }.orEmpty()
+                val ids = value?.let { TvWatchedCoordinator().prepare(it, scope, watched)?.selectedIds }
+                    ?: return false
                 if (watched) watchedIds.addAll(ids) else watchedIds.removeAll(ids.toSet())
+                if (scope == WatchedScope.Series && watched) resumeTimeOffset = 0L
             }
             return true
         }
@@ -54,7 +66,9 @@ class NativeMobileTitleWatchedMenuTest {
                 accountFingerprint = it.accountFingerprint,
                 libraryItemFingerprint = it.libraryItemFingerprint,
                 seriesId = it.seriesId,
-                watchedVideoIds = watchedIds.toList()
+                watchedVideoIds = watchedIds.toList(),
+                resumeVideoId = resumeVideoId,
+                resumeTimeOffset = resumeTimeOffset
             )
         }
     }
@@ -274,6 +288,7 @@ class NativeMobileTitleWatchedMenuTest {
         assertTrue(menu.present(1).isEmpty())
 
         account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        account.resumeTimeOffset = 0L
         assertEquals(4, menu.present(1).size)
         assertEquals(1, account.sent.size)
     }

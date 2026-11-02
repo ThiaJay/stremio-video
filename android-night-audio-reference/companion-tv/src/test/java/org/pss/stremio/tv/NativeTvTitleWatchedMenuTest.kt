@@ -32,6 +32,8 @@ class NativeTvTitleWatchedMenuTest {
         var throwOnDispatch = false
         var applyDispatchToReadback = true
         var readbackOverride: CanonicalWatchedStateReadback? = null
+        var resumeVideoId: String? = "s1e2"
+        var resumeTimeOffset = 42_000L
 
         override fun currentSnapshot(): SeriesAccountSnapshot? {
             if (throwOnRead) throw IllegalStateException("bounded test")
@@ -43,13 +45,23 @@ class NativeTvTitleWatchedMenuTest {
             sent.add(message)
             if (applyDispatchToReadback) {
                 val inner = message["args"] as Map<*, *>
-                val watched = when (inner["action"]) {
-                    "MarkAsWatched" -> inner["args"] as Boolean
-                    "MarkSeasonAsWatched" -> (inner["args"] as List<*>)[1] as Boolean
+                val watched: Boolean
+                val scope = when (inner["action"]) {
+                    "MarkAsWatched" -> {
+                        watched = inner["args"] as Boolean
+                        WatchedScope.Series
+                    }
+                    "MarkSeasonAsWatched" -> {
+                        val args = inner["args"] as List<*>
+                        watched = args[1] as Boolean
+                        WatchedScope.Season(args[0] as Int)
+                    }
                     else -> return false
                 }
-                val ids = value?.videos?.map { it.id }.orEmpty()
+                val ids = value?.let { TvWatchedCoordinator().prepare(it, scope, watched)?.selectedIds }
+                    ?: return false
                 if (watched) watchedIds.addAll(ids) else watchedIds.removeAll(ids.toSet())
+                if (scope == WatchedScope.Series && watched) resumeTimeOffset = 0L
             }
             return true
         }
@@ -60,7 +72,9 @@ class NativeTvTitleWatchedMenuTest {
                 accountFingerprint = it.accountFingerprint,
                 libraryItemFingerprint = it.libraryItemFingerprint,
                 seriesId = it.seriesId,
-                watchedVideoIds = watchedIds.toList()
+                watchedVideoIds = watchedIds.toList(),
+                resumeVideoId = resumeVideoId,
+                resumeTimeOffset = resumeTimeOffset
             )
         }
     }
@@ -282,6 +296,7 @@ class NativeTvTitleWatchedMenuTest {
         assertTrue(menu.present(1).isEmpty())
 
         account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        account.resumeTimeOffset = 0L
         assertEquals(4, menu.present(1).size)
         assertEquals(1, account.sent.size)
     }
@@ -297,6 +312,7 @@ class NativeTvTitleWatchedMenuTest {
             menu.activate(selected, selected.actionId, "ENTER")
         )
         account.watchedIds.addAll(original.videos.map { it.id })
+        account.resumeTimeOffset = 0L
 
         account.value = original.copy(accountFingerprint = "c".repeat(64))
         assertTrue(menu.present(1).isEmpty())
@@ -323,7 +339,9 @@ class NativeTvTitleWatchedMenuTest {
             accountFingerprint = "c".repeat(64),
             libraryItemFingerprint = account.value!!.libraryItemFingerprint,
             seriesId = account.value!!.seriesId,
-            watchedVideoIds = ids
+            watchedVideoIds = ids,
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = 0L
         )
         assertTrue(menu.present(1).isEmpty())
 
@@ -331,12 +349,15 @@ class NativeTvTitleWatchedMenuTest {
             accountFingerprint = account.value!!.accountFingerprint,
             libraryItemFingerprint = account.value!!.libraryItemFingerprint,
             seriesId = account.value!!.seriesId,
-            watchedVideoIds = ids + ids.first()
+            watchedVideoIds = ids + ids.first(),
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = 0L
         )
         assertTrue(menu.present(1).isEmpty())
 
         account.readbackOverride = null
         account.watchedIds.addAll(ids)
+        account.resumeTimeOffset = 0L
         assertEquals(4, menu.present(1).size)
         assertEquals(1, account.sent.size)
     }
@@ -355,7 +376,9 @@ class NativeTvTitleWatchedMenuTest {
             accountFingerprint = account.value!!.accountFingerprint,
             libraryItemFingerprint = account.value!!.libraryItemFingerprint,
             seriesId = account.value!!.seriesId,
-            watchedVideoIds = ids + "stale-unknown-episode"
+            watchedVideoIds = ids + "stale-unknown-episode",
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = 0L
         )
         assertTrue(menu.present(1).isEmpty())
 
@@ -363,26 +386,16 @@ class NativeTvTitleWatchedMenuTest {
             accountFingerprint = account.value!!.accountFingerprint,
             libraryItemFingerprint = account.value!!.libraryItemFingerprint,
             seriesId = account.value!!.seriesId,
-            watchedVideoIds = ids
+            watchedVideoIds = ids,
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = 0L
         )
         assertEquals(4, menu.present(1).size)
         assertEquals(1, account.sent.size)
     }
 
     @Test fun throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping() {
-        val account = Account(snapshot()).apply {
-            applyDispatchToReadback = false
-            readbackOverride = CanonicalWatchedStateReadback(
-                accountFingerprint = value!!.accountFingerprint,
-                libraryItemFingerprint = value!!.libraryItemFingerprint,
-                seriesId = value!!.seriesId,
-                watchedVideoIds = object : AbstractList<String>() {
-                    override val size: Int = 1
-                    override fun get(index: Int): String =
-                        throw IllegalStateException("mutable Core wrapper changed")
-                }
-            )
-        }
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
         val selected = action(menu.present(1), WatchedScope.Series, true)
 
@@ -390,11 +403,74 @@ class NativeTvTitleWatchedMenuTest {
             NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
             menu.activate(selected, selected.actionId, "ENTER")
         )
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = account.value!!.accountFingerprint,
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = object : AbstractList<String>() {
+                override val size: Int = 1
+                override fun get(index: Int): String =
+                    throw IllegalStateException("mutable Core wrapper changed")
+            },
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = 0L
+        )
         assertTrue(menu.present(1).isEmpty())
 
         account.readbackOverride = null
         account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        account.resumeTimeOffset = 0L
         assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
+
+    @Test fun seriesWatchedRequiresExactMembershipAndClearedResumeReadback() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        assertTrue(menu.present(1).isEmpty())
+
+        account.resumeTimeOffset = 0L
+        account.resumeVideoId = "s1e1"
+        assertTrue(menu.present(1).isEmpty())
+
+        account.resumeVideoId = "s1e2"
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
+
+    @Test fun seriesUnwatchedPreservesResumeAndRejectsUnselectedMutation() {
+        val account = Account(snapshot(listOf(
+            CanonicalEpisode("s1e1", 1, 1, released),
+            CanonicalEpisode("s1e2", 1, 2, released),
+            CanonicalEpisode("s1e3", 1, 3, future)
+        ))).apply {
+            watchedIds.addAll(listOf("s1e1", "s1e2", "s1e3"))
+            applyDispatchToReadback = false
+        }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(null), WatchedScope.Series, false)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER", unwatchAcknowledged = true)
+        )
+        account.watchedIds.removeAll(listOf("s1e1", "s1e2"))
+        account.resumeTimeOffset = 0L
+        assertTrue(menu.present(null).isEmpty())
+
+        account.resumeTimeOffset = 42_000L
+        account.watchedIds.remove("s1e3")
+        assertTrue(menu.present(null).isEmpty())
+
+        account.watchedIds.add("s1e3")
+        assertEquals(2, menu.present(null).size)
         assertEquals(1, account.sent.size)
     }
 }

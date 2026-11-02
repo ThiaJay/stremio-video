@@ -608,12 +608,18 @@ if not all(x in synthetic_watched_host for x in [
 if ('snapshot.videos.map { it.copy() }' not in synthetic_watched_host or
     'watchedVideoIds = watched.toList()' not in synthetic_watched_host):
     fail.append('synthetic_watched_host_detached_observation_missing')
+if ('resumeVideoId: String? = "local:mobile-watched:0:99"' not in synthetic_watched_host or
+    'resumeTimeOffset = 42_000L' not in synthetic_watched_host or
+    'resumeTimeOffset = 0L' not in synthetic_watched_host or
+    'fun resumeState(): Pair<String?, Long>' not in synthetic_watched_host):
+    fail.append('synthetic_watched_host_core_resume_consequence_missing')
 if any(name not in synthetic_watched_host_test for name in [
     'seriesActionUsesReleasedValidatedStoryMembership',
     'seasonActionIsBoundedToRequestedSyntheticSeason',
     'malformedOrStaleDispatchNeverMutatesSyntheticState',
     'tvHostBindingAppliesOnlyLocalSyntheticSeriesState',
     'observationsAndReadbackListsAreDetached',
+    'titleUnwatchedPreservesSyntheticResumeState',
 ]):
     fail.append('synthetic_watched_host_regressions_missing')
 recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
@@ -708,8 +714,16 @@ if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watc
     'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
     fail.append('title_watched_canonical_post_write_readback_gate_missing')
 if ('val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()' not in title_watched_menu or
-    'if (!canonicalVideoIds.containsAll(state.watchedVideoIds)) return false' not in title_watched_menu):
+    'canonicalVideoIds.containsAll(state.watchedVideoIds)' not in title_watched_menu or
+    'state.resumeVideoId in canonicalVideoIds' not in title_watched_menu):
     fail.append('title_watched_unknown_canonical_id_gate_missing')
+if ('val before: CanonicalWatchedStateReadback' not in title_watched_menu or
+    'beforeIds + selectedIds' not in title_watched_menu or
+    'beforeIds - selectedIds' not in title_watched_menu or
+    'state.resumeVideoId == pending.before.resumeVideoId' not in title_watched_menu or
+    'state.resumeTimeOffset == 0L' not in title_watched_menu or
+    'state.resumeTimeOffset == pending.before.resumeTimeOffset' not in title_watched_menu):
+    fail.append('title_watched_exact_membership_or_core_resume_readback_missing')
 if ('private val account: CanonicalWatchedStatePort' not in title_watched_menu or
     'account: CanonicalWatchedStatePort' not in mobile_title_watched_menu or
     'account: CanonicalWatchedStatePort' not in mobile_title_host_binding or
@@ -741,7 +755,9 @@ if any(name not in title_watched_menu_test for name in [
     'pendingReadbackCannotCrossAccountOrLibraryIdentity',
     'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration',
     'unknownCanonicalWatchedIdNeverReopensGeneration',
-    'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping'
+    'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping',
+    'seriesWatchedRequiresExactMembershipAndClearedResumeReadback',
+    'seriesUnwatchedPreservesResumeAndRejectsUnselectedMutation'
 ]):
     fail.append('native_tv_title_watched_menu_regressions_missing')
 if ('class NativeMobileTitleWatchedMenu' not in mobile_title_watched_menu or
@@ -1062,6 +1078,13 @@ if ('raw.videos.map' not in canonical_watched_account_adapter or
     'raw.storyOrder?.toList()' not in canonical_watched_account_adapter or
     'raw.watchedVideoIds.toList()' not in canonical_watched_account_adapter):
     fail.append('canonical_account_host_collections_not_detached')
+if ('val resumeVideoId: String?' not in canonical_watched_account_adapter or
+    'val resumeTimeOffset: Long' not in canonical_watched_account_adapter or
+    'raw.resumeTimeOffset < 0L' not in canonical_watched_account_adapter or
+    'resumeVideoId = raw.resumeVideoId' not in canonical_watched_account_adapter or
+    'resumeTimeOffset = raw.resumeTimeOffset' not in canonical_watched_account_adapter or
+    'malformedResumeReadbackFailsClosedBeforeDispatch' not in canonical_watched_account_adapter_test):
+    fail.append('canonical_account_core_resume_readback_contract_missing')
 if ('message.keys != setOf("action", "args")' not in canonical_watched_account_adapter or
     '"MarkAsWatched"' not in canonical_watched_account_adapter or
     '"MarkSeasonAsWatched"' not in canonical_watched_account_adapter or

@@ -14,6 +14,7 @@ import org.pss.stremio.tv.TvWatchedCoordinator
 class SyntheticTitleWatchedAccountHostTest {
     @Test fun seriesActionUsesReleasedValidatedStoryMembership() {
         val host = SyntheticTitleWatchedAccountHost()
+        assertEquals("local:mobile-watched:0:99" to 42_000L, host.resumeState())
 
         assertTrue(host.dispatchTitleWatched(1L, command("MarkAsWatched", true)))
 
@@ -27,6 +28,17 @@ class SyntheticTitleWatchedAccountHostTest {
         )
         assertFalse(host.watchedIds().contains("local:mobile-watched:1:3"))
         assertFalse(host.watchedIds().contains("local:mobile-watched:0:99"))
+        assertEquals("local:mobile-watched:0:99" to 0L, host.resumeState())
+        assertEquals(1, host.acceptedDispatchCount())
+    }
+
+    @Test fun titleUnwatchedPreservesSyntheticResumeState() {
+        val host = SyntheticTitleWatchedAccountHost()
+
+        assertTrue(host.dispatchTitleWatched(1L, command("MarkAsWatched", false)))
+
+        assertEquals("local:mobile-watched:0:99" to 42_000L, host.resumeState())
+        assertTrue(host.watchedIds().isEmpty())
         assertEquals(1, host.acceptedDispatchCount())
     }
 
@@ -97,6 +109,7 @@ class SyntheticTitleWatchedAccountHostTest {
         )
         assertFalse(host.watchedIds().contains("local:mobile-watched:1:3"))
         assertFalse(host.watchedIds().contains("local:mobile-watched:0:99"))
+        assertEquals("local:mobile-watched:0:99" to 0L, host.resumeState())
         assertTrue(binding.close())
         assertTrue(account.close())
     }

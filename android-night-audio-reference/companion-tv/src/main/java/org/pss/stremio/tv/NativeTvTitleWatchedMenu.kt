@@ -32,7 +32,11 @@ data class CanonicalWatchedStateReadback(
     val accountFingerprint: String,
     val libraryItemFingerprint: String,
     val seriesId: String,
-    val watchedVideoIds: List<String>
+    val watchedVideoIds: List<String>,
+    /** Historical Core video_id. It must not be rewritten by a title action. */
+    val resumeVideoId: String?,
+    /** Exact non-negative Core time_offset value, without unit conversion. */
+    val resumeTimeOffset: Long
 )
 
 /** Mandatory account boundary for a real Android title-action screen owner. */
@@ -62,7 +66,10 @@ class NativeTvTitleWatchedMenu(
         val plan: WatchedPlan
     )
 
-    private data class PendingReadback(val plan: WatchedPlan)
+    private data class PendingReadback(
+        val plan: WatchedPlan,
+        val before: CanonicalWatchedStateReadback
+    )
 
     private val ownerThread = Thread.currentThread()
     private val menuSeal = Any()
@@ -167,8 +174,11 @@ class NativeTvTitleWatchedMenu(
             null
         } ?: return NativeTvTitleWatchedOutcome.REFUSED
 
+        val before = watchedStateOrNull()
+            ?.takeIf { validReadback(it, fresh) }
+            ?: return NativeTvTitleWatchedOutcome.REFUSED
         if (!dispatchOrFalse(command.coreAction)) return NativeTvTitleWatchedOutcome.REFUSED
-        pendingReadback = PendingReadback(record.plan)
+        pendingReadback = PendingReadback(record.plan, before)
         val postDispatch = snapshotOrNull()
         return if (postDispatch != null && confirmPendingReadback(postDispatch)) {
             NativeTvTitleWatchedOutcome.APPLIED
@@ -214,23 +224,28 @@ class NativeTvTitleWatchedMenu(
         if (currentPlan != pending.plan) return false
 
         val state = watchedStateOrNull() ?: return false
-        if (state.accountFingerprint != snapshot.accountFingerprint ||
-            state.libraryItemFingerprint != snapshot.libraryItemFingerprint ||
-            state.seriesId != snapshot.seriesId ||
-            state.watchedVideoIds.any { it.isBlank() } ||
-            state.watchedVideoIds.size != state.watchedVideoIds.toSet().size
-        ) return false
+        if (!validReadback(state, snapshot) || !validReadback(pending.before, snapshot)) return false
 
-        val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()
-        if (!canonicalVideoIds.containsAll(state.watchedVideoIds)) return false
-
-        val watchedIds = state.watchedVideoIds.toSet()
-        val confirmed = if (pending.plan.watched) {
-            pending.plan.selectedIds.all { it in watchedIds }
+        val beforeIds = pending.before.watchedVideoIds.toSet()
+        val selectedIds = pending.plan.selectedIds.toSet()
+        val expectedIds = if (pending.plan.watched) {
+            beforeIds + selectedIds
         } else {
-            pending.plan.selectedIds.none { it in watchedIds }
+            beforeIds - selectedIds
         }
-        if (!confirmed) return false
+        if (state.watchedVideoIds.toSet() != expectedIds) return false
+
+        val resumeConfirmed = when (pending.plan.scope) {
+            WatchedScope.Series -> if (pending.plan.watched) {
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == 0L
+            } else {
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == pending.before.resumeTimeOffset
+            }
+            is WatchedScope.Season -> true
+        }
+        if (!resumeConfirmed) return false
         coordinators[!pending.plan.watched] = TvWatchedCoordinator()
         pendingReadback = null
         return true
@@ -246,5 +261,22 @@ class NativeTvTitleWatchedMenu(
         null
     } catch (_: LinkageError) {
         null
+    }
+
+    private fun validReadback(
+        state: CanonicalWatchedStateReadback,
+        snapshot: SeriesAccountSnapshot
+    ): Boolean {
+        if (state.accountFingerprint != snapshot.accountFingerprint ||
+            state.libraryItemFingerprint != snapshot.libraryItemFingerprint ||
+            state.seriesId != snapshot.seriesId ||
+            state.watchedVideoIds.any { it.isBlank() } ||
+            state.watchedVideoIds.size != state.watchedVideoIds.toSet().size ||
+            state.resumeVideoId?.isBlank() == true ||
+            state.resumeTimeOffset < 0L
+        ) return false
+        val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()
+        return canonicalVideoIds.containsAll(state.watchedVideoIds) &&
+            (state.resumeVideoId == null || state.resumeVideoId in canonicalVideoIds)
     }
 }

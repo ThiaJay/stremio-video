@@ -5,14 +5,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * One host observation from an already authenticated private client session.
  *
- * It contains no credentials, addon URLs, stream URLs or playback history.
+ * It contains no credentials, addon URLs or stream URLs. The only history
+ * fields admitted are the bounded library-item video_id and non-negative
+ * time_offset required to verify the merged Core Continue Watching result.
  * The host epoch must change whenever the account, selected library item or
  * metadata generation changes.
  */
 data class CanonicalWatchedAccountObservation(
     val sessionEpoch: Long,
     val snapshot: SeriesAccountSnapshot,
-    val watchedVideoIds: List<String>
+    val watchedVideoIds: List<String>,
+    /** Exact Core library-item history pointer. Null is a valid empty history. */
+    val resumeVideoId: String?,
+    /** Exact non-negative Core library-item time_offset value, without unit conversion. */
+    val resumeTimeOffset: Long
 )
 
 /**
@@ -207,6 +213,9 @@ class SessionBoundCanonicalWatchedAccountAdapter(
             if (watchedIds.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } ||
                 watchedIds.size != watchedIds.toSet().size
             ) return null
+            if (raw.resumeVideoId?.let { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } == true ||
+                raw.resumeTimeOffset < 0L
+            ) return null
 
             val after = host.sessionEpoch()
             if (after != before) return null
@@ -218,7 +227,9 @@ class SessionBoundCanonicalWatchedAccountAdapter(
                     accountFingerprint = snapshot.accountFingerprint,
                     libraryItemFingerprint = snapshot.libraryItemFingerprint,
                     seriesId = snapshot.seriesId,
-                    watchedVideoIds = watchedIds
+                    watchedVideoIds = watchedIds,
+                    resumeVideoId = raw.resumeVideoId,
+                    resumeTimeOffset = raw.resumeTimeOffset
                 )
             )
         } catch (_: Exception) {

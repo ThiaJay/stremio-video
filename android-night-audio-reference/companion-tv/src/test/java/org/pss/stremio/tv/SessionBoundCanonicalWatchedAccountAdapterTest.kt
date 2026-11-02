@@ -41,6 +41,8 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         var epochSequence = ArrayDeque<Long>()
         var epochReads = 0
         var observeCalls = 0
+        var resumeVideoId: String? = "s1e2"
+        var resumeTimeOffset = 42_000L
         val sent = mutableListOf<Map<String, Any>>()
         val dispatchedEpochs = mutableListOf<Long>()
 
@@ -52,7 +54,13 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         override fun observe(): CanonicalWatchedAccountObservation? {
             observeCalls += 1
             if (throwObserve) throw IllegalStateException("bounded test")
-            return CanonicalWatchedAccountObservation(observedEpoch, value, watchedIds)
+            return CanonicalWatchedAccountObservation(
+                observedEpoch,
+                value,
+                watchedIds,
+                resumeVideoId,
+                resumeTimeOffset
+            )
         }
 
         override fun dispatchTitleWatched(
@@ -91,6 +99,25 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertEquals(listOf("s1e1", "s1e2"), detachedSnapshot.videos.map { it.id })
         assertEquals(listOf("s1e1", "s1e2"), detachedSnapshot.storyOrder)
         assertEquals(listOf("s1e1"), detachedReadback.watchedVideoIds)
+        assertEquals("s1e2", detachedReadback.resumeVideoId)
+        assertEquals(42_000L, detachedReadback.resumeTimeOffset)
+    }
+
+    @Test fun malformedResumeReadbackFailsClosedBeforeDispatch() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+
+        host.resumeVideoId = ""
+        assertNull(adapter.currentSnapshot())
+        host.resumeVideoId = "s1e2"
+        host.resumeTimeOffset = -1L
+        assertNull(adapter.currentSnapshot())
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.dispatchedEpochs.size)
+
+        host.resumeTimeOffset = 0L
+        assertNotNull(adapter.currentSnapshot())
+        assertEquals(0L, adapter.currentWatchedState()!!.resumeTimeOffset)
     }
 
     @Test fun watchedReadbackRequiresMatchingObservedSnapshot() {
