@@ -41,14 +41,12 @@ class CompanionTvTitleWatchedInstrumentationTest {
 
     @Test
     fun testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30() {
-        var focused = false
         scenario.onActivity { activity ->
             val button = findViews(activity.window.decorView)
                 .filterIsInstance<Button>()
                 .singleOrNull { it.text.toString() == MARK_SERIES_WATCHED }
             assertNotNull("Synthetic series watched action was not uniquely rendered", button)
             button?.let { candidate ->
-                focused = candidate.requestFocus() && candidate.hasFocus()
                 candidate.requestRectangleOnScreen(
                     Rect(
                         0,
@@ -58,9 +56,13 @@ class CompanionTvTitleWatchedInstrumentationTest {
                     ),
                     true
                 )
+                candidate.requestFocus()
             }
         }
-        assertTrue("Synthetic watched action did not receive real focus", focused)
+        assertTrue(
+            "Synthetic watched action did not receive real visible window focus",
+            awaitButtonFocus(MARK_SERIES_WATCHED, 5_000L)
+        )
 
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.waitForIdleSync()
@@ -101,6 +103,38 @@ class CompanionTvTitleWatchedInstrumentationTest {
                 snapshot.replace('\n', ' ')
         )
         return snapshot
+    }
+
+    private fun awaitButtonFocus(label: String, timeoutMs: Long): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            var focused = false
+            scenario.onActivity { activity ->
+                val button = findViews(activity.window.decorView)
+                    .filterIsInstance<Button>()
+                    .singleOrNull { it.text.toString() == label }
+                button?.let { candidate ->
+                    if (!candidate.hasFocus()) {
+                        candidate.requestRectangleOnScreen(
+                            Rect(
+                                0,
+                                0,
+                                candidate.width.coerceAtLeast(1),
+                                candidate.height.coerceAtLeast(1)
+                            ),
+                            true
+                        )
+                        candidate.requestFocus()
+                    }
+                    focused = candidate.isShown && candidate.hasWindowFocus() &&
+                        candidate.hasFocus()
+                }
+            }
+            if (focused) return true
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            SystemClock.sleep(50L)
+        }
+        return false
     }
 
     private fun findViews(root: View): List<View> = buildList {
