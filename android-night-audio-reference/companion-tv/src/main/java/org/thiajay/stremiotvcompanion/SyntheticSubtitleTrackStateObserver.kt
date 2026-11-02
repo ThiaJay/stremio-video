@@ -16,6 +16,7 @@ internal class SyntheticSubtitleTrackStateObserver(
 
     data class TextTrack(
         val sampleMimeType: String?,
+        val codecs: String?,
         val language: String?,
         val label: String?,
         val selected: Boolean
@@ -53,13 +54,12 @@ internal class SyntheticSubtitleTrackStateObserver(
             state = State.ABSENT
             return true
         }
-        if (textTracks.size != 1 || textTracks.single() != EXPECTED_UNSELECTED.copy(
-                selected = textTracks.single().selected
-            )) {
+        val track = textTracks.singleOrNull()
+        if (track == null || !isExpectedSyntheticWebVttTrack(track)) {
             poisonActiveGeneration()
             return false
         }
-        state = if (textTracks.single().selected) {
+        state = if (track.selected) {
             State.PRESENT_SELECTED
         } else {
             State.PRESENT_UNSELECTED
@@ -87,6 +87,16 @@ internal class SyntheticSubtitleTrackStateObserver(
         return true
     }
 
+    private fun isExpectedSyntheticWebVttTrack(track: TextTrack): Boolean {
+        val payloadIdentityAccepted = when (track.sampleMimeType) {
+            WEBVTT_MIME_TYPE -> track.codecs == null
+            MEDIA3_CUES_MIME_TYPE -> track.codecs == WEBVTT_MIME_TYPE
+            else -> false
+        }
+        return payloadIdentityAccepted && track.language == EXPECTED_LANGUAGE &&
+            track.label == EXPECTED_LABEL
+    }
+
     private fun poisonActiveGeneration() {
         activeContext = null
         state = State.NOT_REPORTED
@@ -100,11 +110,9 @@ internal class SyntheticSubtitleTrackStateObserver(
 
     companion object {
         private const val MAX_TEXT_TRACKS = 4
-        private val EXPECTED_UNSELECTED = TextTrack(
-            sampleMimeType = "text/vtt",
-            language = "en",
-            label = "English (synthetic lab)",
-            selected = false
-        )
+        private const val WEBVTT_MIME_TYPE = "text/vtt"
+        private const val MEDIA3_CUES_MIME_TYPE = "application/x-media3-cues"
+        private const val EXPECTED_LANGUAGE = "en"
+        private const val EXPECTED_LABEL = "English (synthetic lab)"
     }
 }

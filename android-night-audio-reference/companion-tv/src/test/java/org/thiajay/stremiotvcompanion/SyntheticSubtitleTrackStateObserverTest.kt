@@ -13,9 +13,14 @@ class SyntheticSubtitleTrackStateObserverTest {
             sourceId = "local:synthetic-wav"
         )
 
-    private fun expected(selected: Boolean) =
+    private fun expected(selected: Boolean, extractedToMedia3Cues: Boolean = false) =
         SyntheticSubtitleTrackStateObserver.TextTrack(
-            sampleMimeType = "text/vtt",
+            sampleMimeType = if (extractedToMedia3Cues) {
+                "application/x-media3-cues"
+            } else {
+                "text/vtt"
+            },
+            codecs = if (extractedToMedia3Cues) "text/vtt" else null,
             language = "en",
             label = "English (synthetic lab)",
             selected = selected
@@ -35,6 +40,35 @@ class SyntheticSubtitleTrackStateObserverTest {
             SyntheticSubtitleTrackStateObserver.State.PRESENT_SELECTED,
             observer.snapshot(active)!!.state
         )
+    }
+
+    @Test fun media3ExtractedCueFormatRetainsExactWebVttIdentity() {
+        val observer = SyntheticSubtitleTrackStateObserver()
+        val active = context()
+        assertTrue(observer.begin(active))
+        assertTrue(observer.observe(active, listOf(expected(false, true))))
+        assertEquals(
+            SyntheticSubtitleTrackStateObserver.State.PRESENT_UNSELECTED,
+            observer.snapshot(active)!!.state
+        )
+        assertTrue(observer.observe(active, listOf(expected(true, true))))
+        assertEquals(
+            SyntheticSubtitleTrackStateObserver.State.PRESENT_SELECTED,
+            observer.snapshot(active)!!.state
+        )
+    }
+
+    @Test fun media3CueFormatWithoutExactWebVttCodecFailsClosed() {
+        val observer = SyntheticSubtitleTrackStateObserver()
+        val active = context()
+        assertTrue(observer.begin(active))
+        assertFalse(
+            observer.observe(
+                active,
+                listOf(expected(false, true).copy(codecs = "text/plain"))
+            )
+        )
+        assertNull(observer.snapshot(active))
     }
 
     @Test fun emptyTrackReportIsAbsentRatherThanAcceptedSelection() {

@@ -1073,6 +1073,7 @@ class CompanionTvActivity : Activity() {
                 val format = group.getTrackFormat(index)
                 textTracks += SyntheticSubtitleTrackStateObserver.TextTrack(
                     sampleMimeType = format.sampleMimeType,
+                    codecs = format.codecs,
                     language = format.language,
                     label = format.label,
                     selected = group.isTrackSelected(index)
