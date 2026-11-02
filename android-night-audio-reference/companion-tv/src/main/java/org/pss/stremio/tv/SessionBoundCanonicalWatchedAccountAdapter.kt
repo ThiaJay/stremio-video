@@ -22,6 +22,21 @@ data class CanonicalWatchedAccountObservation(
 )
 
 /**
+ * Exact detached state that the private host must compare atomically with its
+ * live authenticated state immediately before applying a title action.
+ *
+ * This carries no credentials. The complete canonical snapshot is included so
+ * a host cannot accept a same-epoch metadata, account, library-item, watched or
+ * Continue Watching ABA change between the adapter's final observation and the
+ * host mutation boundary.
+ */
+data class CanonicalWatchedDispatchExpectation(
+    val sessionEpoch: Long,
+    val snapshot: SeriesAccountSnapshot,
+    val readback: CanonicalWatchedStateReadback
+)
+
+/**
  * Narrow private-client injection surface. Only title watched commands accepted
  * by [SessionBoundCanonicalWatchedAccountAdapter] can reach dispatch.
  */
@@ -30,11 +45,13 @@ interface CanonicalWatchedAccountHostPort {
     fun observe(): CanonicalWatchedAccountObservation?
 
     /**
-     * The host must atomically reject when [expectedSessionEpoch] is no longer
-     * its active authenticated session epoch.
+     * The host must compare the complete [expected] value with its live state
+     * and apply [message] in one atomic transaction. Any session, metadata,
+     * account, library-item, watched-ID, video_id or time_offset difference
+     * must reject without mutation.
      */
     fun dispatchTitleWatched(
-        expectedSessionEpoch: Long,
+        expected: CanonicalWatchedDispatchExpectation,
         message: Map<String, Any>
     ): Boolean
 }
@@ -185,8 +202,13 @@ class SessionBoundCanonicalWatchedAccountAdapter(
             observation.readback != expected.readback
         ) return@synchronized false
         val command = exactTitleWatchedCommand(message) ?: return@synchronized false
+        val dispatchExpectation = CanonicalWatchedDispatchExpectation(
+            sessionEpoch = expected.identity.sessionEpoch,
+            snapshot = expected.identity.snapshot,
+            readback = expected.readback
+        )
         val accepted = try {
-            host.dispatchTitleWatched(expected.identity.sessionEpoch, command)
+            host.dispatchTitleWatched(dispatchExpectation, command)
         } catch (_: Exception) {
             false
         } catch (_: LinkageError) {

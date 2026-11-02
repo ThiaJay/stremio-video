@@ -4,6 +4,8 @@ import java.time.Instant
 import org.pss.stremio.tv.CanonicalEpisode
 import org.pss.stremio.tv.CanonicalWatchedAccountHostPort
 import org.pss.stremio.tv.CanonicalWatchedAccountObservation
+import org.pss.stremio.tv.CanonicalWatchedDispatchExpectation
+import org.pss.stremio.tv.CanonicalWatchedStateReadback
 import org.pss.stremio.tv.SeriesAccountSnapshot
 import org.pss.stremio.tv.TvWatchedCoordinator
 import org.pss.stremio.tv.WatchedScope
@@ -39,8 +41,10 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
         now = Instant.parse("2026-10-30T00:00:00Z")
     )
 
+    @Synchronized
     override fun sessionEpoch(): Long = epoch
 
+    @Synchronized
     override fun observe(): CanonicalWatchedAccountObservation =
         CanonicalWatchedAccountObservation(
             sessionEpoch = epoch,
@@ -53,11 +57,12 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
             resumeTimeOffset = resumeTimeOffset
         )
 
+    @Synchronized
     override fun dispatchTitleWatched(
-        expectedSessionEpoch: Long,
+        expected: CanonicalWatchedDispatchExpectation,
         message: Map<String, Any>
     ): Boolean {
-        if (expectedSessionEpoch != epoch ||
+        if (expected != currentDispatchExpectation() ||
             message.keys != setOf("action", "args") ||
             message["action"] != "MetaDetails"
         ) return false
@@ -102,6 +107,23 @@ internal class SyntheticTitleWatchedAccountHost : CanonicalWatchedAccountHostPor
     fun resumeState(): Pair<String?, Long> = resumeVideoId to resumeTimeOffset
 
     fun acceptedDispatchCount(): Int = acceptedDispatches
+
+    private fun currentDispatchExpectation(): CanonicalWatchedDispatchExpectation =
+        CanonicalWatchedDispatchExpectation(
+            sessionEpoch = epoch,
+            snapshot = snapshot.copy(
+                videos = snapshot.videos.map { it.copy() },
+                storyOrder = snapshot.storyOrder?.toList()
+            ),
+            readback = CanonicalWatchedStateReadback(
+                accountFingerprint = snapshot.accountFingerprint,
+                libraryItemFingerprint = snapshot.libraryItemFingerprint,
+                seriesId = snapshot.seriesId,
+                watchedVideoIds = watched.toList(),
+                resumeVideoId = resumeVideoId,
+                resumeTimeOffset = resumeTimeOffset
+            )
+        )
 
     private fun released(episode: CanonicalEpisode): Boolean {
         val value = episode.releasedAt ?: return false

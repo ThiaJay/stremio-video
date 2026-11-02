@@ -36,6 +36,9 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         var throwObserve = false
         var throwDispatch = false
         var incrementEpochOnDispatch = false
+        var mutateSnapshotOnDispatch = false
+        var mutateWatchedOnDispatch = false
+        var mutateResumeOnDispatch = false
         var dispatchEntered: CountDownLatch? = null
         var dispatchRelease: CountDownLatch? = null
         var epochSequence = ArrayDeque<Long>()
@@ -45,6 +48,7 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         var resumeTimeOffset = 42_000L
         val sent = mutableListOf<Map<String, Any>>()
         val dispatchedEpochs = mutableListOf<Long>()
+        val dispatchedExpectations = mutableListOf<CanonicalWatchedDispatchExpectation>()
 
         override fun sessionEpoch(): Long {
             epochReads += 1
@@ -64,11 +68,20 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         }
 
         override fun dispatchTitleWatched(
-            expectedSessionEpoch: Long,
+            expected: CanonicalWatchedDispatchExpectation,
             message: Map<String, Any>
         ): Boolean {
-            dispatchedEpochs.add(expectedSessionEpoch)
-            if (expectedSessionEpoch != epoch) return false
+            dispatchedExpectations.add(expected)
+            dispatchedEpochs.add(expected.sessionEpoch)
+            if (mutateSnapshotOnDispatch) {
+                value = value.copy(libraryItemFingerprint = "c".repeat(64))
+            }
+            if (mutateWatchedOnDispatch && "s1e2" !in watchedIds) watchedIds.add("s1e2")
+            if (mutateResumeOnDispatch) resumeTimeOffset += 1L
+            if (expected.sessionEpoch != epoch ||
+                expected.snapshot != value ||
+                expected.readback != currentReadback()
+            ) return false
             if (throwDispatch) throw IllegalStateException("bounded test")
             dispatchEntered?.countDown()
             dispatchRelease?.await(5, TimeUnit.SECONDS)
@@ -76,6 +89,15 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
             if (incrementEpochOnDispatch) epoch += 1
             return !rejectDispatch
         }
+
+        private fun currentReadback() = CanonicalWatchedStateReadback(
+            accountFingerprint = value.accountFingerprint,
+            libraryItemFingerprint = value.libraryItemFingerprint,
+            seriesId = value.seriesId,
+            watchedVideoIds = watchedIds.toList(),
+            resumeVideoId = resumeVideoId,
+            resumeTimeOffset = resumeTimeOffset
+        )
     }
 
     private fun seriesCommand(watched: Boolean = true): Map<String, Any> =
@@ -159,6 +181,32 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
 
         assertEquals(0, host.dispatchedEpochs.size)
         assertEquals(0, host.sent.size)
+    }
+
+    @Test fun atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift() {
+        val metadataHost = Host().apply { mutateSnapshotOnDispatch = true }
+        val metadataAdapter = SessionBoundCanonicalWatchedAccountAdapter(metadataHost)
+        assertNotNull(metadataAdapter.currentSnapshot())
+        assertNotNull(metadataAdapter.currentWatchedState())
+        assertFalse(metadataAdapter.dispatch(seriesCommand()))
+        assertEquals(1, metadataHost.dispatchedExpectations.size)
+        assertEquals(0, metadataHost.sent.size)
+
+        val watchedHost = Host().apply { mutateWatchedOnDispatch = true }
+        val watchedAdapter = SessionBoundCanonicalWatchedAccountAdapter(watchedHost)
+        assertNotNull(watchedAdapter.currentSnapshot())
+        assertNotNull(watchedAdapter.currentWatchedState())
+        assertFalse(watchedAdapter.dispatch(seriesCommand()))
+        assertEquals(1, watchedHost.dispatchedExpectations.size)
+        assertEquals(0, watchedHost.sent.size)
+
+        val resumeHost = Host().apply { mutateResumeOnDispatch = true }
+        val resumeAdapter = SessionBoundCanonicalWatchedAccountAdapter(resumeHost)
+        assertNotNull(resumeAdapter.currentSnapshot())
+        assertNotNull(resumeAdapter.currentWatchedState())
+        assertFalse(resumeAdapter.dispatch(seriesCommand()))
+        assertEquals(1, resumeHost.dispatchedExpectations.size)
+        assertEquals(0, resumeHost.sent.size)
     }
 
     @Test fun watchedReadbackRequiresMatchingObservedSnapshot() {

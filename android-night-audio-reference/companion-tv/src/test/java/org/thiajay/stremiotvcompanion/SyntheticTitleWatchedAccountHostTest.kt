@@ -8,6 +8,8 @@ import org.pss.stremio.tv.NativeTvTitleWatchedHostBinding
 import org.pss.stremio.tv.NativeTvTitleWatchedOutcome
 import org.pss.stremio.tv.NativeTvTitleWatchedViewAction
 import org.pss.stremio.tv.NativeTvTitleWatchedViewPort
+import org.pss.stremio.tv.CanonicalWatchedDispatchExpectation
+import org.pss.stremio.tv.CanonicalWatchedStateReadback
 import org.pss.stremio.tv.SessionBoundCanonicalWatchedAccountAdapter
 import org.pss.stremio.tv.TvWatchedCoordinator
 
@@ -16,7 +18,7 @@ class SyntheticTitleWatchedAccountHostTest {
         val host = SyntheticTitleWatchedAccountHost()
         assertEquals("local:mobile-watched:0:99" to 42_000L, host.resumeState())
 
-        assertTrue(host.dispatchTitleWatched(1L, command("MarkAsWatched", true)))
+        assertTrue(host.dispatchTitleWatched(expectation(host), command("MarkAsWatched", true)))
 
         assertEquals(
             listOf(
@@ -35,7 +37,7 @@ class SyntheticTitleWatchedAccountHostTest {
     @Test fun titleUnwatchedPreservesSyntheticResumeState() {
         val host = SyntheticTitleWatchedAccountHost()
 
-        assertTrue(host.dispatchTitleWatched(1L, command("MarkAsWatched", false)))
+        assertTrue(host.dispatchTitleWatched(expectation(host), command("MarkAsWatched", false)))
 
         assertEquals("local:mobile-watched:0:99" to 42_000L, host.resumeState())
         assertTrue(host.watchedIds().isEmpty())
@@ -46,14 +48,14 @@ class SyntheticTitleWatchedAccountHostTest {
         val host = SyntheticTitleWatchedAccountHost()
         assertTrue(
             host.dispatchTitleWatched(
-                1L,
+                expectation(host),
                 command("MarkSeasonAsWatched", listOf(1, true))
             )
         )
         assertEquals(2, host.watchedIds().size)
         assertTrue(
             host.dispatchTitleWatched(
-                1L,
+                expectation(host),
                 command("MarkSeasonAsWatched", listOf(1, false))
             )
         )
@@ -64,21 +66,38 @@ class SyntheticTitleWatchedAccountHostTest {
     @Test fun malformedOrStaleDispatchNeverMutatesSyntheticState() {
         val host = SyntheticTitleWatchedAccountHost()
 
-        assertFalse(host.dispatchTitleWatched(2L, command("MarkAsWatched", true)))
         assertFalse(
             host.dispatchTitleWatched(
-                1L,
+                expectation(host).copy(sessionEpoch = 2L),
+                command("MarkAsWatched", true)
+            )
+        )
+        assertFalse(
+            host.dispatchTitleWatched(
+                expectation(host),
                 mapOf("action" to "MetaDetails", "args" to emptyMap<String, Any>())
             )
         )
         assertFalse(
             host.dispatchTitleWatched(
-                1L,
+                expectation(host),
                 command("MarkSeasonAsWatched", listOf(0, true))
             )
         )
         assertTrue(host.watchedIds().isEmpty())
         assertEquals(0, host.acceptedDispatchCount())
+    }
+
+    @Test fun sameEpochStaleExpectationCannotApplyASecondMutation() {
+        val host = SyntheticTitleWatchedAccountHost()
+        val stale = expectation(host)
+
+        assertTrue(host.dispatchTitleWatched(stale, command("MarkAsWatched", true)))
+        assertFalse(host.dispatchTitleWatched(stale, command("MarkAsWatched", false)))
+
+        assertEquals(3, host.watchedIds().size)
+        assertEquals("local:mobile-watched:0:99" to 0L, host.resumeState())
+        assertEquals(1, host.acceptedDispatchCount())
     }
 
     @Test fun tvHostBindingAppliesOnlyLocalSyntheticSeriesState() {
@@ -146,4 +165,21 @@ class SyntheticTitleWatchedAccountHostTest {
             "action" to "MetaDetails",
             "args" to mapOf("action" to action, "args" to args)
         )
+
+    private fun expectation(host: SyntheticTitleWatchedAccountHost):
+        CanonicalWatchedDispatchExpectation {
+        val observed = host.observe()
+        return CanonicalWatchedDispatchExpectation(
+            sessionEpoch = observed.sessionEpoch,
+            snapshot = observed.snapshot,
+            readback = CanonicalWatchedStateReadback(
+                accountFingerprint = observed.snapshot.accountFingerprint,
+                libraryItemFingerprint = observed.snapshot.libraryItemFingerprint,
+                seriesId = observed.snapshot.seriesId,
+                watchedVideoIds = observed.watchedVideoIds,
+                resumeVideoId = observed.resumeVideoId,
+                resumeTimeOffset = observed.resumeTimeOffset
+            )
+        )
+    }
 }

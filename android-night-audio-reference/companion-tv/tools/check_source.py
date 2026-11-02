@@ -608,6 +608,10 @@ if not all(x in synthetic_watched_host for x in [
 if ('snapshot.videos.map { it.copy() }' not in synthetic_watched_host or
     'watchedVideoIds = watched.toList()' not in synthetic_watched_host):
     fail.append('synthetic_watched_host_detached_observation_missing')
+if ('expected != currentDispatchExpectation()' not in synthetic_watched_host or
+    'CanonicalWatchedDispatchExpectation(' not in synthetic_watched_host or
+    synthetic_watched_host.count('@Synchronized') < 3):
+    fail.append('synthetic_watched_host_atomic_expectation_missing')
 if ('resumeVideoId: String? = "local:mobile-watched:0:99"' not in synthetic_watched_host or
     'resumeTimeOffset = 42_000L' not in synthetic_watched_host or
     'resumeTimeOffset = 0L' not in synthetic_watched_host or
@@ -617,6 +621,7 @@ if any(name not in synthetic_watched_host_test for name in [
     'seriesActionUsesReleasedValidatedStoryMembership',
     'seasonActionIsBoundedToRequestedSyntheticSeason',
     'malformedOrStaleDispatchNeverMutatesSyntheticState',
+    'sameEpochStaleExpectationCannotApplyASecondMutation',
     'tvHostBindingAppliesOnlyLocalSyntheticSeriesState',
     'observationsAndReadbackListsAreDetached',
     'titleUnwatchedPreservesSyntheticResumeState',
@@ -1096,11 +1101,15 @@ adapter_dispatch = canonical_watched_account_adapter[
 ]
 if ('latestLease = null' not in adapter_dispatch or
     adapter_dispatch.find('latestLease = null') >
-        adapter_dispatch.find('host.dispatchTitleWatched(expected.identity.sessionEpoch, command)')):
+        adapter_dispatch.find('host.dispatchTitleWatched(dispatchExpectation, command)')):
     fail.append('canonical_account_lease_not_consumed_before_dispatch')
-if ('expectedSessionEpoch: Long' not in canonical_watched_account_adapter or
-    'host.dispatchTitleWatched(expected.identity.sessionEpoch, command)' not in canonical_watched_account_adapter):
-    fail.append('canonical_account_atomic_session_epoch_dispatch_missing')
+if ('data class CanonicalWatchedDispatchExpectation(' not in canonical_watched_account_adapter or
+    'val snapshot: SeriesAccountSnapshot' not in canonical_watched_account_adapter or
+    'val readback: CanonicalWatchedStateReadback' not in canonical_watched_account_adapter or
+    'host.dispatchTitleWatched(dispatchExpectation, command)' not in canonical_watched_account_adapter or
+    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift' not in
+        canonical_watched_account_adapter_test):
+    fail.append('canonical_account_atomic_complete_state_dispatch_missing')
 if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
     'private val lifecycleLock = Any()' not in canonical_watched_account_adapter or
     canonical_watched_account_adapter.count('synchronized(lifecycleLock)') != 4 or
@@ -1135,6 +1144,7 @@ if any(name not in canonical_watched_account_adapter_test for name in [
     'detachesSnapshotAndWatchedIdsFromHostCollections',
     'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState',
     'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch',
+    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift',
     'watchedReadbackRequiresMatchingObservedSnapshot',
     'failedSnapshotRefreshCannotReviveEarlierLease',
     'mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba',
