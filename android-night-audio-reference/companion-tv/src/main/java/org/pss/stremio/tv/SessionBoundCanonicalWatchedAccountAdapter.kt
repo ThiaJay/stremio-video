@@ -1,5 +1,6 @@
 package org.pss.stremio.tv
 
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -241,7 +242,7 @@ class SessionBoundCanonicalWatchedAccountAdapter(
 
             val snapshot = detachSnapshot(raw.snapshot) ?: return null
             if (raw.watchedVideoIds.size > MAX_WATCHED_VIDEO_IDS) return null
-            val watchedIds = raw.watchedVideoIds.toList()
+            val watchedIds = Collections.unmodifiableList(raw.watchedVideoIds.toList())
             if (watchedIds.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } ||
                 watchedIds.size != watchedIds.toSet().size
             ) return null
@@ -280,13 +281,15 @@ class SessionBoundCanonicalWatchedAccountAdapter(
             (raw.storyOrder?.size ?: 0) > MAX_CANONICAL_EPISODES
         ) return null
 
-        val videos = raw.videos.map {
+        val videos = Collections.unmodifiableList(raw.videos.map {
             if (it.id.isBlank() || it.id.length > MAX_STABLE_ID_LENGTH ||
                 (it.releasedAt?.length ?: 0) > MAX_RELEASED_AT_LENGTH
             ) return null
             it.copy()
+        })
+        val storyOrder = raw.storyOrder?.let {
+            Collections.unmodifiableList(it.toList())
         }
-        val storyOrder = raw.storyOrder?.toList()
         if (storyOrder?.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } == true) return null
         return raw.copy(videos = videos, storyOrder = storyOrder)
     }

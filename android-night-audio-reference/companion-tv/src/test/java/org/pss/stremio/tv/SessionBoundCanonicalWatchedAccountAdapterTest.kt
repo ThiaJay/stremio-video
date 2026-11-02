@@ -125,6 +125,29 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertEquals(42_000L, detachedReadback.resumeTimeOffset)
     }
 
+    @Test fun detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+
+        val detachedSnapshot = adapter.currentSnapshot()!!
+        assertThrows(UnsupportedOperationException::class.java) {
+            (detachedSnapshot.videos as MutableList<CanonicalEpisode>).add(
+                CanonicalEpisode("forged", 1, 99, "2025-03-01T00:00:00Z")
+            )
+        }
+        assertThrows(UnsupportedOperationException::class.java) {
+            (detachedSnapshot.storyOrder as MutableList<String>).add("forged")
+        }
+
+        val detachedReadback = adapter.currentWatchedState()!!
+        assertThrows(UnsupportedOperationException::class.java) {
+            (detachedReadback.watchedVideoIds as MutableList<String>).add("forged")
+        }
+
+        assertTrue(adapter.dispatch(seriesCommand()))
+        assertEquals(1, host.sent.size)
+    }
+
     @Test fun malformedResumeReadbackFailsClosedBeforeDispatch() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)

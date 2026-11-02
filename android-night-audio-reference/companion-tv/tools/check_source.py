@@ -1080,8 +1080,12 @@ if ('val before = host.sessionEpoch()' not in canonical_watched_account_adapter 
     'after != before' not in canonical_watched_account_adapter):
     fail.append('canonical_account_epoch_sandwich_missing')
 if ('raw.videos.map' not in canonical_watched_account_adapter or
-    'raw.storyOrder?.toList()' not in canonical_watched_account_adapter or
-    'raw.watchedVideoIds.toList()' not in canonical_watched_account_adapter):
+    'Collections.unmodifiableList(raw.watchedVideoIds.toList())' not in
+        canonical_watched_account_adapter or
+    'Collections.unmodifiableList(raw.videos.map' not in canonical_watched_account_adapter or
+    'Collections.unmodifiableList(it.toList())' not in canonical_watched_account_adapter or
+    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease' not in
+        canonical_watched_account_adapter_test):
     fail.append('canonical_account_host_collections_not_detached')
 if ('val resumeVideoId: String?' not in canonical_watched_account_adapter or
     'val resumeTimeOffset: Long' not in canonical_watched_account_adapter or
@@ -1142,6 +1146,7 @@ if ('private data class DispatchLease(' not in canonical_watched_account_adapter
     fail.append('canonical_account_watched_resume_dispatch_lease_missing')
 if any(name not in canonical_watched_account_adapter_test for name in [
     'detachesSnapshotAndWatchedIdsFromHostCollections',
+    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease',
     'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState',
     'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch',
     'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift',
