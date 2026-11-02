@@ -23,6 +23,17 @@ class SyntheticSubtitleWindowPixelCaptureLeaseTest {
         assertFalse(gate.pending(context))
     }
 
+    @Test fun sourceNoDataRetryRequiresExactActiveLeaseAndContext() {
+        val gate = SyntheticSubtitleWindowPixelCaptureLease()
+        val context = context()
+        val lease = gate.begin(context)!!
+        assertTrue(gate.pending(lease, context))
+        assertFalse(gate.pending(lease.copy(), context))
+        assertFalse(gate.pending(lease, context(revision = 2L)))
+        assertTrue(gate.pending(lease, context))
+        assertEquals(SUCCESS, gate.resolve(lease, context, true))
+    }
+
     @Test fun duplicateCaptureForSameCueRevisionIsDenied() {
         val gate = SyntheticSubtitleWindowPixelCaptureLease()
         val context = context()

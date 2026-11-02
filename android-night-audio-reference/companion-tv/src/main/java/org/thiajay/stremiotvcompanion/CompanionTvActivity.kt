@@ -107,13 +107,14 @@ class CompanionTvActivity : Activity() {
                     val revision = subtitleCueRevision
                     val captureContext = syntheticWindowPixelCaptureContext(revision)
                     subtitleWindowPixelCaptureLease.begin(captureContext)?.let { lease ->
-                        ui.post {
+                        window.decorView.postOnAnimation {
                             requestSyntheticSubtitleWindowPixels(
                                 current,
                                 pixelContext,
                                 context,
                                 revision,
-                                lease
+                                lease,
+                                true
                             )
                         }
                     }
@@ -945,7 +946,8 @@ class CompanionTvActivity : Activity() {
         pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
         renderContext: SyntheticSubtitleRenderPipelineObserver.Context,
         revision: Long,
-        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease
+        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease,
+        sourceNoDataRetryAvailable: Boolean
     ) {
         val currentCaptureContext = currentSyntheticWindowPixelCaptureContext()
         if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
@@ -979,9 +981,27 @@ class CompanionTvActivity : Activity() {
         try {
             PixelCopy.request(window, rect, bitmap, pixelCopy@{ result ->
                 var pixels: IntArray? = null
+                val callbackContext = currentSyntheticWindowPixelCaptureContext()
+                if (result == PixelCopy.ERROR_SOURCE_NO_DATA &&
+                    sourceNoDataRetryAvailable &&
+                    subtitleWindowPixelCaptureLease.pending(lease, callbackContext)) {
+                    bitmap.eraseColor(Color.TRANSPARENT)
+                    bitmap.recycle()
+                    window.decorView.postOnAnimation {
+                        requestSyntheticSubtitleWindowPixels(
+                            view,
+                            pixelContext,
+                            renderContext,
+                            revision,
+                            lease,
+                            false
+                        )
+                    }
+                    return@pixelCopy
+                }
                 val resolution = subtitleWindowPixelCaptureLease.resolve(
                     lease,
-                    currentSyntheticWindowPixelCaptureContext(),
+                    callbackContext,
                     result == PixelCopy.SUCCESS
                 )
                 try {

@@ -56,7 +56,7 @@ internal class SyntheticSubtitleWindowPixelCaptureLease(
         currentContext: Context?,
         copySucceeded: Boolean
     ): Resolution {
-        if (!ownsThread() || closed || active != lease) return Resolution.STALE_IGNORED
+        if (!ownsThread() || closed || active !== lease) return Resolution.STALE_IGNORED
         active = null
         return if (copySucceeded && currentContext == lease.context &&
             currentContext != null && valid(currentContext)) {
@@ -74,6 +74,10 @@ internal class SyntheticSubtitleWindowPixelCaptureLease(
 
     fun pending(context: Context): Boolean =
         ownsThread() && !closed && active?.context == context
+
+    fun pending(lease: Lease, currentContext: Context?): Boolean =
+        ownsThread() && !closed && currentContext != null &&
+            active === lease && currentContext == lease.context && valid(currentContext)
 
     fun close(): Boolean {
         if (!ownsThread() || closed) return false
