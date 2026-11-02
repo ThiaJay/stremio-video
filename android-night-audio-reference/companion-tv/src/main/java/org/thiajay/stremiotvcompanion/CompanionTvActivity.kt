@@ -2,11 +2,14 @@ package org.thiajay.stremiotvcompanion
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.Button
@@ -84,14 +87,33 @@ class CompanionTvActivity : Activity() {
         SyntheticSubtitlePreferenceEvidenceObserver()
     private val subtitleRenderPipelineObserver =
         SyntheticSubtitleRenderPipelineObserver()
+    private val subtitleWindowPixelObserver =
+        SyntheticSubtitleWindowPixelObserver()
     private var subtitleRenderView: View? = null
     private var subtitleCueRevision = 0L
+    private var subtitlePixelCapturePending = false
     private val subtitleDrawListener = ViewTreeObserver.OnDrawListener {
         val current = subtitleRenderView
         if (fixtureLoaded && current != null && subtitleCueRevision > 0L) {
             val context = syntheticRenderPipelineContext()
             if (subtitleRenderPipelineObserver.observeView(context, current.renderState())) {
                 subtitleRenderPipelineObserver.observeDraw(context, subtitleCueRevision)
+                val renderEvidence = subtitleRenderPipelineObserver.snapshot(context)
+                val pixelContext = syntheticWindowPixelContext()
+                if (renderEvidence?.renderPipelineEvidenceComplete == true &&
+                    subtitleWindowPixelObserver.snapshot(pixelContext) == null &&
+                    !subtitlePixelCapturePending) {
+                    subtitlePixelCapturePending = true
+                    val revision = subtitleCueRevision
+                    ui.post {
+                        requestSyntheticSubtitleWindowPixels(
+                            current,
+                            pixelContext,
+                            context,
+                            revision
+                        )
+                    }
+                }
             }
         }
     }
@@ -199,6 +221,7 @@ class CompanionTvActivity : Activity() {
                     SyntheticSubtitleCueDeliveryObserver.Observation.REFUSED -> {
                         subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
                         subtitleRenderPipelineObserver.invalidate(renderContext)
+                        subtitleWindowPixelObserver.invalidate(syntheticWindowPixelContext())
                     }
                     else -> subtitleCueObserver.snapshot(cueContext)?.let { observed ->
                         subtitlePlaybackEvidenceObserver.observeCues(
@@ -391,7 +414,9 @@ class CompanionTvActivity : Activity() {
         val evidenceContext = syntheticPlaybackEvidenceContext()
         val preferenceEvidenceContext = syntheticPreferenceEvidenceContext()
         val renderPipelineContext = syntheticRenderPipelineContext()
+        val windowPixelContext = syntheticWindowPixelContext()
         subtitleCueRevision = 0L
+        subtitlePixelCapturePending = false
         val cueStarted = subtitleCueObserver.begin(cueContext)
         val trackStarted = subtitleTrackObserver.begin(trackContext)
         val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
@@ -401,8 +426,11 @@ class CompanionTvActivity : Activity() {
         val renderPipelineStarted = subtitleOwner?.currentPlaybackPreference()?.let {
             subtitleRenderPipelineObserver.begin(renderPipelineContext, it)
         } == true
+        val windowPixelStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitleWindowPixelObserver.begin(windowPixelContext, it)
+        } == true
         if (!cueStarted || !trackStarted || !evidenceStarted || !preferenceEvidenceStarted ||
-            !renderPipelineStarted) {
+            !renderPipelineStarted || !windowPixelStarted) {
             if (cueStarted) subtitleCueObserver.abandon(cueContext)
             if (trackStarted) subtitleTrackObserver.abandon(trackContext)
             if (evidenceStarted) subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
@@ -411,6 +439,9 @@ class CompanionTvActivity : Activity() {
             }
             if (renderPipelineStarted) {
                 subtitleRenderPipelineObserver.abandon(renderPipelineContext)
+            }
+            if (windowPixelStarted) {
+                subtitleWindowPixelObserver.abandon(windowPixelContext)
             }
             errorMessage = "Synthetic subtitle playback observation was refused."
             updateUi()
@@ -443,6 +474,7 @@ class CompanionTvActivity : Activity() {
             subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
             subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
             subtitleRenderPipelineObserver.abandon(renderPipelineContext)
+            subtitleWindowPixelObserver.abandon(windowPixelContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -552,9 +584,20 @@ class CompanionTvActivity : Activity() {
                 } ?: "Subtitle view draw-pipeline evidence held closed; " +
                 "visible pixels and device output NOT accepted."
         }
+        val windowPixelStatus = if (!fixtureLoaded) {
+            "Synthetic subtitle window-pixel evidence not active."
+        } else {
+            subtitleWindowPixelObserver.snapshot(syntheticWindowPixelContext())
+                ?.let { observed ->
+                    "Synthetic subtitle window-pixel evidence ${observed.status}; " +
+                        "physical display and device output NOT accepted."
+                } ?: "Synthetic subtitle window-pixel evidence held closed or pending; " +
+                "physical display and device output NOT accepted."
+        }
         status.text =
             "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  " +
-                "$playbackEvidenceStatus  $preferenceEvidenceStatus  $renderPipelineStatus"
+                "$playbackEvidenceStatus  $preferenceEvidenceStatus  $renderPipelineStatus  " +
+                windowPixelStatus
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -670,10 +713,12 @@ class CompanionTvActivity : Activity() {
             subtitlePlaybackEvidenceObserver.abandon(syntheticPlaybackEvidenceContext())
             subtitlePreferenceEvidenceObserver.abandon(syntheticPreferenceEvidenceContext())
             subtitleRenderPipelineObserver.abandon(syntheticRenderPipelineContext())
+            subtitleWindowPixelObserver.abandon(syntheticWindowPixelContext())
         }
         player.stop()
         fixtureLoaded = false
         generation++
+        subtitlePixelCapturePending = false
         subtitlePendingTrigger = null
         setNightAudio(null, "Off")
     }
@@ -741,6 +786,7 @@ class CompanionTvActivity : Activity() {
         }
         subtitleRenderView = null
         subtitleRenderPipelineObserver.close()
+        subtitleWindowPixelObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -808,6 +854,14 @@ class CompanionTvActivity : Activity() {
             sourceId = SYNTHETIC_SOURCE_ID
         )
 
+    private fun syntheticWindowPixelContext() =
+        SyntheticSubtitleWindowPixelObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
     private fun refreshSubtitlePreferenceEvidence() {
         if (!fixtureLoaded || !::player.isInitialized) return
         val preferenceContext = syntheticPreferenceEvidenceContext()
@@ -827,6 +881,7 @@ class CompanionTvActivity : Activity() {
             player.playbackState == Player.STATE_ENDED
         )) {
             subtitleRenderPipelineObserver.invalidate(syntheticRenderPipelineContext())
+            subtitleWindowPixelObserver.invalidate(syntheticWindowPixelContext())
             return
         }
         val preferenceEvidence =
@@ -844,6 +899,81 @@ class CompanionTvActivity : Activity() {
                 syntheticRenderPipelineContext(),
                 current.renderState()
             )
+        }
+    }
+
+    private fun requestSyntheticSubtitleWindowPixels(
+        view: View,
+        pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
+        renderContext: SyntheticSubtitleRenderPipelineObserver.Context,
+        revision: Long
+    ) {
+        if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
+            renderContext != syntheticRenderPipelineContext() ||
+            revision != subtitleCueRevision) {
+            subtitlePixelCapturePending = false
+            return
+        }
+        val width = view.width
+        val height = view.height
+        val total = width.toLong() * height.toLong()
+        if (width !in 16..4096 || height !in 16..4096 || total !in 1L..4_194_304L) {
+            subtitlePixelCapturePending = false
+            subtitleWindowPixelObserver.invalidate(pixelContext)
+            return
+        }
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val rect = Rect(location[0], location[1], location[0] + width, location[1] + height)
+        if (rect.left < 0 || rect.top < 0 || rect.right > window.decorView.width ||
+            rect.bottom > window.decorView.height) {
+            subtitlePixelCapturePending = false
+            subtitleWindowPixelObserver.invalidate(pixelContext)
+            return
+        }
+        val bitmap = try {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        } catch (_: RuntimeException) {
+            subtitlePixelCapturePending = false
+            subtitleWindowPixelObserver.invalidate(pixelContext)
+            return
+        }
+        try {
+            PixelCopy.request(window, rect, bitmap, pixelCopy@{ result ->
+                subtitlePixelCapturePending = false
+                val pixels = IntArray(width * height)
+                try {
+                    if (result != PixelCopy.SUCCESS || !fixtureLoaded ||
+                        pixelContext != syntheticWindowPixelContext() ||
+                        renderContext != syntheticRenderPipelineContext() ||
+                        revision != subtitleCueRevision) {
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                        return@pixelCopy
+                    }
+                    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                    val renderEvidence = subtitleRenderPipelineObserver.snapshot(renderContext)
+                    if (renderEvidence == null || !subtitleWindowPixelObserver.observe(
+                            pixelContext,
+                            renderEvidence,
+                            revision,
+                            width,
+                            height,
+                            pixels
+                        )) {
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                    }
+                } finally {
+                    pixels.fill(0)
+                    bitmap.eraseColor(Color.TRANSPARENT)
+                    bitmap.recycle()
+                    updateUi()
+                }
+            }, ui)
+        } catch (_: RuntimeException) {
+            subtitlePixelCapturePending = false
+            bitmap.eraseColor(Color.TRANSPARENT)
+            bitmap.recycle()
+            subtitleWindowPixelObserver.invalidate(pixelContext)
         }
     }
 

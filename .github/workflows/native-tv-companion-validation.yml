@@ -70,7 +70,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=431 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=440 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -125,6 +125,17 @@ jobs:
               'malformedContextViewAndCueInputNeverPromote',
               'ownerThreadAbandonAndCloseRevokeObservation'):
               assert required in names, 'Synthetic render-pipeline evidence test missing: '+required
+          for required in (
+              'admittedEnabledAcceptsOnlyBoundedLowerBandWindowPixels',
+              'explicitOffAcceptsOnlyOpaqueDarkWindowFrame',
+              'enabledFrameWithoutEnoughLowerPixelsFailsClosed',
+              'enabledFrameDominatedByUpperPixelsFailsClosed',
+              'transparentOrBrightOffFrameFailsClosed',
+              'malformedDimensionsAndPixelCountNeverPromote',
+              'incompleteOrVisuallyPromotedRenderEvidenceIsRejected',
+              'revisionContextAndPreferenceDriftFailClosed',
+              'generationThreadAbandonAndCloseRevokePixelObservation'):
+              assert required in names, 'Synthetic window-pixel evidence test missing: '+required
           for required in (
               'explicitOffDisablesOnlyAutomaticTextSelection',
               'admittedEnabledReenablesAutomaticTextSelection',
