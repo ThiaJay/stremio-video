@@ -532,5 +532,93 @@ jobs:
           echo 'Android companion source and debug APK built; no upload, release, device or account action performed.'
 # Never upload debug APK, release assets, credentials, private data or the synthetic sample.
 
+  companion-api30-window-runtime:
+    needs: companion-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: '8.11.1'
+      - name: Install exact Android 11 emulator and compile SDK components
+        run: >-
+          sdkmanager --install
+          'emulator'
+          'platforms;android-30'
+          'platforms;android-35'
+          'platforms;android-36'
+          'build-tools;35.0.0'
+          'system-images;android-30;google_apis;x86_64'
+          >/dev/null
+      - name: Create clean API 30 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'no\n' | avdmanager create avd \
+            --force \
+            --name stremio_companion_api30 \
+            --package 'system-images;android-30;google_apis;x86_64' \
+            --device 'pixel_2'
+      - name: Execute local Media3 subtitle and PixelCopy runtime gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          emulator -avd stremio_companion_api30 \
+            -no-window -no-snapshot -no-boot-anim \
+            -gpu swiftshader_indirect \
+            -camera-back none -camera-front none \
+            >/tmp/companion-emulator.log 2>&1 &
+          emulator_pid=$!
+          cleanup() {
+            adb emu kill >/dev/null 2>&1 || true
+            wait "$emulator_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          adb wait-for-device
+          timeout 240 bash -c \
+            'until [[ "$(adb shell getprop sys.boot_completed | tr -d "\r")" == "1" ]]; do sleep 2; done'
+          adb shell getprop ro.build.version.sdk | grep -Fx '30'
+          gradle -p android-night-audio-reference \
+            :companion-tv:connectedDebugAndroidTest \
+            --no-daemon --stacktrace
+      - name: Require both API 30 window-buffer tests and retained acceptance boundaries
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=Path('android-night-audio-reference/companion-tv/build/outputs/androidTest-results/connected/debug')
+          reports=list(root.rglob('TEST-*.xml'))
+          assert reports, 'No connected Android test results produced'
+          tests=failures=errors=0
+          names=[]
+          for report in reports:
+              suite=ET.parse(report).getroot()
+              tests+=int(suite.get('tests','0'))
+              failures+=int(suite.get('failures','0'))
+              errors+=int(suite.get('errors','0'))
+              names += [node.get('name','') for node in suite.findall('.//testcase')]
+          expected={
+              'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
+              'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
+          }
+          assert tests==2 and failures==0 and errors==0, (tests,failures,errors)
+          assert expected.issubset(set(names)), (expected,names)
+          print('Verified API 30 synthetic window-buffer runtime:',tests,'failures:',failures,'errors:',errors)
+          print('Physical display, private-client, Fire TV and hardware acceptance remain false.')
+          PY
+# Never upload emulator screenshots, APKs, logs, synthetic media or test artifacts.
+
 
 

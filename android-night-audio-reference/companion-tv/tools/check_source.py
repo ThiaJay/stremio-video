@@ -28,6 +28,7 @@ SYNTHETIC_WINDOW_PIXELS=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/Synth
 SYNTHETIC_WINDOW_PIXELS_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelObserverTest.kt'
 SYNTHETIC_WINDOW_PIXEL_LEASE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelCaptureLease.kt'
 SYNTHETIC_WINDOW_PIXEL_LEASE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelCaptureLeaseTest.kt'
+SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/CompanionTvPixelCopyInstrumentationTest.kt'
 NATIVE_SUBTITLE_PROVENANCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenance.kt'
 NATIVE_SUBTITLE_PROVENANCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenanceTest.kt'
 NATIVE_SUBTITLE_STORE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceStore.kt'
@@ -188,6 +189,7 @@ synthetic_window_pixels=SYNTHETIC_WINDOW_PIXELS.read_text() if SYNTHETIC_WINDOW_
 synthetic_window_pixels_test=SYNTHETIC_WINDOW_PIXELS_TEST.read_text() if SYNTHETIC_WINDOW_PIXELS_TEST.is_file() else ''
 synthetic_window_pixel_lease=SYNTHETIC_WINDOW_PIXEL_LEASE.read_text() if SYNTHETIC_WINDOW_PIXEL_LEASE.is_file() else ''
 synthetic_window_pixel_lease_test=SYNTHETIC_WINDOW_PIXEL_LEASE_TEST.read_text() if SYNTHETIC_WINDOW_PIXEL_LEASE_TEST.is_file() else ''
+synthetic_window_pixel_instrumentation=SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION.read_text() if SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION.is_file() else ''
 native_subtitle_provenance=NATIVE_SUBTITLE_PROVENANCE.read_text() if NATIVE_SUBTITLE_PROVENANCE.is_file() else ''
 native_subtitle_provenance_test=NATIVE_SUBTITLE_PROVENANCE_TEST.read_text() if NATIVE_SUBTITLE_PROVENANCE_TEST.is_file() else ''
 native_subtitle_store=NATIVE_SUBTITLE_STORE.read_text() if NATIVE_SUBTITLE_STORE.is_file() else ''
@@ -2334,9 +2336,28 @@ if not all(x in java_text for x in [
     'subtitleWindowPixelObserver.close()'
 ]):
     fail.append('synthetic_subtitle_window_pixel_activity_binding_missing')
-if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
+if not all(x in synthetic_window_pixel_instrumentation for x in [
+    'class CompanionTvPixelCopyInstrumentationTest',
+    'ActivityInstrumentationTestCase2<CompanionTvActivity>',
+    'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
+    'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
+    'OFF_DARK_WINDOW_OBSERVED',
+    'ENABLED_WINDOW_PIXELS_OBSERVED',
+    'physical display and device output NOT accepted',
+    'instrumentation.runOnMainSync',
+    'getSharedPreferences(TV_STATE, 0).edit().clear().commit()',
+    'getSharedPreferences(TV_RECEIPT, 0).edit().clear().commit()'
+]):
+    fail.append('synthetic_subtitle_window_pixel_instrumentation_missing')
+if any(x in synthetic_window_pixel_instrumentation for x in [
+    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
+    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
+    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
+]):
+    fail.append('synthetic_subtitle_window_pixel_instrumentation_forbidden_surface')
+if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':446,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':458,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

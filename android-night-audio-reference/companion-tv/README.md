@@ -26,6 +26,7 @@ This is a **separately packaged Android TV proof application**, `org.thiajay.str
 * Each lab stores only its own preference and provenance receipt namespaces under the separate `org.thiajay.stremiotvcompanion` application. A fresh owner can read the lab value after Activity recreation and the bounded v1-to-v2 lab migration preserves both explicit Off and Enabled, while mobile and TV remain independent; an enabled value is labelled admitted only after the receipt gate above, while explicit Off never implies consent. This source/build exposure is not private-client adoption, authenticated behaviour, signed delivery, installation, official-client update migration or Android mobile/TV/Fire TV device acceptance.
 * `NativeSubtitlePlaybackPreferenceActuator` and the narrow `Media3SubtitlePlaybackPreferenceAdapter` now bind only the disclosed TV lab's installation-local preference to its synthetic local ExoPlayer. Preference change, initial load, automatic episode transition and recovery share the one-shot stable-state contract. The adapter changes only Media3's text-track disabled flag, preserves every other track parameter and refuses any manual text-track override. Enabled requires the exact same-installation receipt; explicit Off or unadmitted Enabled may disable only automatic text selection. The offline fixture now attaches a deterministic local English WebVTT sidecar to its generated WAV so the compiled Media3 item contains an actual text track without any network, provider or user subtitle data. This is not a production subtitle stream, account, provider, production-client or device binding.
 * `SyntheticSubtitleWindowPixelObserver` adds a bounded final lab handoff after the existing preference, track, cue and subtitle-view draw evidence. The Activity uses Android `PixelCopy` only for the synthetic subtitle view rectangle, immediately reduces the returned window buffer to opaque neutral-bright pixel counts, clears the temporary integer buffer and erases and recycles the bitmap. No frame, screenshot, text or pixel array is stored, exported or logged. Enabled requires a small lower-band signal; explicit Off requires an opaque dark frame. Even an accepted frame proves only that the synthetic app window buffer contained the expected pixels. Physical display visibility, legibility, composition, signed installation and device acceptance remain false and open.
+* A separate no-artifact API 30 instrumentation job launches the isolated Activity in a clean Android 11 emulator, exercises explicit Off and an admitted same-installation Enabled choice against the local WAV/WebVTT fixture, and requires the actual Media3 track/cue callbacks, subtitle-view draw and `PixelCopy` status to complete. The test reads bounded UI status strings only and exports no screenshot, bitmap, cue, media, APK or emulator log. This is genuine emulator window-buffer execution, not a physical display, private Android client, Fire TV, signed-installation or hardware acceptance.
 * A pure Kotlin Story Order presentation adapter now validates version 1 hints, rejects duplicate, unknown or incomplete regular-episode sequences, returns the original canonical episode objects and supplies a stable-ID Next Story override candidate without bypassing existing player gates. A focusable TV control demonstrates canonical versus Story Order presentation using only synthetic local metadata, including one narrative Season 0 entry and one omitted ancillary extra. It has no catalogue, player, account or watched-state binding and is not native-client or device acceptance.
 * A numeric-only Media3 failure intake now maps the Android player's stable error code into the sanitised PR #75 facts contract. It never accepts exception messages, causes, URLs, headers, credentials or account state; it does not guess an HTTP status from Media3's generic HTTP error and never self-authorises playback-health recovery. The current local fixture listener exposes only the resulting category and performs no retry, source change or recovery actuation.
 * `NativeMedia3RetryActuator` adds a separate source-only handoff for the classifier-owned transport retry. A mandatory `NativeMedia3RetryBudget` is created for one episode-session and canonical video, retained by the host across actuator or player-adapter replacement, and has no reset operation. It is the sole same-episode attempt counter: the host snapshot cannot declare or reset retry history. Preparation reserves that shared budget before returning a lease, so replacement, abandoned leases, source/load-generation changes and rejected calls cannot mint another attempt. The exact snapshot is re-read and the token is consumed before the injected port call. Episode advance, a user-requested next episode, released or transitioning player state, terminal/unknown Media3 codes, snapshot drift, cross-instance replay, budget close and adapter failures all fail closed. The local fixture intentionally does not instantiate either boundary; no real retry, source switch, stream, provider, account or device operation is wired.
@@ -53,6 +54,12 @@ java -jar /tmp/native-tv-companion-bridge.jar
 ```
 
 CI must run the native SDK compilation, test and manifest audit on the **exact candidate head**, preserve the APK's SHA-256 and avoid any release/upload/install. Passing Kotlin JVM tests alone is insufficient for a functioning Android APK.
+
+The exact-head workflow also creates a disposable Android 11/API 30 emulator and
+runs `:companion-tv:connectedDebugAndroidTest`. Both explicit-Off and admitted
+Enabled paths must execute the local Media3 fixture through the real subtitle
+view draw and `PixelCopy` callback. No emulator result may be promoted to
+physical-panel, Fire TV, official-client or hardware acceptance.
 
 ## Missing before production integration
 
@@ -182,10 +189,12 @@ older-load replacement, identity or revision drift, foreign-thread completion,
 abandonment and lifecycle closure remain fail closed. This bounds callback
 ordering only; it does not claim that hosted CI executed `PixelCopy`.
 
-This source/build boundary does not claim that hosted CI executed `PixelCopy`,
-that a physical display showed the text, that the text was legible, that an
-official/private client adopted it or that Android TV or Fire TV acceptance
-passed. Runtime window-buffer evidence, physical-panel evidence and device
-acceptance remain separate gates.
+The API 30 instrumentation gate is intended to establish only that the exact
+isolated Activity executed its local Media3 subtitle callbacks, draw path and
+bounded `PixelCopy` reduction in a disposable Android emulator. It does not
+show that a physical display presented legible text, that an official/private
+client adopted the contract, that a signed build was installed, or that Android
+TV, Fire TV or hardware acceptance passed. Emulator window-buffer evidence,
+physical-panel evidence and device acceptance remain separate gates.
 
 

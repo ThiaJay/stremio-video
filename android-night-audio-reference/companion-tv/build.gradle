@@ -12,6 +12,7 @@ android {
         targetSdk 35
         versionCode 1
         versionName '0.1.0-dev'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
         buildConfigField 'boolean', 'EXTERNAL_SOURCE_ENABLED', 'false'
         buildConfigField 'boolean', 'STREMIO_ACCOUNT_WRITES_ENABLED', 'false'
     }
