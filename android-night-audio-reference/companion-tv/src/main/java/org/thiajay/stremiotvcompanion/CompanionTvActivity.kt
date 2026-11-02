@@ -55,6 +55,28 @@ import java.io.File
  */
 @UnstableApi
 class CompanionTvActivity : Activity() {
+    private enum class SubtitleWindowPixelDiagnostic {
+        NOT_STARTED,
+        PENDING,
+        LEASE_ISSUED,
+        CONTEXT_DRIFT,
+        INVALID_DIMENSIONS,
+        OUTSIDE_WINDOW,
+        BITMAP_ALLOCATION_FAILED,
+        SOURCE_NO_DATA_RETRY,
+        COPY_SOURCE_NO_DATA,
+        COPY_TIMEOUT,
+        COPY_SOURCE_INVALID,
+        COPY_DESTINATION_INVALID,
+        COPY_UNKNOWN,
+        COPY_UNRECOGNISED,
+        COPY_SUCCEEDED,
+        PIXEL_POLICY_REFUSED,
+        ACCEPTED,
+        CALLBACK_EXCEPTION,
+        REQUEST_EXCEPTION
+    }
+
     private lateinit var player: ExoPlayer
     private val dsp = NightAudioMedia3Processor()
     private val ui = Handler(Looper.getMainLooper())
@@ -91,6 +113,8 @@ class CompanionTvActivity : Activity() {
         SyntheticSubtitleWindowPixelObserver()
     private val subtitleWindowPixelCaptureLease =
         SyntheticSubtitleWindowPixelCaptureLease()
+    private var subtitleWindowPixelDiagnostic =
+        SubtitleWindowPixelDiagnostic.NOT_STARTED
     private var subtitleRenderView: View? = null
     private var subtitleCueRevision = 0L
     private val subtitleDrawListener = ViewTreeObserver.OnDrawListener {
@@ -107,6 +131,8 @@ class CompanionTvActivity : Activity() {
                     val revision = subtitleCueRevision
                     val captureContext = syntheticWindowPixelCaptureContext(revision)
                     subtitleWindowPixelCaptureLease.begin(captureContext)?.let { lease ->
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.LEASE_ISSUED
                         window.decorView.postOnAnimation {
                             requestSyntheticSubtitleWindowPixels(
                                 current,
@@ -411,6 +437,7 @@ class CompanionTvActivity : Activity() {
         }
         playbackFailed = false
         errorMessage = null
+        subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.PENDING
         currentSyntheticWindowPixelCaptureContext()?.let {
             subtitleWindowPixelCaptureLease.abandon(it)
         }
@@ -597,8 +624,10 @@ class CompanionTvActivity : Activity() {
             subtitleWindowPixelObserver.snapshot(syntheticWindowPixelContext())
                 ?.let { observed ->
                     "Synthetic subtitle window-pixel evidence ${observed.status}; " +
+                        "diagnostic ${subtitleWindowPixelDiagnostic.name}; " +
                         "physical display and device output NOT accepted."
                 } ?: "Synthetic subtitle window-pixel evidence held closed or pending; " +
+                "diagnostic ${subtitleWindowPixelDiagnostic.name}; " +
                 "physical display and device output NOT accepted."
         }
         status.text =
@@ -954,6 +983,7 @@ class CompanionTvActivity : Activity() {
             renderContext != syntheticRenderPipelineContext() ||
             revision != subtitleCueRevision ||
             lease.context != syntheticWindowPixelCaptureContext(revision)) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.CONTEXT_DRIFT
             failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
@@ -961,6 +991,7 @@ class CompanionTvActivity : Activity() {
         val height = view.height
         val total = width.toLong() * height.toLong()
         if (width !in 16..4096 || height !in 16..4096 || total !in 1L..4_194_304L) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.INVALID_DIMENSIONS
             failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
@@ -969,12 +1000,15 @@ class CompanionTvActivity : Activity() {
         val rect = Rect(location[0], location[1], location[0] + width, location[1] + height)
         if (rect.left < 0 || rect.top < 0 || rect.right > window.decorView.width ||
             rect.bottom > window.decorView.height) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.OUTSIDE_WINDOW
             failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
         val bitmap = try {
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         } catch (_: RuntimeException) {
+            subtitleWindowPixelDiagnostic =
+                SubtitleWindowPixelDiagnostic.BITMAP_ALLOCATION_FAILED
             failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
@@ -985,6 +1019,8 @@ class CompanionTvActivity : Activity() {
                 if (result == PixelCopy.ERROR_SOURCE_NO_DATA &&
                     sourceNoDataRetryAvailable &&
                     subtitleWindowPixelCaptureLease.pending(lease, callbackContext)) {
+                    subtitleWindowPixelDiagnostic =
+                        SubtitleWindowPixelDiagnostic.SOURCE_NO_DATA_RETRY
                     bitmap.eraseColor(Color.TRANSPARENT)
                     bitmap.recycle()
                     window.decorView.postOnAnimation {
@@ -998,6 +1034,18 @@ class CompanionTvActivity : Activity() {
                         )
                     }
                     return@pixelCopy
+                }
+                subtitleWindowPixelDiagnostic = when (result) {
+                    PixelCopy.SUCCESS -> SubtitleWindowPixelDiagnostic.COPY_SUCCEEDED
+                    PixelCopy.ERROR_SOURCE_NO_DATA ->
+                        SubtitleWindowPixelDiagnostic.COPY_SOURCE_NO_DATA
+                    PixelCopy.ERROR_TIMEOUT -> SubtitleWindowPixelDiagnostic.COPY_TIMEOUT
+                    PixelCopy.ERROR_SOURCE_INVALID ->
+                        SubtitleWindowPixelDiagnostic.COPY_SOURCE_INVALID
+                    PixelCopy.ERROR_DESTINATION_INVALID ->
+                        SubtitleWindowPixelDiagnostic.COPY_DESTINATION_INVALID
+                    PixelCopy.ERROR_UNKNOWN -> SubtitleWindowPixelDiagnostic.COPY_UNKNOWN
+                    else -> SubtitleWindowPixelDiagnostic.COPY_UNRECOGNISED
                 }
                 val resolution = subtitleWindowPixelCaptureLease.resolve(
                     lease,
@@ -1024,17 +1072,26 @@ class CompanionTvActivity : Activity() {
                     pixels = capturedPixels
                     bitmap.getPixels(capturedPixels, 0, width, 0, 0, width, height)
                     val renderEvidence = subtitleRenderPipelineObserver.snapshot(renderContext)
-                    if (renderEvidence == null || !subtitleWindowPixelObserver.observe(
+                    val accepted = renderEvidence != null &&
+                        subtitleWindowPixelObserver.observe(
                             pixelContext,
                             renderEvidence,
                             revision,
                             width,
                             height,
                             capturedPixels
-                        )) {
+                        )
+                    if (!accepted) {
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.PIXEL_POLICY_REFUSED
                         subtitleWindowPixelObserver.invalidate(pixelContext)
+                    } else {
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.ACCEPTED
                     }
                 } catch (_: RuntimeException) {
+                    subtitleWindowPixelDiagnostic =
+                        SubtitleWindowPixelDiagnostic.CALLBACK_EXCEPTION
                     if (resolution ==
                         SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_SUCCESS) {
                         subtitleWindowPixelObserver.invalidate(pixelContext)
@@ -1047,6 +1104,8 @@ class CompanionTvActivity : Activity() {
                 }
             }, ui)
         } catch (_: RuntimeException) {
+            subtitleWindowPixelDiagnostic =
+                SubtitleWindowPixelDiagnostic.REQUEST_EXCEPTION
             bitmap.eraseColor(Color.TRANSPARENT)
             bitmap.recycle()
             failSyntheticSubtitlePixelCapture(
