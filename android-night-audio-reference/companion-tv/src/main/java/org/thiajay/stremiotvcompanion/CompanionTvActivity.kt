@@ -102,7 +102,8 @@ class CompanionTvActivity : Activity() {
                 val renderEvidence = subtitleRenderPipelineObserver.snapshot(context)
                 val pixelContext = syntheticWindowPixelContext()
                 if (renderEvidence?.renderPipelineEvidenceComplete == true &&
-                    subtitleWindowPixelObserver.snapshot(pixelContext) == null) {
+                    subtitleWindowPixelObserver.snapshot(pixelContext)?.status ==
+                    SyntheticSubtitleWindowPixelObserver.Status.RENDER_PIPELINE_PENDING) {
                     val revision = subtitleCueRevision
                     val captureContext = syntheticWindowPixelCaptureContext(revision)
                     subtitleWindowPixelCaptureLease.begin(captureContext)?.let { lease ->
