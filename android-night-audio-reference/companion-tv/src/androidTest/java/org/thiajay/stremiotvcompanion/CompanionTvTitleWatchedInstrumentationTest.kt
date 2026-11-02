@@ -6,6 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -18,8 +20,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Executes one synthetic title-level watched action through the real Android TV
- * Button, remote-key, screen-owner, canonical adapter and readback path on API 30.
+ * Executes one synthetic title-level watched/unwatched round trip through the
+ * real Android TV Button, remote-key, acknowledgement dialog, screen-owner,
+ * canonical adapter and readback path on API 30.
  * The fixture is process-local and has no credentials, network or Stremio account.
  * This is not private-client, Fire TV, account or hardware acceptance.
  */
@@ -39,7 +42,7 @@ class CompanionTvTitleWatchedInstrumentationTest {
     }
 
     @Test
-    fun testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30() {
+    fun testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30() {
         scenario.onActivity { activity ->
             val button = findViews(activity.window.decorView)
                 .filterIsInstance<Button>()
@@ -75,6 +78,30 @@ class CompanionTvTitleWatchedInstrumentationTest {
         assertTrue(
             "Canonical watched readback did not re-arm the opposite synthetic action",
             oppositeActionReady
+        )
+
+        assertTrue(
+            "Synthetic unwatched action did not receive real visible window focus",
+            awaitRemoteFocus(MARK_SERIES_UNWATCHED, 64)
+        )
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        instrumentation.waitForIdleSync()
+
+        assertTrue(
+            "Destructive acknowledgement did not expose a remotely focused Confirm control",
+            awaitRemoteDialogFocus(CONFIRM, 8)
+        )
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        instrumentation.waitForIdleSync()
+
+        val cleared = awaitWatchedStatus(EMPTY_WATCHED_READBACK, 5_000L)
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_1))
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_2))
+        assertFalse(cleared, cleared.contains(SEASON_ZERO_EPISODE))
+
+        assertTrue(
+            "Canonical unwatched readback did not re-arm a remotely focusable watched action",
+            awaitRemoteFocus(MARK_SERIES_WATCHED, 64)
         )
     }
 
@@ -132,6 +159,23 @@ class CompanionTvTitleWatchedInstrumentationTest {
         return false
     }
 
+    private fun awaitRemoteDialogFocus(label: String, maximumMoves: Int): Boolean {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        repeat(maximumMoves + 1) { move ->
+            var focused = false
+            onView(withText(label)).check { view, noViewFoundException ->
+                focused = noViewFoundException == null &&
+                    view?.let { it.isShown && it.hasWindowFocus() && it.hasFocus() } == true
+            }
+            if (focused) return true
+            if (move < maximumMoves) {
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
+                instrumentation.waitForIdleSync()
+            }
+        }
+        return false
+    }
+
     private fun findViews(root: View): List<View> = buildList {
         add(root)
         if (root is ViewGroup) {
@@ -142,7 +186,9 @@ class CompanionTvTitleWatchedInstrumentationTest {
     private companion object {
         const val MARK_SERIES_WATCHED = "Mark all released episodes watched"
         const val MARK_SERIES_UNWATCHED = "Mark all released episodes unwatched"
+        const val CONFIRM = "Confirm"
         const val APPLIED = "Applied to local synthetic watched state."
+        const val EMPTY_WATCHED_READBACK = "Synthetic watched IDs: none"
         const val EXPECTED_EPISODE_1 = "local:mobile-watched:1:1"
         const val EXPECTED_EPISODE_2 = "local:mobile-watched:1:2"
         const val SEASON_ZERO_EPISODE = "local:mobile-watched:0:2"

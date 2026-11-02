@@ -650,7 +650,7 @@ jobs:
           expected={
               'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
               'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
-              'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
+              'testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
               'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
               'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
               'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',

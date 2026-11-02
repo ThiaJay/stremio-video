@@ -2406,7 +2406,7 @@ if not all(x in title_watched_instrumentation for x in [
     'candidate.hasFocus()',
     'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)',
     'boundedTitleWatchedRuntimeStatusForInstrumentation()',
-    'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
+    'testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
     'Mark all released episodes watched',
     'Mark all released episodes unwatched',
     'Applied to local synthetic watched state.',
@@ -2425,7 +2425,13 @@ if not all(x in title_watched_instrumentation for x in [
     'awaitVisibleWindowFocus(5_000L)',
     'root.isShown && root.hasWindowFocus()',
     'SystemClock.sleep(100L)',
-    'awaitRemoteFocus(MARK_SERIES_WATCHED, 64)'
+    'awaitRemoteFocus(MARK_SERIES_WATCHED, 64)',
+    'awaitRemoteFocus(MARK_SERIES_UNWATCHED, 64)',
+    'awaitRemoteDialogFocus(CONFIRM, 8)',
+    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)',
+    'view?.let { it.isShown && it.hasWindowFocus() && it.hasFocus() }',
+    'Synthetic watched IDs: none',
+    'Canonical unwatched readback did not re-arm a remotely focusable watched action'
 ]):
     fail.append('synthetic_title_watched_visible_window_focus_gate_missing')
 if not all(x in mobile_title_watched_instrumentation for x in [
