@@ -653,7 +653,7 @@ jobs:
               'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
               'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
               'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
-              'testFrameworkClickAppliesMobileSeriesWatchedAndCanonicalReadbackOnApi30',
+              'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',
           }
           assert tests==6 and failures==0 and errors==0, (tests,failures,errors)
           assert expected.issubset(set(names)), (expected,names)

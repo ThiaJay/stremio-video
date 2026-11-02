@@ -37,7 +37,7 @@ class MobileTitleWatchedInstrumentationTest {
     }
 
     @Test
-    fun testFrameworkClickAppliesMobileSeriesWatchedAndCanonicalReadbackOnApi30() {
+    fun testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30() {
         clickUniqueButton(MARK_SERIES_WATCHED)
 
         val status = awaitText(APPLIED, 5_000L)
@@ -51,6 +51,23 @@ class MobileTitleWatchedInstrumentationTest {
                 .singleOrNull { it.text.toString() == MARK_SERIES_UNWATCHED }
             assertTrue(
                 "Canonical mobile watched readback did not re-arm the opposite action",
+                opposite?.let { it.isEnabled && it.isClickable } == true
+            )
+        }
+
+        clickUniqueButton(MARK_SERIES_UNWATCHED)
+
+        val cleared = awaitText(EMPTY_WATCHED_READBACK, 5_000L)
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_1))
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_2))
+        assertFalse(cleared, cleared.contains(SEASON_ZERO_EPISODE))
+
+        scenario.onActivity { activity ->
+            val opposite = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == MARK_SERIES_WATCHED }
+            assertTrue(
+                "Canonical mobile unwatched readback did not re-arm the watched action",
                 opposite?.let { it.isEnabled && it.isClickable } == true
             )
         }
@@ -102,6 +119,7 @@ class MobileTitleWatchedInstrumentationTest {
         const val MARK_SERIES_WATCHED = "Mark all released episodes watched"
         const val MARK_SERIES_UNWATCHED = "Mark all released episodes unwatched"
         const val APPLIED = "Applied to local synthetic watched state."
+        const val EMPTY_WATCHED_READBACK = "Synthetic watched IDs: none"
         const val EXPECTED_EPISODE_1 = "local:mobile-watched:1:1"
         const val EXPECTED_EPISODE_2 = "local:mobile-watched:1:2"
         const val SEASON_ZERO_EPISODE = "local:mobile-watched:0:2"
