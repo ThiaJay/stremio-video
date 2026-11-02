@@ -1,5 +1,11 @@
 name: Isolated Fire TV companion Media3 build
 on:
+  push:
+    branches:
+      - feature/stremio-companion-tv-20261012
+    paths:
+      - 'android-night-audio-reference/**'
+      - '.github/workflows/native-tv-companion-validation.yml'
   pull_request:
     paths:
       - 'android-night-audio-reference/**'
@@ -8,6 +14,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: native-tv-companion-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   companion-validation:
