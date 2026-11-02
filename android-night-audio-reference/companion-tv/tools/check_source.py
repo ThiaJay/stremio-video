@@ -2338,13 +2338,16 @@ if not all(x in java_text for x in [
     fail.append('synthetic_subtitle_window_pixel_activity_binding_missing')
 if not all(x in synthetic_window_pixel_instrumentation for x in [
     'class CompanionTvPixelCopyInstrumentationTest',
-    'ActivityInstrumentationTestCase2<CompanionTvActivity>',
+    '@RunWith(AndroidJUnit4::class)',
+    'ActivityScenario.launch(CompanionTvActivity::class.java)',
+    'InstrumentationRegistry.getInstrumentation()',
+    'scenario.onActivity',
+    '@Test',
     'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
     'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
     'OFF_DARK_WINDOW_OBSERVED',
     'ENABLED_WINDOW_PIXELS_OBSERVED',
     'physical display and device output NOT accepted',
-    'instrumentation.runOnMainSync',
     'getSharedPreferences(TV_STATE, 0).edit().clear().commit()',
     'getSharedPreferences(TV_RECEIPT, 0).edit().clear().commit()'
 ]):

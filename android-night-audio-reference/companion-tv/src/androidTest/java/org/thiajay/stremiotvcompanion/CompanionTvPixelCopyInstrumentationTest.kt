@@ -1,12 +1,19 @@
 package org.thiajay.stremiotvcompanion
 
-import android.app.Activity
 import android.os.SystemClock
-import android.test.ActivityInstrumentationTestCase2
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
 
 /**
  * Executes the disclosed offline subtitle path in an ephemeral Android 11
@@ -16,34 +23,41 @@ import android.widget.TextView
  * This is emulator window-buffer evidence. It is not physical-display,
  * signed-installation, private-client, Fire TV or hardware acceptance.
  */
-@Suppress("DEPRECATION")
-class CompanionTvPixelCopyInstrumentationTest :
-    ActivityInstrumentationTestCase2<CompanionTvActivity>(CompanionTvActivity::class.java) {
+@RunWith(AndroidJUnit4::class)
+class CompanionTvPixelCopyInstrumentationTest {
+    private lateinit var scenario: ActivityScenario<CompanionTvActivity>
 
-    override fun setUp() {
-        super.setUp()
-        setActivityInitialTouchMode(true)
+    @Before
+    fun setUp() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         assertTrue(context.getSharedPreferences(TV_STATE, 0).edit().clear().commit())
         assertTrue(context.getSharedPreferences(TV_RECEIPT, 0).edit().clear().commit())
+        scenario = ActivityScenario.launch(CompanionTvActivity::class.java)
+        instrumentation.waitForIdleSync()
     }
 
+    @After
+    fun tearDown() {
+        scenario.close()
+    }
+
+    @Test
     fun testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30() {
-        val launched = activity
-        clickButton(launched, PLAY)
-        val status = awaitStatus(launched, OFF_PIXELS, 25_000L)
+        clickButton(PLAY)
+        val status = awaitStatus(OFF_PIXELS, 25_000L)
         assertTrue(status, status.contains("Media3 synthetic text track present and unselected"))
         assertTrue(status, status.contains("OFF_EMPTY_DRAW_PIPELINE_OBSERVED"))
         assertTrue(status, status.contains(OFF_PIXELS))
         assertTrue(status, status.contains("physical display and device output NOT accepted"))
     }
 
+    @Test
     fun testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30() {
-        val launched = activity
-        clickButton(launched, ENABLE)
-        awaitStatus(launched, "Accepted explicit synthetic enabled choice", 5_000L)
-        clickButton(launched, PLAY)
-        val status = awaitStatus(launched, ENABLED_PIXELS, 25_000L)
+        clickButton(ENABLE)
+        awaitStatus("Accepted explicit synthetic enabled choice", 5_000L)
+        clickButton(PLAY)
+        val status = awaitStatus(ENABLED_PIXELS, 25_000L)
         assertTrue(status, status.contains("Media3 synthetic text track present and selected"))
         assertTrue(status, status.contains("Media3 synthetic cue delivery"))
         assertTrue(status, status.contains("ENABLED_DRAW_PIPELINE_OBSERVED"))
@@ -51,23 +65,23 @@ class CompanionTvPixelCopyInstrumentationTest :
         assertTrue(status, status.contains("physical display and device output NOT accepted"))
     }
 
-    private fun clickButton(activity: Activity, label: String) {
+    private fun clickButton(label: String) {
         var clicked = false
-        instrumentation.runOnMainSync {
+        scenario.onActivity { activity ->
             val button = findViews(activity.window.decorView)
                 .filterIsInstance<Button>()
                 .singleOrNull { it.text.toString() == label }
             clicked = button?.performClick() == true
         }
         assertTrue("Button was not uniquely found or activated: $label", clicked)
-        instrumentation.waitForIdleSync()
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     }
 
-    private fun awaitStatus(activity: Activity, needle: String, timeoutMs: Long): String {
+    private fun awaitStatus(needle: String, timeoutMs: Long): String {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
         var snapshot = ""
         while (SystemClock.uptimeMillis() < deadline) {
-            instrumentation.runOnMainSync {
+            scenario.onActivity { activity ->
                 snapshot = findViews(activity.window.decorView)
                     .filterIsInstance<TextView>()
                     .joinToString("\n") { it.text.toString() }
