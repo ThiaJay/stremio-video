@@ -121,7 +121,7 @@ class MobileStoryOrderInstrumentationTest {
         const val SHOW_STORY_ORDER = "Show story order"
         const val REGULAR_EPISODE_1 = "S1 E1  Episode one"
         const val NARRATIVE_SPECIAL_TITLE = "Narrative special"
-        const val NARRATIVE_SPECIAL_LABEL = "S0 E2  Narrative special"
+        const val NARRATIVE_SPECIAL_LABEL = "S0 E2  Narrative special  • Watched"
         const val REGULAR_EPISODE_2 = "S1 E2  Episode two"
         const val ANCILLARY_TITLE = "Ancillary extra"
         const val WATCHED_MARKER = "• Watched"
