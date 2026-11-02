@@ -581,7 +581,7 @@ jobs:
             --name stremio_companion_api30 \
             --package 'system-images;android-30;google_apis;x86_64' \
             --path "$ANDROID_AVD_HOME/stremio_companion_api30.avd"
-          emulator -list-avds | tee /tmp/companion-avds.txt
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee /tmp/companion-avds.txt
           grep -Fx 'stremio_companion_api30' /tmp/companion-avds.txt
       - name: Execute local Media3 subtitle and PixelCopy runtime gates
         shell: bash
@@ -590,7 +590,7 @@ jobs:
           if [[ -e /dev/kvm ]]; then
             sudo chmod 666 /dev/kvm
           fi
-          emulator -avd stremio_companion_api30 \
+          "$ANDROID_HOME/emulator/emulator" -avd stremio_companion_api30 \
             -no-window -no-snapshot -no-boot-anim \
             -gpu swiftshader_indirect \
             -camera-back none -camera-front none -no-audio \
