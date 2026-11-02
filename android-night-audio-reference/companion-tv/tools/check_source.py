@@ -1094,12 +1094,12 @@ adapter_dispatch = canonical_watched_account_adapter[
     canonical_watched_account_adapter.find('override fun dispatch('):
     canonical_watched_account_adapter.find('fun close(): Boolean')
 ]
-if ('latestIdentity = null' not in adapter_dispatch or
-    adapter_dispatch.find('latestIdentity = null') >
-        adapter_dispatch.find('host.dispatchTitleWatched(expected.sessionEpoch, command)')):
+if ('latestLease = null' not in adapter_dispatch or
+    adapter_dispatch.find('latestLease = null') >
+        adapter_dispatch.find('host.dispatchTitleWatched(expected.identity.sessionEpoch, command)')):
     fail.append('canonical_account_lease_not_consumed_before_dispatch')
 if ('expectedSessionEpoch: Long' not in canonical_watched_account_adapter or
-    'host.dispatchTitleWatched(expected.sessionEpoch, command)' not in canonical_watched_account_adapter):
+    'host.dispatchTitleWatched(expected.identity.sessionEpoch, command)' not in canonical_watched_account_adapter):
     fail.append('canonical_account_atomic_session_epoch_dispatch_missing')
 if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
     'private val lifecycleLock = Any()' not in canonical_watched_account_adapter or
@@ -1111,19 +1111,30 @@ if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_ad
 if ('SessionBoundCanonicalWatchedAccountAdapter(' in java_text or
     'CanonicalWatchedAccountHostPort' in java_text):
     fail.append('canonical_account_adapter_wired_to_synthetic_activity')
-if ('latestIdentity = null\n        val observation = observeOrNull()' not in
+if ('latestLease = null\n        val observation = observeOrNull()' not in
         canonical_watched_account_adapter):
     fail.append('canonical_account_failed_refresh_retains_snapshot_lease')
-if ('if (observation == null || observation.identity != expected) {' not in
+if ('if (observation == null || observation.identity != expected.identity) {' not in
         canonical_watched_account_adapter or
-    'latestIdentity = null\n                return@synchronized null' not in
+    'latestLease = null\n                return@synchronized null' not in
         canonical_watched_account_adapter):
     fail.append('canonical_account_failed_readback_retains_snapshot_lease')
-if ('val expected = latestIdentity ?: return@synchronized false\n        latestIdentity = null' not in
+if ('val expected = latestLease ?: return@synchronized false\n        latestLease = null' not in
         canonical_watched_account_adapter):
     fail.append('canonical_account_dispatch_preconditions_retain_snapshot_lease')
+if ('private data class DispatchLease(' not in canonical_watched_account_adapter or
+    'latestLease = DispatchLease(observation.identity, observation.readback)' not in
+        canonical_watched_account_adapter or
+    'observation.readback != expected.readback' not in canonical_watched_account_adapter or
+    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState' not in
+        canonical_watched_account_adapter_test or
+    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch' not in
+        canonical_watched_account_adapter_test):
+    fail.append('canonical_account_watched_resume_dispatch_lease_missing')
 if any(name not in canonical_watched_account_adapter_test for name in [
     'detachesSnapshotAndWatchedIdsFromHostCollections',
+    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState',
+    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch',
     'watchedReadbackRequiresMatchingObservedSnapshot',
     'failedSnapshotRefreshCannotReviveEarlierLease',
     'mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba',

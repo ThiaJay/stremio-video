@@ -120,6 +120,47 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertEquals(0L, adapter.currentWatchedState()!!.resumeTimeOffset)
     }
 
+    @Test fun canonicalReadbackRefreshRebindsDispatchLeaseToLatestState() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        assertNotNull(adapter.currentSnapshot())
+
+        watchedIds.add("s1e2")
+        host.resumeTimeOffset = 21_000L
+        val refreshed = adapter.currentWatchedState()!!
+        assertEquals(listOf("s1e1", "s1e2"), refreshed.watchedVideoIds)
+        assertEquals("s1e2", refreshed.resumeVideoId)
+        assertEquals(21_000L, refreshed.resumeTimeOffset)
+
+        assertTrue(adapter.dispatch(seriesCommand()))
+        assertEquals(1, host.dispatchedEpochs.size)
+    }
+
+    @Test fun watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+
+        assertNotNull(adapter.currentSnapshot())
+        assertNotNull(adapter.currentWatchedState())
+        watchedIds.add("s1e2")
+        assertFalse(adapter.dispatch(seriesCommand()))
+
+        watchedIds.remove("s1e2")
+        assertNotNull(adapter.currentSnapshot())
+        assertNotNull(adapter.currentWatchedState())
+        host.resumeTimeOffset = 0L
+        assertFalse(adapter.dispatch(seriesCommand()))
+
+        host.resumeTimeOffset = 42_000L
+        assertNotNull(adapter.currentSnapshot())
+        assertNotNull(adapter.currentWatchedState())
+        host.resumeVideoId = "s1e1"
+        assertFalse(adapter.dispatch(seriesCommand()))
+
+        assertEquals(0, host.dispatchedEpochs.size)
+        assertEquals(0, host.sent.size)
+    }
+
     @Test fun watchedReadbackRequiresMatchingObservedSnapshot() {
         val host = Host()
         val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)

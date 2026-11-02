@@ -109,11 +109,13 @@ internal class CanonicalWatchedScreenOwnedAccountLease(
  * Concrete fail-closed [CanonicalWatchedStatePort] for Android title actions.
  *
  * Every observation is detached between two equal session-epoch reads. Dispatch
- * requires the complete detached snapshot last returned by [currentSnapshot],
- * consumes that lease before the host call, accepts only exact series/season
- * watched commands and verifies that the host epoch did not change. Every
- * failed refresh, readback identity check or dispatch precondition consumes
- * the previous snapshot lease, so an ABA return cannot revive stale authority.
+ * requires the complete detached snapshot and canonical watched/resume readback
+ * held by the latest lease, consumes that lease before the host call, accepts
+ * only exact series/season watched commands and verifies that the host epoch did
+ * not change. [currentWatchedState] may deliberately refresh the lease, but any
+ * later watched-ID, video_id or time_offset drift refuses dispatch before the
+ * host callback. Every failed refresh, readback identity check or dispatch
+ * precondition consumes the previous lease.
  *
  * Account operations remain owner-thread confined. [close] is a thread-safe
  * revocation boundary so an asynchronous host teardown can wait for any
@@ -135,6 +137,11 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         val snapshot: SeriesAccountSnapshot
     )
 
+    private data class DispatchLease(
+        val identity: ObservationIdentity,
+        val readback: CanonicalWatchedStateReadback
+    )
+
     private data class DetachedObservation(
         val identity: ObservationIdentity,
         val snapshot: SeriesAccountSnapshot,
@@ -144,39 +151,42 @@ class SessionBoundCanonicalWatchedAccountAdapter(
     private val ownerThread = Thread.currentThread()
     private val lifecycleLock = Any()
     private val hexSha = Regex("^[a-f0-9]{64}$")
-    private var latestIdentity: ObservationIdentity? = null
+    private var latestLease: DispatchLease? = null
     @Volatile
     private var closed = false
 
     override fun currentSnapshot(): SeriesAccountSnapshot? = synchronized(lifecycleLock) {
         if (!onOwnerThread() || closed) return@synchronized null
-        latestIdentity = null
+        latestLease = null
         val observation = observeOrNull() ?: return@synchronized null
-        latestIdentity = observation.identity
+        latestLease = DispatchLease(observation.identity, observation.readback)
         observation.snapshot
     }
 
     override fun currentWatchedState(): CanonicalWatchedStateReadback? =
         synchronized(lifecycleLock) {
             if (!onOwnerThread() || closed) return@synchronized null
-            val expected = latestIdentity ?: return@synchronized null
+            val expected = latestLease ?: return@synchronized null
             val observation = observeOrNull()
-            if (observation == null || observation.identity != expected) {
-                latestIdentity = null
+            if (observation == null || observation.identity != expected.identity) {
+                latestLease = null
                 return@synchronized null
             }
+            latestLease = DispatchLease(observation.identity, observation.readback)
             observation.readback
         }
 
     override fun dispatch(message: Map<String, Any>): Boolean = synchronized(lifecycleLock) {
         if (!onOwnerThread() || closed) return@synchronized false
-        val expected = latestIdentity ?: return@synchronized false
-        latestIdentity = null
+        val expected = latestLease ?: return@synchronized false
+        latestLease = null
         val observation = observeOrNull() ?: return@synchronized false
-        if (observation.identity != expected) return@synchronized false
+        if (observation.identity != expected.identity ||
+            observation.readback != expected.readback
+        ) return@synchronized false
         val command = exactTitleWatchedCommand(message) ?: return@synchronized false
         val accepted = try {
-            host.dispatchTitleWatched(expected.sessionEpoch, command)
+            host.dispatchTitleWatched(expected.identity.sessionEpoch, command)
         } catch (_: Exception) {
             false
         } catch (_: LinkageError) {
@@ -190,13 +200,13 @@ class SessionBoundCanonicalWatchedAccountAdapter(
         } catch (_: LinkageError) {
             return@synchronized false
         }
-        after == expected.sessionEpoch
+        after == expected.identity.sessionEpoch
     }
 
     fun close(): Boolean = synchronized(lifecycleLock) {
         if (closed) return@synchronized false
         closed = true
-        latestIdentity = null
+        latestLease = null
         true
     }
 
