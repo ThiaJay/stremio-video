@@ -583,7 +583,7 @@ jobs:
             --path "$ANDROID_AVD_HOME/stremio_companion_api30.avd"
           "$ANDROID_HOME/emulator/emulator" -list-avds | tee /tmp/companion-avds.txt
           grep -Fx 'stremio_companion_api30' /tmp/companion-avds.txt
-      - name: Execute local Media3 subtitle and PixelCopy runtime gates
+      - name: Execute local Media3 subtitle, PixelCopy and title-action runtime gates
         shell: bash
         run: |
           set -euo pipefail
@@ -630,7 +630,7 @@ jobs:
           gradle -p android-night-audio-reference \
             :companion-tv:connectedDebugAndroidTest \
             --no-daemon --stacktrace
-      - name: Require both API 30 window-buffer tests and retained acceptance boundaries
+      - name: Require API 30 subtitle and title-action tests with retained boundaries
         shell: bash
         run: |
           python3 - <<'PY'
@@ -650,11 +650,12 @@ jobs:
           expected={
               'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
               'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
+              'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
           }
-          assert tests==2 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests==3 and failures==0 and errors==0, (tests,failures,errors)
           assert expected.issubset(set(names)), (expected,names)
-          print('Verified API 30 synthetic window-buffer runtime:',tests,'failures:',failures,'errors:',errors)
-          print('Physical display, private-client, Fire TV and hardware acceptance remain false.')
+          print('Verified API 30 synthetic subtitle and title-action runtime:',tests,'failures:',failures,'errors:',errors)
+          print('Private-client, account, physical display, Fire TV and hardware acceptance remain false.')
           PY
 # Never upload emulator screenshots, APKs, logs, synthetic media or test artifacts.
 

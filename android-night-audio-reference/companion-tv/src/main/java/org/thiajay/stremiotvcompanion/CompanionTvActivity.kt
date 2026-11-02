@@ -656,6 +656,22 @@ class CompanionTvActivity : Activity() {
         return bounded.takeIf { it.isNotBlank() && it.length <= 8_192 }
     }
 
+    /**
+     * Read-only instrumentation surface for the process-local synthetic title
+     * action outcome. It exposes no account, credential, network or Core object.
+     */
+    internal fun boundedTitleWatchedRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::watchedStatus.isInitialized ||
+            !controls.isAttachedToWindow || !watchedStatus.isAttachedToWindow ||
+            watchedStatus.parent !== controls) {
+            return null
+        }
+        return watchedStatus.text.toString().takeIf {
+            it.isNotBlank() && it.length <= 2_048
+        }
+    }
+
     private fun updateStoryOrderDemo(message: String? = null) {
         val visible = StoryOrderContract.presentation(
             STORY_CANONICAL,
