@@ -87,7 +87,7 @@ class CompanionTvPixelCopyInstrumentationTest {
             if (snapshot.contains(needle)) return snapshot
             SystemClock.sleep(200L)
         }
-        fail("Timed out waiting for '$needle'. Final bounded UI status:\n$snapshot")
+        fail("Timed out waiting for '$needle'. Final bounded UI status: $snapshot")
         return snapshot
     }
 
