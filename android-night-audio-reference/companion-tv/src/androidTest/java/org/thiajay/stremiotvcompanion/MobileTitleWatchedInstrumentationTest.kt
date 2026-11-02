@@ -6,6 +6,9 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -56,6 +59,8 @@ class MobileTitleWatchedInstrumentationTest {
         }
 
         clickUniqueButton(MARK_SERIES_UNWATCHED)
+        onView(withText(CONFIRM)).perform(click())
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
         val cleared = awaitText(EMPTY_WATCHED_READBACK, 5_000L)
         assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_1))
@@ -118,6 +123,7 @@ class MobileTitleWatchedInstrumentationTest {
     private companion object {
         const val MARK_SERIES_WATCHED = "Mark all released episodes watched"
         const val MARK_SERIES_UNWATCHED = "Mark all released episodes unwatched"
+        const val CONFIRM = "Confirm"
         const val APPLIED = "Applied to local synthetic watched state."
         const val EMPTY_WATCHED_READBACK = "Synthetic watched IDs: none"
         const val EXPECTED_EPISODE_1 = "local:mobile-watched:1:1"
