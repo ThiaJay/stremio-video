@@ -605,6 +605,26 @@ class CompanionTvActivity : Activity() {
                 windowPixelStatus
     }
 
+    /**
+     * Read-only instrumentation surface for the two existing bounded subtitle status
+     * strings. It refuses detached or replaced UI and never returns cue text, pixels,
+     * media, account, source or preference storage.
+     */
+    internal fun boundedSubtitleRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::subtitleStatus.isInitialized ||
+            !::status.isInitialized || !controls.isAttachedToWindow ||
+            !subtitleStatus.isAttachedToWindow || !status.isAttachedToWindow ||
+            subtitleStatus.parent !== controls || status.parent !== controls) {
+            return null
+        }
+        val bounded = listOf(
+            subtitleStatus.text.toString(),
+            status.text.toString()
+        ).joinToString("\n")
+        return bounded.takeIf { it.isNotBlank() && it.length <= 8_192 }
+    }
+
     private fun updateStoryOrderDemo(message: String? = null) {
         val visible = StoryOrderContract.presentation(
             STORY_CANONICAL,

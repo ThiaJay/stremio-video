@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -82,9 +81,8 @@ class CompanionTvPixelCopyInstrumentationTest {
         var snapshot = ""
         while (SystemClock.uptimeMillis() < deadline) {
             scenario.onActivity { activity ->
-                snapshot = findViews(activity.window.decorView)
-                    .filterIsInstance<TextView>()
-                    .joinToString("\n") { it.text.toString() }
+                snapshot = activity.boundedSubtitleRuntimeStatusForInstrumentation()
+                    ?: "SUBTITLE_RUNTIME_STATUS_UNAVAILABLE"
             }
             if (snapshot.contains(needle)) return snapshot
             SystemClock.sleep(200L)
