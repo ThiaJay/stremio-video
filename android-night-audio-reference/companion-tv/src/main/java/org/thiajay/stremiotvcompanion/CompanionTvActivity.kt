@@ -89,9 +89,10 @@ class CompanionTvActivity : Activity() {
         SyntheticSubtitleRenderPipelineObserver()
     private val subtitleWindowPixelObserver =
         SyntheticSubtitleWindowPixelObserver()
+    private val subtitleWindowPixelCaptureLease =
+        SyntheticSubtitleWindowPixelCaptureLease()
     private var subtitleRenderView: View? = null
     private var subtitleCueRevision = 0L
-    private var subtitlePixelCapturePending = false
     private val subtitleDrawListener = ViewTreeObserver.OnDrawListener {
         val current = subtitleRenderView
         if (fixtureLoaded && current != null && subtitleCueRevision > 0L) {
@@ -101,17 +102,19 @@ class CompanionTvActivity : Activity() {
                 val renderEvidence = subtitleRenderPipelineObserver.snapshot(context)
                 val pixelContext = syntheticWindowPixelContext()
                 if (renderEvidence?.renderPipelineEvidenceComplete == true &&
-                    subtitleWindowPixelObserver.snapshot(pixelContext) == null &&
-                    !subtitlePixelCapturePending) {
-                    subtitlePixelCapturePending = true
+                    subtitleWindowPixelObserver.snapshot(pixelContext) == null) {
                     val revision = subtitleCueRevision
-                    ui.post {
-                        requestSyntheticSubtitleWindowPixels(
-                            current,
-                            pixelContext,
-                            context,
-                            revision
-                        )
+                    val captureContext = syntheticWindowPixelCaptureContext(revision)
+                    subtitleWindowPixelCaptureLease.begin(captureContext)?.let { lease ->
+                        ui.post {
+                            requestSyntheticSubtitleWindowPixels(
+                                current,
+                                pixelContext,
+                                context,
+                                revision,
+                                lease
+                            )
+                        }
                     }
                 }
             }
@@ -406,6 +409,9 @@ class CompanionTvActivity : Activity() {
         }
         playbackFailed = false
         errorMessage = null
+        currentSyntheticWindowPixelCaptureContext()?.let {
+            subtitleWindowPixelCaptureLease.abandon(it)
+        }
         fixtureLoaded = false
         generation++
         player.stop()
@@ -416,7 +422,6 @@ class CompanionTvActivity : Activity() {
         val renderPipelineContext = syntheticRenderPipelineContext()
         val windowPixelContext = syntheticWindowPixelContext()
         subtitleCueRevision = 0L
-        subtitlePixelCapturePending = false
         val cueStarted = subtitleCueObserver.begin(cueContext)
         val trackStarted = subtitleTrackObserver.begin(trackContext)
         val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
@@ -707,6 +712,9 @@ class CompanionTvActivity : Activity() {
     }
 
     private fun stopFixture() {
+        currentSyntheticWindowPixelCaptureContext()?.let {
+            subtitleWindowPixelCaptureLease.abandon(it)
+        }
         if (fixtureLoaded) subtitleCueObserver.abandon(syntheticCueContext())
         if (fixtureLoaded) subtitleTrackObserver.abandon(syntheticTrackContext())
         if (fixtureLoaded) {
@@ -718,7 +726,6 @@ class CompanionTvActivity : Activity() {
         player.stop()
         fixtureLoaded = false
         generation++
-        subtitlePixelCapturePending = false
         subtitlePendingTrigger = null
         setNightAudio(null, "Off")
     }
@@ -786,6 +793,7 @@ class CompanionTvActivity : Activity() {
         }
         subtitleRenderView = null
         subtitleRenderPipelineObserver.close()
+        subtitleWindowPixelCaptureLease.close()
         subtitleWindowPixelObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
@@ -862,6 +870,15 @@ class CompanionTvActivity : Activity() {
             sourceId = SYNTHETIC_SOURCE_ID
         )
 
+    private fun syntheticWindowPixelCaptureContext(revision: Long) =
+        SyntheticSubtitleWindowPixelCaptureLease.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID,
+            cueRevision = revision
+        )
+
     private fun refreshSubtitlePreferenceEvidence() {
         if (!fixtureLoaded || !::player.isInitialized) return
         val preferenceContext = syntheticPreferenceEvidenceContext()
@@ -906,20 +923,22 @@ class CompanionTvActivity : Activity() {
         view: View,
         pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
         renderContext: SyntheticSubtitleRenderPipelineObserver.Context,
-        revision: Long
+        revision: Long,
+        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease
     ) {
+        val currentCaptureContext = currentSyntheticWindowPixelCaptureContext()
         if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
             renderContext != syntheticRenderPipelineContext() ||
-            revision != subtitleCueRevision) {
-            subtitlePixelCapturePending = false
+            revision != subtitleCueRevision ||
+            lease.context != syntheticWindowPixelCaptureContext(revision)) {
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
         val width = view.width
         val height = view.height
         val total = width.toLong() * height.toLong()
         if (width !in 16..4096 || height !in 16..4096 || total !in 1L..4_194_304L) {
-            subtitlePixelCapturePending = false
-            subtitleWindowPixelObserver.invalidate(pixelContext)
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
         val location = IntArray(2)
@@ -927,30 +946,42 @@ class CompanionTvActivity : Activity() {
         val rect = Rect(location[0], location[1], location[0] + width, location[1] + height)
         if (rect.left < 0 || rect.top < 0 || rect.right > window.decorView.width ||
             rect.bottom > window.decorView.height) {
-            subtitlePixelCapturePending = false
-            subtitleWindowPixelObserver.invalidate(pixelContext)
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
         val bitmap = try {
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         } catch (_: RuntimeException) {
-            subtitlePixelCapturePending = false
-            subtitleWindowPixelObserver.invalidate(pixelContext)
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
             return
         }
         try {
             PixelCopy.request(window, rect, bitmap, pixelCopy@{ result ->
-                subtitlePixelCapturePending = false
-                val pixels = IntArray(width * height)
+                var pixels: IntArray? = null
+                val resolution = subtitleWindowPixelCaptureLease.resolve(
+                    lease,
+                    currentSyntheticWindowPixelCaptureContext(),
+                    result == PixelCopy.SUCCESS
+                )
                 try {
-                    if (result != PixelCopy.SUCCESS || !fixtureLoaded ||
-                        pixelContext != syntheticWindowPixelContext() ||
+                    when (resolution) {
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.STALE_IGNORED ->
+                            return@pixelCopy
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_FAILURE -> {
+                            subtitleWindowPixelObserver.invalidate(pixelContext)
+                            return@pixelCopy
+                        }
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_SUCCESS -> Unit
+                    }
+                    if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
                         renderContext != syntheticRenderPipelineContext() ||
                         revision != subtitleCueRevision) {
                         subtitleWindowPixelObserver.invalidate(pixelContext)
                         return@pixelCopy
                     }
-                    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+                    val capturedPixels = IntArray(width * height)
+                    pixels = capturedPixels
+                    bitmap.getPixels(capturedPixels, 0, width, 0, 0, width, height)
                     val renderEvidence = subtitleRenderPipelineObserver.snapshot(renderContext)
                     if (renderEvidence == null || !subtitleWindowPixelObserver.observe(
                             pixelContext,
@@ -958,21 +989,48 @@ class CompanionTvActivity : Activity() {
                             revision,
                             width,
                             height,
-                            pixels
+                            capturedPixels
                         )) {
                         subtitleWindowPixelObserver.invalidate(pixelContext)
                     }
+                } catch (_: RuntimeException) {
+                    if (resolution ==
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_SUCCESS) {
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                    }
                 } finally {
-                    pixels.fill(0)
+                    pixels?.fill(0)
                     bitmap.eraseColor(Color.TRANSPARENT)
                     bitmap.recycle()
                     updateUi()
                 }
             }, ui)
         } catch (_: RuntimeException) {
-            subtitlePixelCapturePending = false
             bitmap.eraseColor(Color.TRANSPARENT)
             bitmap.recycle()
+            failSyntheticSubtitlePixelCapture(
+                lease,
+                pixelContext,
+                currentSyntheticWindowPixelCaptureContext()
+            )
+        }
+    }
+
+    private fun currentSyntheticWindowPixelCaptureContext():
+        SyntheticSubtitleWindowPixelCaptureLease.Context? =
+        if (fixtureLoaded && subtitleCueRevision > 0L) {
+            syntheticWindowPixelCaptureContext(subtitleCueRevision)
+        } else {
+            null
+        }
+
+    private fun failSyntheticSubtitlePixelCapture(
+        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease,
+        pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
+        currentContext: SyntheticSubtitleWindowPixelCaptureLease.Context?
+    ) {
+        if (subtitleWindowPixelCaptureLease.resolve(lease, currentContext, false) ==
+            SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_FAILURE) {
             subtitleWindowPixelObserver.invalidate(pixelContext)
         }
     }

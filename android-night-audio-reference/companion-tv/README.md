@@ -174,6 +174,14 @@ explicit Off only for an opaque nearly-dark frame. Stale identity, preference
 or draw evidence, malformed dimensions, transparent pixels, unexpected bright
 output, thread drift and lifecycle closure fail closed.
 
+Each asynchronous copy is also owned by an immutable player/load/cue lease.
+Only that exact current lease may resolve success or current failure. A newer
+load supersedes an outstanding lease without allowing its late callback to
+clear or invalidate the newer capture. Duplicate capture for the same cue,
+older-load replacement, identity or revision drift, foreign-thread completion,
+abandonment and lifecycle closure remain fail closed. This bounds callback
+ordering only; it does not claim that hosted CI executed `PixelCopy`.
+
 This source/build boundary does not claim that hosted CI executed `PixelCopy`,
 that a physical display showed the text, that the text was legible, that an
 official/private client adopted it or that Android TV or Fire TV acceptance
