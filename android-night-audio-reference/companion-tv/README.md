@@ -147,4 +147,20 @@ natural synthetic end. Preference, context or playback-end regression closes
 the generation. These are callback-only states: visible rendering remains
 explicitly unaccepted, and hosted CI does not execute Media3 playback.
 
+The TV lab now also attaches a bounded draw listener to Media3's own subtitle
+view. For the same player, video, source and load generation, the observer
+requires the exact preference-bound callback evidence, a newly reported cue
+group, an attached, shown, fully opaque and non-zero-size subtitle view and a
+draw callback for that exact cue revision. Admitted Enabled requires an active
+validated cue. Explicit Off requires completed zero-cue callback evidence and
+an empty draw. Missing receipt, manual selection, stale revisions, malformed
+view state, identity drift and lifecycle or thread violations fail closed.
+
+This is render-pipeline instrumentation only. A view draw does not establish
+that subtitle pixels reached a display, were legible, survived composition or
+were visible on a physical TV. `visibleRenderingAccepted`, pixel output and
+device acceptance remain fixed false. Hosted CI compiles the Android binding
+and exercises the pure observer, but does not run Media3 playback or observe a
+real draw callback.
+
 

@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -81,6 +82,19 @@ class CompanionTvActivity : Activity() {
     private val subtitlePlaybackEvidenceObserver = SyntheticSubtitlePlaybackEvidenceObserver()
     private val subtitlePreferenceEvidenceObserver =
         SyntheticSubtitlePreferenceEvidenceObserver()
+    private val subtitleRenderPipelineObserver =
+        SyntheticSubtitleRenderPipelineObserver()
+    private var subtitleRenderView: View? = null
+    private var subtitleCueRevision = 0L
+    private val subtitleDrawListener = ViewTreeObserver.OnDrawListener {
+        val current = subtitleRenderView
+        if (fixtureLoaded && current != null && subtitleCueRevision > 0L) {
+            val context = syntheticRenderPipelineContext()
+            if (subtitleRenderPipelineObserver.observeView(context, current.renderState())) {
+                subtitleRenderPipelineObserver.observeDraw(context, subtitleCueRevision)
+            }
+        }
+    }
 
     // The real Media3 seek must be guarded against the selected programme changing
     // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
@@ -180,15 +194,24 @@ class CompanionTvActivity : Activity() {
                 val cueTexts = cueGroup.cues.mapNotNull { it.text?.toString() }
                 val cueContext = syntheticCueContext()
                 val evidenceContext = syntheticPlaybackEvidenceContext()
+                val renderContext = syntheticRenderPipelineContext()
                 when (subtitleCueObserver.observe(cueContext, cueTexts)) {
-                    SyntheticSubtitleCueDeliveryObserver.Observation.REFUSED ->
+                    SyntheticSubtitleCueDeliveryObserver.Observation.REFUSED -> {
                         subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
+                        subtitleRenderPipelineObserver.invalidate(renderContext)
+                    }
                     else -> subtitleCueObserver.snapshot(cueContext)?.let { observed ->
                         subtitlePlaybackEvidenceObserver.observeCues(
                             evidenceContext,
                             observed.deliveredCueCount,
                             observed.expectedCueCount,
                             observed.allExpectedCuesObserved
+                        )
+                        subtitleCueRevision++
+                        subtitleRenderPipelineObserver.observeCueGroup(
+                            renderContext,
+                            subtitleCueRevision,
+                            cueTexts.size
                         )
                     }
                 }
@@ -230,6 +253,8 @@ class CompanionTvActivity : Activity() {
             isFocusable = false
             setBackgroundColor(Color.BLACK)
         }
+        subtitleRenderView = video.subtitleView
+        subtitleRenderView?.viewTreeObserver?.addOnDrawListener(subtitleDrawListener)
         controls.addView(video, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 280.dp
         ))
@@ -365,18 +390,27 @@ class CompanionTvActivity : Activity() {
         val trackContext = syntheticTrackContext()
         val evidenceContext = syntheticPlaybackEvidenceContext()
         val preferenceEvidenceContext = syntheticPreferenceEvidenceContext()
+        val renderPipelineContext = syntheticRenderPipelineContext()
+        subtitleCueRevision = 0L
         val cueStarted = subtitleCueObserver.begin(cueContext)
         val trackStarted = subtitleTrackObserver.begin(trackContext)
         val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
         val preferenceEvidenceStarted = subtitleOwner?.currentPlaybackPreference()?.let {
             subtitlePreferenceEvidenceObserver.begin(preferenceEvidenceContext, it)
         } == true
-        if (!cueStarted || !trackStarted || !evidenceStarted || !preferenceEvidenceStarted) {
+        val renderPipelineStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitleRenderPipelineObserver.begin(renderPipelineContext, it)
+        } == true
+        if (!cueStarted || !trackStarted || !evidenceStarted || !preferenceEvidenceStarted ||
+            !renderPipelineStarted) {
             if (cueStarted) subtitleCueObserver.abandon(cueContext)
             if (trackStarted) subtitleTrackObserver.abandon(trackContext)
             if (evidenceStarted) subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
             if (preferenceEvidenceStarted) {
                 subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
+            }
+            if (renderPipelineStarted) {
+                subtitleRenderPipelineObserver.abandon(renderPipelineContext)
             }
             errorMessage = "Synthetic subtitle playback observation was refused."
             updateUi()
@@ -408,6 +442,7 @@ class CompanionTvActivity : Activity() {
             subtitleTrackObserver.abandon(trackContext)
             subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
             subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
+            subtitleRenderPipelineObserver.abandon(renderPipelineContext)
             errorMessage = "Unable to prepare the offline test media."
             fixtureLoaded = false
             player.stop()
@@ -507,9 +542,19 @@ class CompanionTvActivity : Activity() {
                 } ?: "Preference-bound subtitle callback evidence held closed; " +
                 "visible output NOT accepted."
         }
+        val renderPipelineStatus = if (!fixtureLoaded) {
+            "Subtitle view draw-pipeline evidence not active."
+        } else {
+            subtitleRenderPipelineObserver.snapshot(syntheticRenderPipelineContext())
+                ?.let { observed ->
+                    "Subtitle view draw-pipeline evidence ${observed.status}; " +
+                        "visible pixels and device output NOT accepted."
+                } ?: "Subtitle view draw-pipeline evidence held closed; " +
+                "visible pixels and device output NOT accepted."
+        }
         status.text =
             "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  " +
-                "$playbackEvidenceStatus  $preferenceEvidenceStatus"
+                "$playbackEvidenceStatus  $preferenceEvidenceStatus  $renderPipelineStatus"
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
@@ -624,6 +669,7 @@ class CompanionTvActivity : Activity() {
         if (fixtureLoaded) {
             subtitlePlaybackEvidenceObserver.abandon(syntheticPlaybackEvidenceContext())
             subtitlePreferenceEvidenceObserver.abandon(syntheticPreferenceEvidenceContext())
+            subtitleRenderPipelineObserver.abandon(syntheticRenderPipelineContext())
         }
         player.stop()
         fixtureLoaded = false
@@ -690,6 +736,11 @@ class CompanionTvActivity : Activity() {
         subtitleTrackObserver.close()
         subtitlePlaybackEvidenceObserver.close()
         subtitlePreferenceEvidenceObserver.close()
+        subtitleRenderView?.viewTreeObserver?.let { observer ->
+            if (observer.isAlive) observer.removeOnDrawListener(subtitleDrawListener)
+        }
+        subtitleRenderView = null
+        subtitleRenderPipelineObserver.close()
         if (::player.isInitialized) player.release()
         dsp.request(null)
         super.onDestroy()
@@ -749,6 +800,14 @@ class CompanionTvActivity : Activity() {
             sourceId = SYNTHETIC_SOURCE_ID
         )
 
+    private fun syntheticRenderPipelineContext() =
+        SyntheticSubtitleRenderPipelineObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
     private fun refreshSubtitlePreferenceEvidence() {
         if (!fixtureLoaded || !::player.isInitialized) return
         val preferenceContext = syntheticPreferenceEvidenceContext()
@@ -760,14 +819,41 @@ class CompanionTvActivity : Activity() {
             subtitlePreferenceEvidenceObserver.invalidate(preferenceContext)
             return
         }
-        subtitlePreferenceEvidenceObserver.observe(
+        if (!subtitlePreferenceEvidenceObserver.observe(
             preferenceContext,
             preference,
             origin,
             playbackEvidence,
             player.playbackState == Player.STATE_ENDED
-        )
+        )) {
+            subtitleRenderPipelineObserver.invalidate(syntheticRenderPipelineContext())
+            return
+        }
+        val preferenceEvidence =
+            subtitlePreferenceEvidenceObserver.snapshot(preferenceContext)
+        if (preferenceEvidence == null ||
+            !subtitleRenderPipelineObserver.observePreferenceEvidence(
+                syntheticRenderPipelineContext(),
+                preference,
+                preferenceEvidence
+            )) {
+            return
+        }
+        subtitleRenderView?.let { current ->
+            subtitleRenderPipelineObserver.observeView(
+                syntheticRenderPipelineContext(),
+                current.renderState()
+            )
+        }
     }
+
+    private fun View.renderState() = SyntheticSubtitleRenderPipelineObserver.ViewState(
+        attached = isAttachedToWindow,
+        shown = isShown,
+        width = width,
+        height = height,
+        alphaPermille = (alpha * 1000f).toInt().coerceIn(0, 1000)
+    )
 
     private fun syntheticTextTracks(
         tracks: Tracks
