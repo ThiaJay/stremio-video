@@ -1,6 +1,5 @@
 package org.thiajay.stremiotvcompanion
 
-import android.graphics.Rect
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
@@ -46,22 +45,10 @@ class CompanionTvTitleWatchedInstrumentationTest {
                 .filterIsInstance<Button>()
                 .singleOrNull { it.text.toString() == MARK_SERIES_WATCHED }
             assertNotNull("Synthetic series watched action was not uniquely rendered", button)
-            button?.let { candidate ->
-                candidate.requestRectangleOnScreen(
-                    Rect(
-                        0,
-                        0,
-                        candidate.width.coerceAtLeast(1),
-                        candidate.height.coerceAtLeast(1)
-                    ),
-                    true
-                )
-                candidate.requestFocus()
-            }
         }
         assertTrue(
             "Synthetic watched action did not receive real visible window focus",
-            awaitButtonFocus(MARK_SERIES_WATCHED, 5_000L)
+            awaitRemoteFocus(MARK_SERIES_WATCHED, 64)
         )
 
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -105,34 +92,24 @@ class CompanionTvTitleWatchedInstrumentationTest {
         return snapshot
     }
 
-    private fun awaitButtonFocus(label: String, timeoutMs: Long): Boolean {
-        val deadline = SystemClock.uptimeMillis() + timeoutMs
-        while (SystemClock.uptimeMillis() < deadline) {
+    private fun awaitRemoteFocus(label: String, maximumMoves: Int): Boolean {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        repeat(maximumMoves + 1) { move ->
             var focused = false
             scenario.onActivity { activity ->
                 val button = findViews(activity.window.decorView)
                     .filterIsInstance<Button>()
                     .singleOrNull { it.text.toString() == label }
                 button?.let { candidate ->
-                    if (!candidate.hasFocus()) {
-                        candidate.requestRectangleOnScreen(
-                            Rect(
-                                0,
-                                0,
-                                candidate.width.coerceAtLeast(1),
-                                candidate.height.coerceAtLeast(1)
-                            ),
-                            true
-                        )
-                        candidate.requestFocus()
-                    }
                     focused = candidate.isShown && candidate.hasWindowFocus() &&
                         candidate.hasFocus()
                 }
             }
             if (focused) return true
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            SystemClock.sleep(50L)
+            if (move < maximumMoves) {
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+                instrumentation.waitForIdleSync()
+            }
         }
         return false
     }
