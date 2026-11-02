@@ -334,7 +334,11 @@ class CompanionTvActivity : Activity() {
         button("Night Audio Balanced") { setNightAudio(PcmDynamicsProcessor.Strength.BALANCED, "Balanced") }
         button("Night Audio Strong") { setNightAudio(PcmDynamicsProcessor.Strength.STRONG, "Strong") }
         button("Stop playback and reset Night Audio") { stopFixture() }
-        small("Story Order below uses synthetic local metadata only. It cannot read a Stremio catalogue, start a stream or change watched state.")
+        small(
+            "Story Order below uses synthetic local metadata and fixed local watched " +
+                "markers only. It cannot read a Stremio catalogue, start a stream or " +
+                "read or change account watched state."
+        )
         storyOrderToggle = button("Presentation: Canonical") {
             storyOrderSelected = !storyOrderSelected
             updateStoryOrderDemo()
@@ -703,13 +707,14 @@ class CompanionTvActivity : Activity() {
             "Presentation: Canonical"
         }
         val sequence = visible.joinToString("  →  ") {
-            "${it.id} [S${it.season} E${it.episode ?: "?"}]"
+            val watched = if (STORY_WATCHED_IDS.contains(it.id)) " • Watched" else ""
+            "${it.id} [S${it.season} E${it.episode ?: "?"}]$watched"
         }
         storyOrderSummary.text = listOfNotNull(
             message,
             "Selected stable ID: $storyDemoCurrentId",
             "Visible local sequence: $sequence",
-            "No player, account or watched-state binding."
+            "No player, account or mutable watched-state binding."
         ).joinToString("\n")
     }
 
@@ -907,6 +912,10 @@ class CompanionTvActivity : Activity() {
                 "local:story:0:2",
                 "local:story:1:2"
             )
+        )
+        private val STORY_WATCHED_IDS = setOf(
+            "local:story:0:2",
+            "local:story:1:2"
         )
     }
 

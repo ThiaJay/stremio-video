@@ -39,6 +39,8 @@ class CompanionTvStoryOrderInstrumentationTest {
 
     @Test
     fun testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30() {
+        val canonical = awaitStoryStatus(CANONICAL_LABEL, 5_000L)
+        assertStableWatchedMarkers(canonical, shouldContainAncillary = true)
         scenario.onActivity { activity ->
             val toggle = findViews(activity.window.decorView)
                 .filterIsInstance<Button>()
@@ -63,6 +65,7 @@ class CompanionTvStoryOrderInstrumentationTest {
         assertTrue(selected, selected.contains(NARRATIVE_SPECIAL))
         assertTrue(selected, selected.contains(REGULAR_EPISODE_2))
         assertFalse(selected, selected.contains(ANCILLARY_SPECIAL))
+        assertStableWatchedMarkers(selected, shouldContainAncillary = false)
 
         assertTrue(
             "Synthetic Next Story action did not receive real visible window focus",
@@ -75,6 +78,22 @@ class CompanionTvStoryOrderInstrumentationTest {
         assertTrue(advanced, advanced.contains(ORIGINAL_OBJECT_MESSAGE))
         assertTrue(advanced, advanced.contains(NARRATIVE_SPECIAL))
         assertFalse(advanced, advanced.contains(ANCILLARY_SPECIAL))
+        assertStableWatchedMarkers(advanced, shouldContainAncillary = false)
+    }
+
+    private fun assertStableWatchedMarkers(
+        snapshot: String,
+        shouldContainAncillary: Boolean
+    ) {
+        assertTrue(snapshot, snapshot.contains(WATCHED_NARRATIVE_SPECIAL))
+        assertTrue(snapshot, snapshot.contains(WATCHED_REGULAR_EPISODE_2))
+        assertFalse(snapshot, snapshot.contains(WATCHED_REGULAR_EPISODE_1))
+        assertFalse(snapshot, snapshot.contains(WATCHED_ANCILLARY_SPECIAL))
+        if (shouldContainAncillary) {
+            assertTrue(snapshot, snapshot.contains(ANCILLARY_SPECIAL))
+        } else {
+            assertFalse(snapshot, snapshot.contains(ANCILLARY_SPECIAL))
+        }
     }
 
     private fun awaitStoryStatus(needle: String, timeoutMs: Long): String {
@@ -146,6 +165,14 @@ class CompanionTvStoryOrderInstrumentationTest {
         const val NARRATIVE_SPECIAL = "local:story:0:2"
         const val REGULAR_EPISODE_2 = "local:story:1:2"
         const val ANCILLARY_SPECIAL = "local:story:0:99"
+        const val WATCHED_NARRATIVE_SPECIAL =
+            "local:story:0:2 [S0 E2] • Watched"
+        const val WATCHED_REGULAR_EPISODE_2 =
+            "local:story:1:2 [S1 E2] • Watched"
+        const val WATCHED_REGULAR_EPISODE_1 =
+            "local:story:1:1 [S1 E1] • Watched"
+        const val WATCHED_ANCILLARY_SPECIAL =
+            "local:story:0:99 [S0 E99] • Watched"
         const val ADVANCED_STABLE_ID = "Selected stable ID: local:story:0:2"
         const val ORIGINAL_OBJECT_MESSAGE =
             "Resolved the original canonical object by stable ID."
