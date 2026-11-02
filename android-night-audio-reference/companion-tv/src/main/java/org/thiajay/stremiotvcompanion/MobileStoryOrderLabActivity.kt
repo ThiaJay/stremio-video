@@ -37,6 +37,7 @@ class MobileStoryOrderLabActivity : Activity() {
                 if (selected != null) {
                     storyStatus.text =
                         "Selected exact synthetic episode: " + selected.id +
+                            "\nSelection resolved the original synthetic canonical object by stable ID." +
                             "\nNo playback, account or production watched-state action was performed."
                     if (!current.render(MobileStoryOrderMode.STORY)) {
                         storyStatus.text =

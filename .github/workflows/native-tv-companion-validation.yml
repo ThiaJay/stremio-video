@@ -652,10 +652,11 @@ jobs:
               'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
               'testDpadCenterAppliesSyntheticSeriesWatchedAndCanonicalReadbackOnApi30',
               'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
+              'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
           }
-          assert tests==4 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests==5 and failures==0 and errors==0, (tests,failures,errors)
           assert expected.issubset(set(names)), (expected,names)
-          print('Verified API 30 synthetic subtitle, title-action and Story Order runtime:',tests,'failures:',failures,'errors:',errors)
+          print('Verified API 30 synthetic subtitle, title-action, TV and mobile Story Order runtime:',tests,'failures:',failures,'errors:',errors)
           print('Private-client, account, physical display, Fire TV and hardware acceptance remain false.')
           PY
 # Never upload emulator screenshots, APKs, logs, synthetic media or test artifacts.
