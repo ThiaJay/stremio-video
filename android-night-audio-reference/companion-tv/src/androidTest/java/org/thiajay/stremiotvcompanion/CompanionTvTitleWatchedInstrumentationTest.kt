@@ -47,6 +47,10 @@ class CompanionTvTitleWatchedInstrumentationTest {
             assertNotNull("Synthetic series watched action was not uniquely rendered", button)
         }
         assertTrue(
+            "Synthetic watched window did not become visibly focused",
+            awaitVisibleWindowFocus(5_000L)
+        )
+        assertTrue(
             "Synthetic watched action did not receive real visible window focus",
             awaitRemoteFocus(MARK_SERIES_WATCHED, 64)
         )
@@ -90,6 +94,20 @@ class CompanionTvTitleWatchedInstrumentationTest {
                 snapshot.replace('\n', ' ')
         )
         return snapshot
+    }
+
+    private fun awaitVisibleWindowFocus(timeoutMs: Long): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            var focused = false
+            scenario.onActivity { activity ->
+                val root = activity.window.decorView
+                focused = root.isShown && root.hasWindowFocus()
+            }
+            if (focused) return true
+            SystemClock.sleep(100L)
+        }
+        return false
     }
 
     private fun awaitRemoteFocus(label: String, maximumMoves: Int): Boolean {

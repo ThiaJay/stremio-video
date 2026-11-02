@@ -46,6 +46,10 @@ class CompanionTvStoryOrderInstrumentationTest {
             assertNotNull("Synthetic Story Order selector was not uniquely rendered", toggle)
         }
         assertTrue(
+            "Synthetic Story Order window did not become visibly focused",
+            awaitVisibleWindowFocus(5_000L)
+        )
+        assertTrue(
             "Synthetic Story Order selector did not receive real visible window focus",
             awaitRemoteFocus(CANONICAL_LABEL, 64)
         )
@@ -89,6 +93,20 @@ class CompanionTvStoryOrderInstrumentationTest {
                 snapshot.replace('\n', ' ')
         )
         return snapshot
+    }
+
+    private fun awaitVisibleWindowFocus(timeoutMs: Long): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            var focused = false
+            scenario.onActivity { activity ->
+                val root = activity.window.decorView
+                focused = root.isShown && root.hasWindowFocus()
+            }
+            if (focused) return true
+            SystemClock.sleep(100L)
+        }
+        return false
     }
 
     private fun awaitRemoteFocus(label: String, maximumMoves: Int): Boolean {
