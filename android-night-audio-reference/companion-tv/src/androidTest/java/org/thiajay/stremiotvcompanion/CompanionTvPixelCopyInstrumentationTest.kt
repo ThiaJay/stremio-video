@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ScrollView
+import androidx.media3.ui.PlayerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -71,12 +72,16 @@ class CompanionTvPixelCopyInstrumentationTest {
             val views = findViews(activity.window.decorView)
             val button = views.filterIsInstance<Button>()
                 .singleOrNull { it.text.toString() == label }
-            if (label == PLAY) {
-                views.filterIsInstance<ScrollView>().singleOrNull()?.scrollTo(0, 0)
-            }
             clicked = button?.performClick() == true
-            if (label == PLAY) {
-                views.filterIsInstance<ScrollView>().singleOrNull()?.scrollTo(0, 0)
+            if (label == PLAY && clicked) {
+                val scroll = views.filterIsInstance<ScrollView>().singleOrNull()
+                val playerView = views.filterIsInstance<PlayerView>().singleOrNull()
+                button?.clearFocus()
+                if (scroll != null && playerView != null) {
+                    scroll.scrollTo(0, playerView.top)
+                } else {
+                    clicked = false
+                }
             }
         }
         assertTrue("Button was not uniquely found or activated: $label", clicked)
