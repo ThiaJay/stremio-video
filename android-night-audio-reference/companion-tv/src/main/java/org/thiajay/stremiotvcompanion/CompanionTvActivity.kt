@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
+import android.view.KeyEvent
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
@@ -337,6 +338,11 @@ class CompanionTvActivity : Activity() {
         }
         syntheticSearchInput.nextFocusDownId = syntheticSearchSubmit.id
         syntheticSearchSubmit.nextFocusUpId = syntheticSearchInput.id
+        syntheticSearchInput.setOnKeyListener { _, keyCode, event ->
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                event.action == KeyEvent.ACTION_DOWN &&
+                syntheticSearchSubmit.requestFocus()
+        }
         syntheticSearchStatus = small(
             "Typed input ready. Companion route and device identity remain unknown; " +
                 "live acceptance is false."
