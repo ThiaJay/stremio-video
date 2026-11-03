@@ -884,7 +884,7 @@ class CompanionTvActivity : Activity() {
         val text = syntheticSearchInput.text?.toString().orEmpty()
         val plan = NativeCompanionTextEntryPolicy.plan(
             CompanionTextEntryFacts(
-                searchSurfaceActive = true,
+                searchSurfaceActive = false,
                 typedSearchFocused = syntheticSearchInput.hasFocus(),
                 explicitCompanionInputGesture = true,
                 sensitiveInput = false,
