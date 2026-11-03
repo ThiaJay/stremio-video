@@ -111,6 +111,17 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(0, account.sent.size)
     }
 
+    @Test fun hostSnapshotCannotAdvanceReleaseClock() {
+        val account = Account(snapshot(listOf(
+            CanonicalEpisode("s1e1", 1, 1, released),
+            CanonicalEpisode("s1e2", 1, 2, "2035-01-01T00:00:00Z")
+        )).copy(now = Instant.now().plusSeconds(3_600)))
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+
+        assertTrue(menu.present(1).isEmpty())
+        assertEquals(0, account.sent.size)
+    }
+
     @Test fun focusAndRemoteConfirmationDispatchExactSeriesAction() {
         val account = Account(snapshot())
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)

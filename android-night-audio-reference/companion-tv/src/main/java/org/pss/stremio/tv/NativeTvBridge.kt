@@ -193,6 +193,11 @@ class TvWatchedCoordinator {
         if (!hexSha.matches(s.accountFingerprint) || !hexSha.matches(s.libraryItemFingerprint)) return null
         if (s.videos.isEmpty() || s.videos.any { it.id.isBlank() || it.season < 0 || it.episode < 0 }) return null
         if (s.videos.map { it.id }.toSet().size != s.videos.size) return null
+        // The host snapshot may conservatively lag the runtime clock, but it may
+        // never move the release boundary into the future. Otherwise a
+        // self-consistent snapshot could classify unreleased episodes as released.
+        val runtimeNow = try { Instant.now() } catch (_: Exception) { return null }
+        if (s.now.isAfter(runtimeNow)) return null
         val selected: List<CanonicalEpisode> = when (scope) {
             WatchedScope.Series -> storyMembership(s).filter { released(it, s.now) }
             is WatchedScope.Season -> {

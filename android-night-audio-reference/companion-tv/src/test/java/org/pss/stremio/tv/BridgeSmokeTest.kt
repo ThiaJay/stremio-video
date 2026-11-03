@@ -69,6 +69,8 @@ fun main() {
     val watched = TvWatchedCoordinator()
     val title = watched.prepare(state, WatchedScope.Series, true)
     checkCase(title != null && title.selectedIds == listOf("s1e1", "s1e2", "s2e1", "s2e2", "special"), "released story includes narrative special and excludes future and ancillary Season 0")
+    val forgedFutureClock = state.copy(now = Instant.now().plusSeconds(3_600))
+    checkCase(watched.prepare(forgedFutureClock, WatchedScope.Series, true) == null, "host snapshot cannot move the release clock forward")
     checkCase(watched.prepare(state, WatchedScope.Season(3), true) == null, "future season watched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(3), false) == null, "future season unwatched refused")
     checkCase(watched.prepare(state, WatchedScope.Season(0), true) == null, "season zero refused")

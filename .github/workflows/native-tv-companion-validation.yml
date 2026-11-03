@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' 'b0341307c1e6a1b1e731044808aa02cb369ab24c65a938ad93473654fbd90566  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+          printf '%s\n' '9c74db1d38c3232c332c14fdb3731006d69178329f7e1a2228c4a3e26477e385  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
       - name: Validate exact source contract and safety guard
         run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK
@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=517 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=518 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
