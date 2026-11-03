@@ -233,6 +233,12 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         val unchangedCoreVideo = snapshotCoreVideo(secondSource) ?: return false
         if (unchangedCoreVideo["id"] != plan.stableVideoId ||
             hash(canonical(unchangedCoreVideo) ?: return false) != plan.videoFingerprint) return false
+        // The final canonical object read can itself synchronously expose an account,
+        // catalogue or release-boundary change. Recompute the complete plan once more
+        // after freezing that exact dispatch payload; a video-only recheck must not
+        // authorise a command against an account snapshot which has already drifted.
+        val finalPlan = buildPlan(plan.stableVideoId, plan.markWatched) ?: return false
+        if (finalPlan != plan) return false
         val command = mapOf<String, Any>(
             "action" to "MetaDetails",
             "args" to mapOf(

@@ -15,13 +15,17 @@ class NativeEpisodeWatchedActionTest {
         var video:Map<String,Any?> = mapOf("id" to "tt18:1:1","season" to 1,"episode" to 1,"title" to "One")
         var writes=0
         var lastAction:Map<String,Any>?=null
+        var snapshotReadCount=0
         var videoReadCount=0
         var beforeVideoRead: ((Int) -> Unit)?=null
         var duringDispatch: (() -> Unit)?=null
         var snapshotFailure:Throwable?=null
+        var snapshotFailureOnRead:Int?=null
         var videoFailureOnRead:Int?=null
         var dispatchFailure:Throwable?=null
         override fun currentSnapshot():SeriesAccountSnapshot {
+            snapshotReadCount++
+            if(snapshotFailureOnRead==snapshotReadCount) throw LinkageError("account snapshot unavailable")
             snapshotFailure?.let { throw it }
             return state
         }
@@ -106,7 +110,14 @@ class NativeEpisodeWatchedActionTest {
         finalFailure.videoFailureOnRead=3
         assertFalse(finalActuator.confirm(finalPlan,
             TvWatchedConfirmation(true,"ENTER",finalPlan.fingerprint)))
-        assertEquals(0,refreshFailure.writes+finalFailure.writes)
+
+        val finalPlanFailure=FakeAccount(base)
+        val finalPlanActuator=NativeTvEpisodeWatchedActuator(finalPlanFailure)
+        val finalPlanVideo=finalPlanActuator.prepare("tt18:1:1",true)!!
+        finalPlanFailure.videoFailureOnRead=4
+        assertFalse(finalPlanActuator.confirm(finalPlanVideo,
+            TvWatchedConfirmation(true,"ENTER",finalPlanVideo.fingerprint)))
+        assertEquals(0,refreshFailure.writes+finalFailure.writes+finalPlanFailure.writes)
     }
     @Test fun dispatchFailureFailsClosedAndConsumesThePlan() {
         val p=FakeAccount(base)
@@ -218,6 +229,30 @@ class NativeEpisodeWatchedActionTest {
         }
         assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
         assertEquals(0,p.writes)
+    }
+
+    @Test fun finalAccountDriftAfterDispatchPayloadReadFailsClosed() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+        p.beforeVideoRead={ read ->
+            if(read==3) p.state=base.copy(libraryItemFingerprint="c".repeat(64))
+        }
+
+        assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        assertEquals(0,p.writes)
+        assertEquals(3,p.snapshotReadCount)
+    }
+
+    @Test fun finalAccountSnapshotFailureAfterDispatchPayloadReadFailsClosed() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+        p.snapshotFailureOnRead=3
+
+        assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        assertEquals(0,p.writes)
+        assertEquals(3,p.snapshotReadCount)
     }
 
     @Test fun dispatchedPayloadIsDeepDetachedFromMutableCoreObject() {
