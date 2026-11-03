@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=512 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=516 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -521,7 +521,11 @@ jobs:
               'closeRevokesUnusedSession',
               'nullExpectedCannotOpenSession',
               'sessionDiagnosticsExposeNoQueryOrDigest',
-              'hostileMapConsumesSessionWithoutEscaping'):
+              'hostileMapConsumesSessionWithoutEscaping',
+              'earlierReceiptCannotBeReplayedInLaterSession',
+              'evaluationClockRollbackIsRefusedAndConsumesSession',
+              'expiredSessionIsRefused',
+              'invalidSessionOpenTimeCannotOpen'):
               assert required in names, 'Companion acceptance one-shot session regression not executed: '+required
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY

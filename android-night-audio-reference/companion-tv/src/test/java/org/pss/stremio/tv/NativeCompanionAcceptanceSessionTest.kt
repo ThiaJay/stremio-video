@@ -13,10 +13,11 @@ import org.junit.Test
 class NativeCompanionAcceptanceSessionTest {
     private val source = "a".repeat(64)
     private val device = "c".repeat(64)
+    private val openedAt = "2026-11-03T05:54:00Z"
     private val evaluatedAt = "2026-11-03T06:00:00Z"
 
     @Test fun exactReceiptCanBeEvaluatedOnce() {
-        val session = NativeCompanionAcceptanceSession.open(expected())
+        val session = session()
         assertNotNull(session)
         val decision = session!!.evaluate(wire(), evaluatedAt)
         assertTrue(decision.validation.accepted)
@@ -24,7 +25,7 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun duplicateReceiptReplayIsRefusedAfterAcceptance() {
-        val session = NativeCompanionAcceptanceSession.open(expected())!!
+        val session = session()!!
         assertTrue(session.evaluate(wire(), evaluatedAt).validation.accepted)
         val replay = session.evaluate(wire(), evaluatedAt)
         assertFalse(replay.validation.accepted)
@@ -33,7 +34,7 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun rejectedAttemptConsumesSessionBeforeLaterValidReceipt() {
-        val session = NativeCompanionAcceptanceSession.open(expected())!!
+        val session = session()!!
         val rejected = session.evaluate(wire().apply { remove("route") }, evaluatedAt)
         assertEquals("RECEIPT_WIRE_WIRE_SCHEMA_MISMATCH", rejected.validation.reason)
         val later = session.evaluate(wire(), evaluatedAt)
@@ -42,7 +43,7 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun foreignThreadCannotEvaluateOrClose() {
-        val session = NativeCompanionAcceptanceSession.open(expected())!!
+        val session = session()!!
         val foreignDecision = AtomicReference<CompanionAcceptanceDecision?>()
         val foreignClose = AtomicBoolean(true)
         val thread = Thread {
@@ -57,7 +58,7 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun closeRevokesUnusedSession() {
-        val session = NativeCompanionAcceptanceSession.open(expected())!!
+        val session = session()!!
         assertTrue(session.close())
         assertFalse(session.close())
         val decision = session.evaluate(wire(), evaluatedAt)
@@ -66,12 +67,12 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun nullExpectedCannotOpenSession() {
-        assertNull(NativeCompanionAcceptanceSession.open(null))
+        assertNull(NativeCompanionAcceptanceSession.open(null, openedAt))
     }
 
     @Test fun sessionDiagnosticsExposeNoQueryOrDigest() {
         val expected = expected()
-        val session = NativeCompanionAcceptanceSession.open(expected)!!
+        val session = NativeCompanionAcceptanceSession.open(expected, openedAt)!!
         assertFalse(session.toString().contains("bounded query"))
         assertFalse(session.toString().contains(expected.expectedTextSha256!!))
         val fields = NativeCompanionAcceptanceSession::class.java.declaredFields.map { it.name }
@@ -79,7 +80,7 @@ class NativeCompanionAcceptanceSessionTest {
     }
 
     @Test fun hostileMapConsumesSessionWithoutEscaping() {
-        val session = NativeCompanionAcceptanceSession.open(expected())!!
+        val session = session()!!
         val first = session.evaluate(ThrowingEntriesMap(), evaluatedAt)
         assertEquals("RECEIPT_WIRE_INVALID_OR_HOSTILE_WIRE_INPUT", first.validation.reason)
         assertEquals(
@@ -87,6 +88,48 @@ class NativeCompanionAcceptanceSessionTest {
             session.evaluate(wire(), evaluatedAt).validation.reason
         )
     }
+
+    @Test fun earlierReceiptCannotBeReplayedInLaterSession() {
+        val session = NativeCompanionAcceptanceSession.open(
+            expected(),
+            "2026-11-03T05:56:00Z"
+        )!!
+        val decision = session.evaluate(wire(), evaluatedAt)
+        assertFalse(decision.validation.accepted)
+        assertEquals("SESSION_OBSERVATION_PRECEDES_REQUEST", decision.validation.reason)
+        assertEquals("PRESERVE_TYPED_SEARCH", decision.plan.action)
+    }
+
+    @Test fun evaluationClockRollbackIsRefusedAndConsumesSession() {
+        val session = NativeCompanionAcceptanceSession.open(
+            expected(),
+            "2026-11-03T06:01:00Z"
+        )!!
+        val first = session.evaluate(wire(), evaluatedAt)
+        assertEquals("SESSION_CLOCK_ROLLBACK", first.validation.reason)
+        assertEquals(
+            "SESSION_ALREADY_CONSUMED",
+            session.evaluate(wire(), "2026-11-03T06:02:00Z").validation.reason
+        )
+    }
+
+    @Test fun expiredSessionIsRefused() {
+        val session = NativeCompanionAcceptanceSession.open(
+            expected(),
+            "2026-11-03T05:49:59Z"
+        )!!
+        val decision = session.evaluate(wire(), evaluatedAt)
+        assertEquals("SESSION_EXPIRED", decision.validation.reason)
+        assertFalse(decision.plan.acceptance)
+    }
+
+    @Test fun invalidSessionOpenTimeCannotOpen() {
+        assertNull(NativeCompanionAcceptanceSession.open(expected(), null))
+        assertNull(NativeCompanionAcceptanceSession.open(expected(), "not-an-instant"))
+    }
+
+    private fun session() =
+        NativeCompanionAcceptanceSession.open(expected(), openedAt)
 
     private fun expected() = ExpectedCompanionAcceptance(
         contractSourceSha256 = source,
