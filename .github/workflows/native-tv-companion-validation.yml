@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=516 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=517 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -405,7 +405,8 @@ jobs:
           assert 'throwingSnapshotDuringPreparationFailsClosed' in names, 'Preparation snapshot exception regression not executed'
           assert 'throwingFinalSnapshotRefusesWithoutExecution' in names, 'Final snapshot exception regression not executed'
           assert 'throwingPortExecutionConsumesLeaseAndFailsClosed' in names, 'Native execution exception one-shot regression not executed'
-          assert 'issuedLeaseSetIsBoundedWithoutReplayEviction' in names, 'Bounded native recovery lease registry regression not executed'
+          assert 'sharedEpisodeBudgetSurvivesActuatorReplacementAndRejectsLedgerReset' in names, 'Shared native recovery ledger regression not executed'
+          assert 'episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes' in names, 'Classifier/playback shared authority regression not executed'
           assert 'sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults' in names, 'Native subtitle provenance regression sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults not executed'
           assert 'explicitOffRemainsAuthoritativeWithoutInventingConsent' in names, 'Native subtitle provenance regression explicitOffRemainsAuthoritativeWithoutInventingConsent not executed'
           assert 'sameInstallationReceiptMustBindExactPreferenceAndInstallation' in names, 'Native subtitle provenance regression sameInstallationReceiptMustBindExactPreferenceAndInstallation not executed'
