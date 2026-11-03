@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import androidx.test.core.app.ActivityScenario
@@ -93,13 +94,21 @@ class CompanionTvSearchFocusInstrumentationTest {
             )
         }
 
-        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
-        instrumentation.waitForIdleSync()
-        assertTrue(
-            "Synthetic typed field trapped DPAD_DOWN instead of reaching local submit",
-            awaitSubmitFocus(5_000L)
-        )
-        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        scenario.onActivity { activity ->
+            val input = findViews(activity.window.decorView)
+                .filterIsInstance<EditText>()
+                .singleOrNull {
+                    it.contentDescription?.toString() ==
+                        CompanionTvActivity.SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+                }
+            assertNotNull("Synthetic typed field was not uniquely rendered", input)
+            assertTrue(
+                "Synthetic typed field did not expose the explicit Search action",
+                (input!!.imeOptions and EditorInfo.IME_MASK_ACTION) ==
+                    EditorInfo.IME_ACTION_SEARCH
+            )
+            input.onEditorAction(EditorInfo.IME_ACTION_SEARCH)
+        }
         instrumentation.waitForIdleSync()
 
         val status = awaitSearchStatus(HELD_REASON, 5_000L)

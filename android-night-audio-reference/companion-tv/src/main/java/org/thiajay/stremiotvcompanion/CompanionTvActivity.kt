@@ -15,6 +15,7 @@ import android.view.KeyEvent
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -318,9 +319,9 @@ class CompanionTvActivity : Activity() {
             hint = "Type a synthetic local search"
             contentDescription = SYNTHETIC_SEARCH_INPUT_DESCRIPTION
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
             filters = arrayOf(InputFilter.LengthFilter(MAX_SYNTHETIC_SEARCH_LENGTH))
             setSingleLine(true)
-            showSoftInputOnFocus = false
             isFocusable = true
             setTextColor(Color.WHITE)
             setHintTextColor(Color.rgb(160, 175, 190))
@@ -343,6 +344,17 @@ class CompanionTvActivity : Activity() {
             keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
                 event.action == KeyEvent.ACTION_DOWN &&
                 syntheticSearchSubmit.requestFocus()
+        }
+        syntheticSearchInput.setOnEditorActionListener { _, actionId, event ->
+            val explicitSearchAction = actionId == EditorInfo.IME_ACTION_SEARCH
+            val hardwareEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                event.action == KeyEvent.ACTION_DOWN
+            if (!explicitSearchAction && !hardwareEnter) {
+                false
+            } else {
+                runSyntheticTypedSearch()
+                true
+            }
         }
         syntheticSearchStatus = small(
             "Typed input ready. Companion route and device identity remain unknown; " +
