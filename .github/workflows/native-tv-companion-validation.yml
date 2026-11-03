@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=450 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=488 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -467,6 +467,34 @@ jobs:
           assert 'cancellationConsumesOnlyTheExactPresentedLease' in names, 'Subtitle choice cancellation regression not executed'
           assert 'foreignThreadCannotPrepareCommitCancelOrClose' in names, 'Subtitle choice owner-thread regression not executed'
           assert 'closeRevokesPendingChoiceAndReleasesStorageOwner' in names, 'Subtitle choice lifecycle regression not executed'
+          for required in (
+              'supportedRouteIsOnlyOfferedBeforeLiveAcceptance',
+              'acceptanceRequiresDeliveryAndResultsToRemainInsideStremio',
+              'unknownOrUnavailableRoutePreservesTypedSearch',
+              'differentOrUnknownDeviceCannotBeAccepted',
+              'missingExplicitGestureNeverOffersCompanionEntry',
+              'sensitiveInputIsAlwaysForbidden',
+              'inactiveSearchSurfaceCannotOfferCompanionEntry',
+              'unfocusedFieldRequestsFocusWithoutAcceptance',
+              'nullOrIncompleteFactsFailClosed',
+              'unrecognisedRouteAndIdentityFailClosed',
+              'dataObjectsDoNotExposeAnyMutationOrVoiceOperation'):
+              assert required in names, 'Companion text-entry policy regression not executed: '+required
+          for required in (
+              'exactFreshSourceBoundReceiptIsAcceptedWithoutQueryProjection',
+              'acceptedReceiptAloneCanPromoteCompanionPolicy',
+              'nullAndUnsupportedContractsFailClosed',
+              'exactReviewedSourceBindingIsMandatory',
+              'exactPrivateDeviceIdentityAndModelAreMandatory',
+              'exactAppVersionAndOfficialRouteAreMandatory',
+              'observationWindowAllowsOnlyTenMinutesAndThirtySecondsFutureSkew',
+              'explicitFocusedStremioInputPreconditionsAreMandatory',
+              'everyPreservationInvariantMustBeExplicitlyFalse',
+              'exactBoundedTextReadbackIsMandatory',
+              'resultsMustRemainInsideStremio',
+              'rejectedReceiptPreservesTypedSearchWithoutAcceptance',
+              'receiptSchemaCarriesNoRawIdentityOrAudioPayload'):
+              assert required in names, 'Companion acceptance receipt regression not executed: '+required
           print('Verified Android TV JVM tests:',tests,'failures:',failures,'errors:',errors)
           PY
       - name: Enforce compile-only official Core SDK and no account/API writes
