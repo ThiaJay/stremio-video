@@ -60,6 +60,20 @@ class NativeEpisodeWatchedActionTest {
         assertNull(a.prepare("tt18:1:1",true))
         assertEquals(0,p.writes)
     }
+    @Test fun hostSnapshotCannotAdvanceIndividualEpisodeReleaseClock() {
+        val runtimeNow=Instant.now()
+        val futureId="tt18:1:3"
+        val p=FakeAccount(base.copy(
+            videos=base.videos+CanonicalEpisode(
+                futureId,1,3,runtimeNow.plusSeconds(1_800).toString()),
+            now=runtimeNow.plusSeconds(3_600)))
+        p.video=mapOf("id" to futureId,"season" to 1,"episode" to 3,"title" to "Future")
+        val a=NativeTvEpisodeWatchedActuator(p)
+
+        assertNull(a.prepare(futureId,true))
+        assertNull(a.prepare(futureId,false))
+        assertEquals(0,p.writes)
+    }
     @Test fun accountOrMetadataDriftIsNotDispatched() {
         val p=FakeAccount(base)
         val a=NativeTvEpisodeWatchedActuator(p)

@@ -171,6 +171,11 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         if (stableVideoId.isBlank() || state.videos.map { it.id }.distinct().size != state.videos.size) return null
         val epMeta = state.videos.singleOrNull { it.id == stableVideoId } ?: return null
         if (epMeta.season < 0 || epMeta.episode < 0 || epMeta.releasedAt.isNullOrBlank()) return null
+        // Match the title-level coordinator's release-clock authority: a host
+        // snapshot may conservatively lag this process, but it cannot move the
+        // release boundary forward and thereby admit a genuinely future episode.
+        val runtimeNow = try { Instant.now() } catch (_: Exception) { return null }
+        if (state.now.isAfter(runtimeNow)) return null
         val released = try { Instant.parse(epMeta.releasedAt) } catch (_: Exception) { return null }
         if (released.isAfter(state.now)) return null
         if (video["id"] != stableVideoId) return null
