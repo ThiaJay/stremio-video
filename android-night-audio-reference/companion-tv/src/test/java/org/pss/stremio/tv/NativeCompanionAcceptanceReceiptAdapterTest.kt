@@ -180,7 +180,8 @@ class NativeCompanionAcceptanceReceiptAdapterTest {
         deviceIdentityDigest = device,
         deviceModel = "AFTKRT",
         appPackage = "com.stremio.one",
-        appVersion = "1.11.2"
+        appVersion = "1.11.2",
+        expectedTextSha256 = NativeCompanionAcceptanceReceipt.digestExpectedText("bounded query")
     )
 
     private fun wire() = linkedMapOf<String, Any?>(

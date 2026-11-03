@@ -17,13 +17,15 @@ class NativeCompanionAcceptanceReceiptTest {
         deviceIdentityDigest: String? = device,
         deviceModel: String? = "AFTKRT",
         appPackage: String? = "com.stremio.one",
-        appVersion: String? = "1.11.2"
+        appVersion: String? = "1.11.2",
+        expectedTextSha256: String? = NativeCompanionAcceptanceReceipt.digestExpectedText("bounded query")
     ) = ExpectedCompanionAcceptance(
         contractSourceSha256,
         deviceIdentityDigest,
         deviceModel,
         appPackage,
-        appVersion
+        appVersion,
+        expectedTextSha256
     )
 
     private fun receipt(
@@ -233,7 +235,9 @@ class NativeCompanionAcceptanceReceiptTest {
             receipt(expectedText = " padded", readBackText = " padded"),
             receipt(expectedText = "x".repeat(161), readBackText = "x".repeat(161)),
             receipt(expectedText = "one", readBackText = "two"),
-            receipt(expectedText = null, readBackText = null)
+            receipt(expectedText = null, readBackText = null),
+            receipt(expectedText = "line\nbreak", readBackText = "line\nbreak"),
+            receipt(expectedText = "\uD800", readBackText = "\uD800")
         )
         for (value in invalid) {
             assertEquals(
@@ -241,6 +245,51 @@ class NativeCompanionAcceptanceReceiptTest {
                 NativeCompanionAcceptanceReceipt.validate(value, expected(), evaluatedAt).reason
             )
         }
+    }
+
+    @Test fun expectedTextDigestBindsReceiptToCurrentRequest() {
+        val digest = NativeCompanionAcceptanceReceipt.digestExpectedText("bounded query")
+        assertEquals(
+            "f1ade0a4523592cbbc760a1c2eb905e507e99d9cfbc264252d1d2bdc5ca99a73",
+            digest
+        )
+        assertTrue(
+            NativeCompanionAcceptanceReceipt.validate(
+                receipt(),
+                expected(expectedTextSha256 = digest),
+                evaluatedAt
+            ).accepted
+        )
+    }
+
+    @Test fun selfConsistentDifferentTextCannotReplaceCurrentRequest() {
+        val result = NativeCompanionAcceptanceReceipt.validate(
+            receipt(expectedText = "different", readBackText = "different"),
+            expected(),
+            evaluatedAt
+        )
+        assertFalse(result.accepted)
+        assertEquals("EXPECTED_TEXT_BINDING_NOT_VERIFIED", result.reason)
+    }
+
+    @Test fun invalidExpectedDigestFailsClosedWithoutQueryProjection() {
+        for (digest in listOf<String?>(null, "short", "A".repeat(64), "d".repeat(64))) {
+            val result = NativeCompanionAcceptanceReceipt.validate(
+                receipt(),
+                expected(expectedTextSha256 = digest),
+                evaluatedAt
+            )
+            assertFalse(result.accepted)
+            assertEquals("EXPECTED_TEXT_BINDING_NOT_VERIFIED", result.reason)
+            assertFalse(result.toString().contains("bounded query"))
+        }
+    }
+
+    @Test fun malformedUnicodeCannotAcquireRequestBinding() {
+        for (value in listOf("\uD800", "\uDC00", "ok\uD800tail", "line\nbreak")) {
+            assertNull(NativeCompanionAcceptanceReceipt.digestExpectedText(value))
+        }
+        assertTrue(NativeCompanionAcceptanceReceipt.digestExpectedText("emoji \uD83D\uDE00") != null)
     }
 
     @Test fun resultsMustRemainInsideStremio() {
@@ -278,5 +327,9 @@ class NativeCompanionAcceptanceReceiptTest {
         assertFalse(fields.any { it.contains("audioData", ignoreCase = true) })
         assertFalse(fields.any { it.contains("transcript", ignoreCase = true) })
         assertTrue("deviceIdentityDigest" in fields)
+        val expectedFields = ExpectedCompanionAcceptance::class.java.declaredFields.map { it.name }
+        assertFalse(expectedFields.any { it == "expectedText" || it == "query" })
+        assertTrue("expectedTextSha256" in expectedFields)
+        assertFalse(expected().toString().contains(expected().expectedTextSha256!!))
     }
 }

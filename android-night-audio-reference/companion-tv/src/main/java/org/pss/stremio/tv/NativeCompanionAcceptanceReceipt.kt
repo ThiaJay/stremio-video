@@ -1,6 +1,7 @@
 package org.pss.stremio.tv
 
 import java.time.Instant
+import java.security.MessageDigest
 
 /**
  * Native, side-effect-free binding of Foundation PR #74's companion acceptance
@@ -42,8 +43,11 @@ data class ExpectedCompanionAcceptance(
     val deviceIdentityDigest: String?,
     val deviceModel: String?,
     val appPackage: String?,
-    val appVersion: String?
-)
+    val appVersion: String?,
+    val expectedTextSha256: String?
+) {
+    override fun toString() = "ExpectedCompanionAcceptance(query=REDACTED)"
+}
 
 data class CompanionAcceptanceValidation(
     val accepted: Boolean,
@@ -136,6 +140,11 @@ object NativeCompanionAcceptanceReceipt {
         ) {
             return reject("EXACT_TEXT_DELIVERY_NOT_PROVEN")
         }
+        if (!isSha256(expected.expectedTextSha256) ||
+            digestExpectedText(receipt.expectedText) != expected.expectedTextSha256
+        ) {
+            return reject("EXPECTED_TEXT_BINDING_NOT_VERIFIED")
+        }
         if (receipt.searchSurfaceAfter != "stremio" ||
             receipt.resultsRemainInStremio != true
         ) {
@@ -193,7 +202,38 @@ object NativeCompanionAcceptanceReceipt {
     private fun exactText(value: String?) = value != null &&
         value.isNotEmpty() &&
         value.length <= MAX_TEXT_LENGTH &&
-        value.trim() == value
+        value.trim() == value &&
+        value.none { it.isISOControl() } &&
+        wellFormedUtf16(value)
+
+    /**
+     * Produces the query-redacted binding held by the Android request owner.
+     * Invalid or non-canonical text cannot acquire a digest.
+     */
+    fun digestExpectedText(value: String?): String? {
+        if (!exactText(value)) return null
+        return MessageDigest.getInstance("SHA-256")
+            .digest(value!!.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+    }
+
+    private fun wellFormedUtf16(value: String): Boolean {
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            when {
+                current.isHighSurrogate() -> {
+                    if (index + 1 >= value.length || !value[index + 1].isLowSurrogate()) {
+                        return false
+                    }
+                    index += 2
+                }
+                current.isLowSurrogate() -> return false
+                else -> index += 1
+            }
+        }
+        return true
+    }
 
     private fun exactIdentifier(value: String?) = exactText(value) &&
         value!!.none { it.isISOControl() }
