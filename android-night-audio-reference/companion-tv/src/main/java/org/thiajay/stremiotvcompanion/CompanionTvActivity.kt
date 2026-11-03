@@ -320,6 +320,7 @@ class CompanionTvActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             filters = arrayOf(InputFilter.LengthFilter(MAX_SYNTHETIC_SEARCH_LENGTH))
             setSingleLine(true)
+            showSoftInputOnFocus = false
             isFocusable = true
             setTextColor(Color.WHITE)
             setHintTextColor(Color.rgb(160, 175, 190))
