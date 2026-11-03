@@ -119,6 +119,41 @@ class NativeEpisodeWatchedActionTest {
         assertFalse(a.confirm(plan,request))
         assertEquals(1,p.writes)
     }
+    @Test fun copiedOrForeignActuatorPlanCannotDispatch() {
+        val p=FakeAccount(base)
+        val owner=NativeTvEpisodeWatchedActuator(p)
+        val foreign=NativeTvEpisodeWatchedActuator(p)
+        val plan=owner.prepare("tt18:1:1",true)!!
+        val request=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+
+        assertFalse(owner.confirm(plan.copy(),request))
+        assertFalse(foreign.confirm(plan,request))
+        assertEquals(0,p.writes)
+        assertTrue(owner.confirm(plan,request))
+        assertEquals(1,p.writes)
+    }
+    @Test fun duplicatePreparationIsRefused() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+
+        assertNull(a.prepare("tt18:1:1",true))
+        assertTrue(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        assertNull(a.prepare("tt18:1:1",true))
+        assertEquals(1,p.writes)
+    }
+    @Test fun failedRefreshConsumesExactIssuedPlan() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+        val request=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+        p.videoFailureOnRead=2
+
+        assertFalse(a.confirm(plan,request))
+        p.videoFailureOnRead=null
+        assertFalse(a.confirm(plan,request))
+        assertEquals(0,p.writes)
+    }
     @Test fun crossThreadAccessFailsClosedWithoutConsumingOwnerPlan() {
         val p=FakeAccount(base)
         val a=NativeTvEpisodeWatchedActuator(p)

@@ -27,10 +27,12 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         private const val MAX_CANONICAL_VIDEO_COLLECTION_ENTRIES = 10_000
         private const val MAX_CANONICAL_VIDEO_STRING_LENGTH = 262_144
         private const val MAX_CANONICAL_VIDEO_TOTAL_STRING_LENGTH = 1_000_000
+        private const val MAX_ISSUED_PLANS = 16
     }
 
     private val ownerThread = Thread.currentThread()
-    private val issued = HashSet<String>()
+    private val prepared = LinkedHashMap<String, TvEpisodeWatchedPlan>()
+    private val consumed = HashSet<String>()
     private var closed = false
     private val sha = Regex("^[0-9a-f]{64}$")
 
@@ -171,8 +173,7 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         }
     }
 
-    fun prepare(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
-        if (!onOwnerThread() || closed) return null
+    private fun buildPlan(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
         val state = failClosedPortCall { port.currentSnapshot() } ?: return null
         val videoSource = failClosedPortCall {
             port.canonicalVideoFromReadyMetaDetails(stableVideoId)
@@ -205,12 +206,24 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
             (if (markWatched) "Mark episode watched" else "Mark episode unwatched") + ": $stableVideoId")
     }
 
+    fun prepare(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
+        if (!onOwnerThread() || closed || prepared.size + consumed.size >= MAX_ISSUED_PLANS) return null
+        val plan = buildPlan(stableVideoId, markWatched) ?: return null
+        if (plan.fingerprint in prepared || plan.fingerprint in consumed) return null
+        prepared[plan.fingerprint] = plan
+        return plan
+    }
+
     fun confirm(plan: TvEpisodeWatchedPlan, request: TvWatchedConfirmation): Boolean {
         if (!onOwnerThread() || closed || !request.focusOnConfirmation ||
             request.fingerprint != plan.fingerprint ||
             (request.remoteKey != "DPAD_CENTER" && request.remoteKey != "ENTER") ||
-            (!plan.markWatched && !request.unwatchAcknowledged) || issued.contains(plan.fingerprint)) return false
-        val fresh = prepare(plan.stableVideoId, plan.markWatched) ?: return false
+            (!plan.markWatched && !request.unwatchAcknowledged)) return false
+        val exact = prepared[plan.fingerprint] ?: return false
+        if (exact !== plan) return false
+        prepared.remove(plan.fingerprint)
+        consumed.add(plan.fingerprint)
+        val fresh = buildPlan(plan.stableVideoId, plan.markWatched) ?: return false
         if (fresh != plan) return false
         // The first refreshed metadata read can pass and then change again before dispatch.
         // Freeze and verify a SECOND canonical object, including nested fields, not just its ID.
@@ -227,7 +240,6 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
                 "args" to listOf(unchangedCoreVideo, plan.markWatched)
             )
         )
-        issued.add(plan.fingerprint)
         return failClosedPortCall { port.dispatch(command) } ?: false
     }
 
@@ -235,7 +247,8 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
         closed = true
-        issued.clear()
+        prepared.clear()
+        consumed.clear()
         return true
     }
 
