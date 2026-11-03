@@ -1,6 +1,7 @@
 package org.thiajay.stremiotvcompanion
 
 import android.os.SystemClock
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -78,7 +79,14 @@ class CompanionTvSearchFocusInstrumentationTest {
         )
 
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        instrumentation.sendStringSync(BOUNDARY_INPUT)
+        val keyEvents = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD)
+            .getEvents(BOUNDARY_INPUT.toCharArray())
+        assertNotNull("Synthetic boundary input could not be mapped to real key events", keyEvents)
+        assertTrue("Synthetic boundary input produced no real key events", keyEvents!!.isNotEmpty())
+        keyEvents.forEach { event ->
+            instrumentation.sendKeySync(event)
+            SystemClock.sleep(KEY_EVENT_SETTLE_MS)
+        }
         instrumentation.waitForIdleSync()
         assertTrue(
             "Synthetic keyboard input was not retained locally",
@@ -213,5 +221,6 @@ class CompanionTvSearchFocusInstrumentationTest {
     private companion object {
         const val BOUNDARY_INPUT = "localquery42"
         const val HELD_REASON = "PRESERVE_TYPED_SEARCH: STREMIO_SEARCH_NOT_ACTIVE"
+        const val KEY_EVENT_SETTLE_MS = 35L
     }
 }

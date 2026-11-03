@@ -63,7 +63,10 @@ CI must run the native SDK compilation, test and manifest audit on the **exact c
 The exact-head workflow also creates a disposable Android 11/API 30 emulator and
 runs `:companion-tv:connectedDebugAndroidTest`. Both explicit-Off and admitted
 Enabled paths must execute the local Media3 fixture through the real subtitle
-view draw and `PixelCopy` callback. No emulator result may be promoted to
+view draw and `PixelCopy` callback. The typed-search boundary injects one paced
+virtual-keyboard key-event sequence, then still requires exact retained text,
+visible focus, the local held result and no query echo; it does not set widget
+text directly or retry a failed injection. No emulator result may be promoted to
 physical-panel, Fire TV, official-client or hardware acceptance.
 
 ## Missing before production integration
