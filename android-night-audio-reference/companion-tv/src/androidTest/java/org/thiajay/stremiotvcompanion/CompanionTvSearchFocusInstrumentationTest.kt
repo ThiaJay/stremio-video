@@ -69,6 +69,58 @@ class CompanionTvSearchFocusInstrumentationTest {
         }
     }
 
+    @Test
+    fun testTypedSubmitStaysLocalAndReportsHeldWithoutEchoOnApi30() {
+        assertTrue(
+            "Synthetic typed field did not receive real visible window focus",
+            awaitInputFocus(64)
+        )
+
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.sendStringSync(BOUNDARY_INPUT)
+        instrumentation.waitForIdleSync()
+        scenario.onActivity { activity ->
+            val input = findViews(activity.window.decorView)
+                .filterIsInstance<EditText>()
+                .singleOrNull {
+                    it.contentDescription?.toString() ==
+                        CompanionTvActivity.SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+                }
+            assertNotNull("Synthetic typed field was not uniquely rendered", input)
+            assertTrue(
+                "Synthetic keyboard input was not retained locally",
+                input!!.text.toString() == BOUNDARY_INPUT
+            )
+        }
+
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+        instrumentation.waitForIdleSync()
+        assertTrue(
+            "Synthetic typed field trapped DPAD_DOWN instead of reaching local submit",
+            awaitSubmitFocus(5_000L)
+        )
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
+        instrumentation.waitForIdleSync()
+
+        val status = awaitSearchStatus(HELD_REASON, 5_000L)
+        assertTrue(status, status.contains(HELD_REASON))
+        assertTrue(status, status.contains("Retained ${BOUNDARY_INPUT.length} typed characters"))
+        assertTrue(status, !status.contains(BOUNDARY_INPUT))
+        scenario.onActivity { activity ->
+            val input = findViews(activity.window.decorView)
+                .filterIsInstance<EditText>()
+                .singleOrNull {
+                    it.contentDescription?.toString() ==
+                        CompanionTvActivity.SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+                }
+            assertNotNull("Synthetic typed field was not uniquely rendered", input)
+            assertTrue(
+                "Held submission must preserve local typed input",
+                input!!.text.toString() == BOUNDARY_INPUT
+            )
+        }
+    }
+
     private fun awaitInputFocus(maximumMoves: Int): Boolean {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         repeat(maximumMoves + 1) { move ->
@@ -115,10 +167,29 @@ class CompanionTvSearchFocusInstrumentationTest {
         return false
     }
 
+    private fun awaitSearchStatus(needle: String, timeoutMs: Long): String {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        var snapshot = ""
+        while (SystemClock.uptimeMillis() < deadline) {
+            scenario.onActivity { activity ->
+                snapshot = activity.boundedSyntheticSearchRuntimeStatusForInstrumentation()
+                    ?: "SYNTHETIC_SEARCH_RUNTIME_STATUS_UNAVAILABLE"
+            }
+            if (snapshot.contains(needle)) return snapshot
+            SystemClock.sleep(100L)
+        }
+        return snapshot
+    }
+
     private fun findViews(root: View): List<View> = buildList {
         add(root)
         if (root is ViewGroup) {
             for (index in 0 until root.childCount) addAll(findViews(root.getChildAt(index)))
         }
+    }
+
+    private companion object {
+        const val BOUNDARY_INPUT = "localquery42"
+        const val HELD_REASON = "PRESERVE_TYPED_SEARCH: STREMIO_SEARCH_NOT_ACTIVE"
     }
 }
