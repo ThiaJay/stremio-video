@@ -313,6 +313,7 @@ class CompanionTvActivity : Activity() {
                 "Stremio catalogue or Fire TV acceptance claim."
         )
         syntheticSearchInput = EditText(this).apply {
+            id = View.generateViewId()
             hint = "Type a synthetic local search"
             contentDescription = SYNTHETIC_SEARCH_INPUT_DESCRIPTION
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -329,7 +330,13 @@ class CompanionTvActivity : Activity() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         )
-        button(SYNTHETIC_SEARCH_BUTTON_LABEL) { runSyntheticTypedSearch() }
+        val syntheticSearchSubmit = button(SYNTHETIC_SEARCH_BUTTON_LABEL) {
+            runSyntheticTypedSearch()
+        }.apply {
+            id = View.generateViewId()
+        }
+        syntheticSearchInput.nextFocusDownId = syntheticSearchSubmit.id
+        syntheticSearchSubmit.nextFocusUpId = syntheticSearchInput.id
         syntheticSearchStatus = small(
             "Typed input ready. Companion route and device identity remain unknown; " +
                 "live acceptance is false."
