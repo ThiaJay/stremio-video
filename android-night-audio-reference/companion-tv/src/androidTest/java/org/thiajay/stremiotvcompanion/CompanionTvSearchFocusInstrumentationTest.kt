@@ -80,19 +80,10 @@ class CompanionTvSearchFocusInstrumentationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.sendStringSync(BOUNDARY_INPUT)
         instrumentation.waitForIdleSync()
-        scenario.onActivity { activity ->
-            val input = findViews(activity.window.decorView)
-                .filterIsInstance<EditText>()
-                .singleOrNull {
-                    it.contentDescription?.toString() ==
-                        CompanionTvActivity.SYNTHETIC_SEARCH_INPUT_DESCRIPTION
-                }
-            assertNotNull("Synthetic typed field was not uniquely rendered", input)
-            assertTrue(
-                "Synthetic keyboard input was not retained locally",
-                input!!.text.toString() == BOUNDARY_INPUT
-            )
-        }
+        assertTrue(
+            "Synthetic keyboard input was not retained locally",
+            awaitInputText(BOUNDARY_INPUT, 5_000L)
+        )
 
         scenario.onActivity { activity ->
             val input = findViews(activity.window.decorView)
@@ -171,6 +162,28 @@ class CompanionTvSearchFocusInstrumentationTest {
                 }
             }
             if (focused) return true
+            SystemClock.sleep(100L)
+        }
+        return false
+    }
+
+    private fun awaitInputText(expected: String, timeoutMs: Long): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            var retained = false
+            scenario.onActivity { activity ->
+                val input = findViews(activity.window.decorView)
+                    .filterIsInstance<EditText>()
+                    .singleOrNull {
+                        it.contentDescription?.toString() ==
+                            CompanionTvActivity.SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+                    }
+                input?.let { candidate ->
+                    retained = candidate.isShown && candidate.hasWindowFocus() &&
+                        candidate.hasFocus() && candidate.text.toString() == expected
+                }
+            }
+            if (retained) return true
             SystemClock.sleep(100L)
         }
         return false
