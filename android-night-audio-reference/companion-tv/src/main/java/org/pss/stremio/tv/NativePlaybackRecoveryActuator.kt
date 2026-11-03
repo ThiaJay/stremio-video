@@ -7,6 +7,7 @@ import java.util.Collections
  * The host owns capture and must call this boundary on its single player thread.
  */
 data class NativeRecoverySnapshot(
+    val episodeSessionId: String,
     val recoveryContextId: String,
     val videoId: String,
     val sourceId: String,
@@ -43,7 +44,8 @@ enum class NativeRecoveryExecutionOutcome {
  * It does not implement a player recovery, source retry, network or account write.
  */
 class NativePlaybackRecoveryActuator(
-    private val port: NativePlaybackRecoveryPort
+    private val port: NativePlaybackRecoveryPort,
+    private val budget: NativeEpisodeRecoveryBudget
 ) {
     private val ownerThread = Thread.currentThread()
     private val issued = LinkedHashSet<String>()
@@ -55,11 +57,13 @@ class NativePlaybackRecoveryActuator(
         observation: PlaybackHealthObservation?
     ): PreparedNativeRecovery? {
         if (!onOwnerThread() || closed) return null
-        val plan = NativePlaybackRecoveryPolicy.plan(facts, observation)
-        if (!trustedPlaybackPlan(plan)) return null
-
         val lease = snapshotOrNull() ?: return null
         if (!trustedSnapshot(lease) || observation == null) return null
+        val authoritativeHistory = budget.playbackHistory(lease) ?: return null
+        if (!sameAttemptHistory(observation.attemptedRecoveries, authoritativeHistory)) return null
+
+        val plan = NativePlaybackRecoveryPolicy.plan(facts, observation)
+        if (!trustedPlaybackPlan(plan)) return null
         if (plan.action !in lease.supportedRecoveryActions) return null
         if (lease.recoveryContextId != observation.recoveryContextId ||
             lease.recoveryContextId != observation.currentContextId
@@ -67,7 +71,9 @@ class NativePlaybackRecoveryActuator(
 
         if (issued.size >= MAX_ISSUED_LEASES) return null
         val token = token(plan, lease)
-        if (!issued.add(token)) return null
+        if (token in issued) return null
+        if (!budget.reservePlayback(lease, plan.action, observation.attemptedRecoveries)) return null
+        issued.add(token)
         return PreparedNativeRecovery(plan, lease, token)
     }
 
@@ -75,7 +81,8 @@ class NativePlaybackRecoveryActuator(
         if (!onOwnerThread() || closed) return NativeRecoveryExecutionOutcome.REFUSED
         if (!trustedPlaybackPlan(prepared.plan) ||
             !trustedSnapshot(prepared.lease) ||
-            prepared.plan.action !in prepared.lease.supportedRecoveryActions
+            prepared.plan.action !in prepared.lease.supportedRecoveryActions ||
+            !budget.containsPlayback(prepared.lease, prepared.plan.action)
         ) {
             return NativeRecoveryExecutionOutcome.REFUSED
         }
@@ -121,7 +128,8 @@ class NativePlaybackRecoveryActuator(
             plan.preserveStreamIdentity
 
     private fun trustedSnapshot(value: NativeRecoverySnapshot): Boolean =
-        validId(value.recoveryContextId) &&
+        validId(value.episodeSessionId) &&
+            validId(value.recoveryContextId) &&
             validId(value.videoId) &&
             validId(value.sourceId) &&
             value.loadGeneration >= 0 &&
@@ -137,6 +145,25 @@ class NativePlaybackRecoveryActuator(
 
     private fun validId(value: String): Boolean =
         value.length in 1..MAX_ID_LENGTH && ID.matches(value)
+
+    private fun sameAttemptHistory(
+        claimed: List<String>?,
+        authoritative: List<String>
+    ): Boolean {
+        if (claimed == null) return false
+        return try {
+            val expectedSize = claimed.size
+            if (expectedSize != authoritative.size || expectedSize > RECOVERY_ACTIONS.size) return false
+            repeat(expectedSize) { index ->
+                if (claimed[index] != authoritative[index]) return false
+            }
+            true
+        } catch (_: Exception) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
 
     private fun onOwnerThread(): Boolean =
         Thread.currentThread() === ownerThread
@@ -187,6 +214,7 @@ class NativePlaybackRecoveryActuator(
     private fun token(plan: NativeRecoveryPlan, lease: NativeRecoverySnapshot): String =
         listOf(
             plan.action,
+            lease.episodeSessionId,
             lease.recoveryContextId,
             lease.videoId,
             lease.sourceId,
@@ -198,7 +226,7 @@ class NativePlaybackRecoveryActuator(
 
     private companion object {
         const val MAX_ID_LENGTH = 160
-        const val MAX_ISSUED_LEASES = 256
+        const val MAX_ISSUED_LEASES = 16
         val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
         val FINGERPRINT = Regex("^[0-9a-f]{64}$")
         val RECOVERY_ACTIONS = setOf(

@@ -43,27 +43,51 @@ enum class NativeMedia3RetryOutcome {
  * has no reset operation: a new budget is valid only for a genuinely new
  * episode session.
  */
-class NativeMedia3RetryBudget private constructor(
+class NativeEpisodeRecoveryBudget private constructor(
     private val episodeSessionId: String,
     private val videoId: String
 ) {
     private val ownerThread = Thread.currentThread()
-    private var reserved = false
+    private var classifierRetryReserved = false
+    private val playbackRecoveries = LinkedHashSet<String>()
     private var closed = false
 
     internal fun attemptCount(value: NativeMedia3RetrySnapshot): Int? {
         if (!onOwnerThread() || closed || !matches(value)) return null
-        return if (reserved) 1 else 0
+        return if (classifierRetryReserved) 1 else 0
     }
 
     internal fun reserve(value: NativeMedia3RetrySnapshot): Boolean {
-        if (!onOwnerThread() || closed || reserved || !matches(value)) return false
-        reserved = true
+        if (!onOwnerThread() || closed || classifierRetryReserved || !matches(value)) return false
+        classifierRetryReserved = true
         return true
     }
 
     internal fun contains(value: NativeMedia3RetrySnapshot): Boolean =
-        onOwnerThread() && !closed && reserved && matches(value)
+        onOwnerThread() && !closed && classifierRetryReserved && matches(value)
+
+    internal fun playbackHistory(value: NativeRecoverySnapshot): List<String>? {
+        if (!onOwnerThread() || closed || !matches(value)) return null
+        return java.util.Collections.unmodifiableList(ArrayList(playbackRecoveries))
+    }
+
+    internal fun reservePlayback(
+        value: NativeRecoverySnapshot,
+        action: String,
+        claimedHistory: List<String>?
+    ): Boolean {
+        if (!onOwnerThread() || closed || !matches(value)) return false
+        val history = snapshotClaimedHistory(claimedHistory) ?: return false
+        if (history != playbackRecoveries.toList() ||
+            playbackRecoveries.size >= MAX_PLAYBACK_RECOVERIES ||
+            action in playbackRecoveries
+        ) return false
+        playbackRecoveries.add(action)
+        return true
+    }
+
+    internal fun containsPlayback(value: NativeRecoverySnapshot, action: String): Boolean =
+        onOwnerThread() && !closed && matches(value) && action in playbackRecoveries
 
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
@@ -74,21 +98,43 @@ class NativeMedia3RetryBudget private constructor(
     private fun matches(value: NativeMedia3RetrySnapshot): Boolean =
         value.episodeSessionId == episodeSessionId && value.videoId == videoId
 
+    private fun matches(value: NativeRecoverySnapshot): Boolean =
+        value.episodeSessionId == episodeSessionId && value.videoId == videoId
+
+    private fun snapshotClaimedHistory(value: List<String>?): List<String>? {
+        if (value == null) return null
+        return try {
+            val expectedSize = value.size
+            if (expectedSize !in 0..MAX_PLAYBACK_RECOVERIES) return null
+            val snapshot = ArrayList<String>(expectedSize)
+            repeat(expectedSize) { index -> snapshot += value[index] }
+            snapshot
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
     private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 
     companion object {
-        fun open(episodeSessionId: String, videoId: String): NativeMedia3RetryBudget? {
+        fun open(episodeSessionId: String, videoId: String): NativeEpisodeRecoveryBudget? {
             if (!validId(episodeSessionId) || !validId(videoId)) return null
-            return NativeMedia3RetryBudget(episodeSessionId, videoId)
+            return NativeEpisodeRecoveryBudget(episodeSessionId, videoId)
         }
 
         private fun validId(value: String): Boolean =
             value.length in 1..MAX_ID_LENGTH && ID.matches(value)
 
         private const val MAX_ID_LENGTH = 160
+        private const val MAX_PLAYBACK_RECOVERIES = 16
         private val ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]*$")
     }
 }
+
+/** Compatibility name for existing source callers; both routes use one object. */
+typealias NativeMedia3RetryBudget = NativeEpisodeRecoveryBudget
 
 /**
  * Binds the numeric-only Media3 intake to the classification-first policy and
@@ -101,7 +147,7 @@ class NativeMedia3RetryBudget private constructor(
  */
 class NativeMedia3RetryActuator(
     private val port: NativeMedia3RetryPort,
-    private val budget: NativeMedia3RetryBudget
+    private val budget: NativeEpisodeRecoveryBudget
 ) {
     private val ownerThread = Thread.currentThread()
     private val issuedTokens = LinkedHashSet<String>()

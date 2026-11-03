@@ -1,2628 +1,1 @@
-#!/usr/bin/env python3
-"""Fail-closed, source-only safeguards for the isolated Android TV companion candidate."""
-from __future__ import annotations
-import hashlib
-import json
-import pathlib
-import re
-import sys
-import xml.etree.ElementTree as ET
-
-ROOT=pathlib.Path(__file__).resolve().parents[1]
-MANIFEST=ROOT/'src/main/AndroidManifest.xml'
-ANDROID='{http://schemas.android.com/apk/res/android}'
-SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/CompanionTvActivity.kt'
-SYNTHETIC_FIXTURES=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticAudioFixture.kt'
-SYNTHETIC_FIXTURES_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticFixtureTest.kt'
-SYNTHETIC_CUE_OBSERVER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleCueDeliveryObserver.kt'
-SYNTHETIC_CUE_OBSERVER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleCueDeliveryObserverTest.kt'
-SYNTHETIC_TRACK_OBSERVER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleTrackStateObserver.kt'
-SYNTHETIC_TRACK_OBSERVER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleTrackStateObserverTest.kt'
-SYNTHETIC_PLAYBACK_EVIDENCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePlaybackEvidenceObserver.kt'
-SYNTHETIC_PLAYBACK_EVIDENCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePlaybackEvidenceObserverTest.kt'
-SYNTHETIC_PREFERENCE_EVIDENCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceEvidenceObserver.kt'
-SYNTHETIC_PREFERENCE_EVIDENCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceEvidenceObserverTest.kt'
-SYNTHETIC_RENDER_PIPELINE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleRenderPipelineObserver.kt'
-SYNTHETIC_RENDER_PIPELINE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleRenderPipelineObserverTest.kt'
-SYNTHETIC_WINDOW_PIXELS=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelObserver.kt'
-SYNTHETIC_WINDOW_PIXELS_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelObserverTest.kt'
-SYNTHETIC_WINDOW_PIXEL_LEASE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelCaptureLease.kt'
-SYNTHETIC_WINDOW_PIXEL_LEASE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitleWindowPixelCaptureLeaseTest.kt'
-SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/CompanionTvPixelCopyInstrumentationTest.kt'
-TITLE_WATCHED_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/CompanionTvTitleWatchedInstrumentationTest.kt'
-MOBILE_TITLE_WATCHED_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/MobileTitleWatchedInstrumentationTest.kt'
-STORY_ORDER_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/CompanionTvStoryOrderInstrumentationTest.kt'
-MOBILE_STORY_ORDER_INSTRUMENTATION=ROOT/'src/androidTest/java/org/thiajay/stremiotvcompanion/MobileStoryOrderInstrumentationTest.kt'
-NATIVE_SUBTITLE_PROVENANCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenance.kt'
-NATIVE_SUBTITLE_PROVENANCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceProvenanceTest.kt'
-NATIVE_SUBTITLE_STORE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceStore.kt'
-NATIVE_SUBTITLE_STORE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceStoreTest.kt'
-NATIVE_SUBTITLE_CODEC=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceReceiptCodec.kt'
-NATIVE_SUBTITLE_CODEC_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePreferenceReceiptCodecTest.kt'
-ANDROID_SUBTITLE_STORAGE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceSharedPreferencesPort.kt'
-ANDROID_SUBTITLE_STORAGE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceSharedPreferencesPortTest.kt'
-SUBTITLE_DIGEST_SOURCE=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SecureRandomSubtitlePreferenceDigestSource.kt'
-SUBTITLE_DIGEST_SOURCE_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SecureRandomSubtitlePreferenceDigestSourceTest.kt'
-ANDROID_SUBTITLE_STORE_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceStoreOwner.kt'
-ANDROID_SUBTITLE_STORE_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceStoreOwnerTest.kt'
-ANDROID_SUBTITLE_CHOICE_SESSION=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceSession.kt'
-ANDROID_SUBTITLE_CHOICE_SESSION_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceSessionTest.kt'
-ANDROID_SUBTITLE_CHOICE_TRANSACTION=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceTransaction.kt'
-ANDROID_SUBTITLE_CHOICE_TRANSACTION_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceTransactionTest.kt'
-ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetController.kt'
-ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetControllerTest.kt'
-ANDROID_SUBTITLE_CHOICE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceWidgetPort.kt'
-ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceScreenOwner.kt'
-ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/AndroidSubtitlePreferenceChoiceScreenOwnerTest.kt'
-SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceHost.kt'
-SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticSubtitlePreferenceHostTest.kt'
-PERSISTENT_SYNTHETIC_SUBTITLE_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHost.kt'
-PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceHostTest.kt'
-PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceScreenOwner.kt'
-PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/PersistentSyntheticSubtitlePreferenceScreenOwnerTest.kt'
-NATIVE_SUBTITLE_PLAYBACK_ACTUATOR=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/NativeSubtitlePlaybackPreferenceActuator.kt'
-NATIVE_SUBTITLE_PLAYBACK_ACTUATOR_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/NativeSubtitlePlaybackPreferenceActuatorTest.kt'
-MEDIA3_SUBTITLE_PLAYBACK_ADAPTER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/Media3SubtitlePlaybackPreferenceAdapter.kt'
-MEDIA3_SUBTITLE_PLAYBACK_ADAPTER_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/Media3SubtitlePlaybackPreferenceAdapterTest.kt'
-STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt'
-STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/StoryOrderContractTest.kt'
-MOBILE_STORY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderController.kt'
-MOBILE_STORY_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderControllerTest.kt'
-MOBILE_STORY_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderViewHost.kt'
-MOBILE_STORY_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/MobileStoryOrderViewHostTest.kt'
-ANDROID_MOBILE_STORY_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderWidgetPort.kt'
-ANDROID_MOBILE_STORY_SCREEN_OWNER=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileStoryOrderScreenOwner.kt'
-MOBILE_STORY_ACTIVITY=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/MobileStoryOrderLabActivity.kt'
-SYNTHETIC_WATCHED_HOST=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/SyntheticTitleWatchedAccountHost.kt'
-SYNTHETIC_WATCHED_HOST_TEST=ROOT/'src/test/java/org/thiajay/stremiotvcompanion/SyntheticTitleWatchedAccountHostTest.kt'
-MOBILE_ICON=ROOT/'src/main/res/drawable/companion_mobile_icon.xml'
-RECOVERY=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicy.kt'
-RECOVERY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryPolicyTest.kt'
-CLASSIFIER=ROOT/'src/main/java/org/pss/stremio/tv/NativeStreamFailureClassifier.kt'
-CLASSIFIER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeStreamFailureClassifierTest.kt'
-MEDIA3_INTAKE=ROOT/'src/main/java/org/pss/stremio/tv/NativeMedia3FailureIntake.kt'
-MEDIA3_INTAKE_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMedia3FailureIntakeTest.kt'
-MEDIA3_RETRY_ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativeMedia3RetryActuator.kt'
-MEDIA3_RETRY_ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMedia3RetryActuatorTest.kt'
-ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryActuator.kt'
-ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryActuatorTest.kt'
-BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
-PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
-EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
-TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedMenu.kt'
-TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedMenuTest.kt'
-MOBILE_TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedMenu.kt'
-MOBILE_TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedMenuTest.kt'
-MOBILE_TITLE_HOST_BINDING=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedHostBinding.kt'
-MOBILE_TITLE_HOST_BINDING_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedHostBindingTest.kt'
-TV_TITLE_HOST_BINDING=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedHostBinding.kt'
-TV_TITLE_HOST_BINDING_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedHostBindingTest.kt'
-TV_TITLE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedWidgetController.kt'
-TV_TITLE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedWidgetControllerTest.kt'
-ANDROID_TV_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidTvTitleWatchedWidgetPort.kt'
-MOBILE_TITLE_WIDGET_CONTROLLER=ROOT/'src/main/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetController.kt'
-MOBILE_TITLE_WIDGET_CONTROLLER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeMobileTitleWatchedWidgetControllerTest.kt'
-ANDROID_MOBILE_TITLE_WIDGET_PORT=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidMobileTitleWatchedWidgetPort.kt'
-TITLE_WATCHED_VIEW_PORT_RELAY=ROOT/'src/main/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelay.kt'
-TITLE_WATCHED_VIEW_PORT_RELAY_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTitleWatchedViewPortRelayTest.kt'
-ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcompanion/AndroidTitleWatchedScreenOwners.kt'
-CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
-CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
-BUILD=ROOT/'build.gradle'
-CHECKSUM='b0341307c1e6a1b1e731044808aa02cb369ab24c65a938ad93473654fbd90566'
-
-manifest=ET.parse(MANIFEST).getroot()
-fail=[]
-permission_names=[p.get(ANDROID+'name') for p in manifest.findall('uses-permission') if p.get('{http://schemas.android.com/tools}node')!='remove']
-if permission_names:fail.append('permissions_are_not_allowed:'+repr(permission_names))
-app=manifest.find('application')
-if app is None:fail.append('missing_application')
-else:
-    if app.get(ANDROID+'banner') != '@drawable/companion_tv_banner':fail.append('leanback_banner_missing')
-    if app.get(ANDROID+'allowBackup') != 'false':fail.append('backup_not_disabled')
-    if app.get(ANDROID+'usesCleartextTraffic') != 'false':fail.append('cleartext_not_disabled')
-    if app.get(ANDROID+'icon') != '@drawable/companion_mobile_icon':
-        fail.append('mobile_launcher_icon_missing')
-    features={
-        feature.get(ANDROID+'name'): feature.get(ANDROID+'required')
-        for feature in manifest.findall('uses-feature')
-    }
-    if features.get('android.software.leanback') != 'false':
-        fail.append('leanback_still_required_for_mobile_lab')
-    activities=app.findall('activity')
-    by_name={activity.get(ANDROID+'name'): activity for activity in activities}
-    expected={'.CompanionTvActivity', '.MobileStoryOrderLabActivity'}
-    if set(by_name) != expected:fail.append('unexpected_activity_set:'+repr(set(by_name)))
-    for activity in activities:
-        names=[a.get(ANDROID+'name') for a in activity.findall('.//action')]
-        if activity.get(ANDROID+'exported') != 'true':
-            fail.append('launcher_activity_not_explicitly_exported')
-        if 'android.intent.action.VIEW' in names:fail.append('external_media_view_exposed')
-        if any('android.intent.action.BOOT_COMPLETED' in (name or '') for name in names):fail.append('boot_receiver')
-    tv=by_name.get('.CompanionTvActivity')
-    mobile=by_name.get('.MobileStoryOrderLabActivity')
-    tv_categories=[] if tv is None else [c.get(ANDROID+'name') for c in tv.findall('.//category')]
-    mobile_categories=[] if mobile is None else [c.get(ANDROID+'name') for c in mobile.findall('.//category')]
-    if tv_categories != ['android.intent.category.LEANBACK_LAUNCHER']:
-        fail.append('tv_launcher_category_changed')
-    if mobile_categories != ['android.intent.category.LAUNCHER']:
-        fail.append('mobile_launcher_category_missing_or_broadened')
-    if app.findall('service') or app.findall('receiver') or app.findall('provider'):
-        fail.append('unexpected_background_component')
-BANNER=ROOT/'src/main/res/drawable/companion_tv_banner.xml'
-if not BANNER.is_file():
-    fail.append('native_tv_banner_resource_missing')
-else:
-    try:
-        b=ET.parse(BANNER).getroot()
-        if b.tag!='vector' and not b.tag.endswith('}vector'):
-            fail.append('native_tv_banner_not_vector')
-        if b.get(ANDROID+'width')!='320dp' or b.get(ANDROID+'height')!='180dp':
-            fail.append('native_tv_banner_wrong_dimensions')
-    except (ET.ParseError,OSError):
-        fail.append('native_tv_banner_invalid_xml')
-if not MOBILE_ICON.is_file():
-    fail.append('mobile_launcher_icon_resource_missing')
-else:
-    try:
-        icon=ET.parse(MOBILE_ICON).getroot()
-        if icon.tag!='vector' and not icon.tag.endswith('}vector'):
-            fail.append('mobile_launcher_icon_not_vector')
-        if icon.get(ANDROID+'width')!='108dp' or icon.get(ANDROID+'height')!='108dp':
-            fail.append('mobile_launcher_icon_wrong_dimensions')
-    except (ET.ParseError,OSError):
-        fail.append('mobile_launcher_icon_invalid_xml')
-if hashlib.sha256(BRIDGE.read_bytes()).hexdigest()!=CHECKSUM:
-    fail.append('tested_bridge_modified')
-bridge_text=BRIDGE.read_text()
-if ('return order.mapNotNull { byId[it] }' not in bridge_text or
-    'return order.mapNotNull { byId[it] }.filter { it.season > 0 }' in bridge_text):
-    fail.append('series_watched_story_order_narrative_membership_missing')
-java_text=SOURCE.read_text()
-synthetic_fixtures=SYNTHETIC_FIXTURES.read_text() if SYNTHETIC_FIXTURES.is_file() else ''
-synthetic_fixtures_test=SYNTHETIC_FIXTURES_TEST.read_text() if SYNTHETIC_FIXTURES_TEST.is_file() else ''
-synthetic_cue_observer=SYNTHETIC_CUE_OBSERVER.read_text() if SYNTHETIC_CUE_OBSERVER.is_file() else ''
-synthetic_cue_observer_test=SYNTHETIC_CUE_OBSERVER_TEST.read_text() if SYNTHETIC_CUE_OBSERVER_TEST.is_file() else ''
-synthetic_track_observer=SYNTHETIC_TRACK_OBSERVER.read_text() if SYNTHETIC_TRACK_OBSERVER.is_file() else ''
-synthetic_track_observer_test=SYNTHETIC_TRACK_OBSERVER_TEST.read_text() if SYNTHETIC_TRACK_OBSERVER_TEST.is_file() else ''
-synthetic_playback_evidence=SYNTHETIC_PLAYBACK_EVIDENCE.read_text() if SYNTHETIC_PLAYBACK_EVIDENCE.is_file() else ''
-synthetic_playback_evidence_test=SYNTHETIC_PLAYBACK_EVIDENCE_TEST.read_text() if SYNTHETIC_PLAYBACK_EVIDENCE_TEST.is_file() else ''
-synthetic_preference_evidence=SYNTHETIC_PREFERENCE_EVIDENCE.read_text() if SYNTHETIC_PREFERENCE_EVIDENCE.is_file() else ''
-synthetic_preference_evidence_test=SYNTHETIC_PREFERENCE_EVIDENCE_TEST.read_text() if SYNTHETIC_PREFERENCE_EVIDENCE_TEST.is_file() else ''
-synthetic_render_pipeline=SYNTHETIC_RENDER_PIPELINE.read_text() if SYNTHETIC_RENDER_PIPELINE.is_file() else ''
-synthetic_render_pipeline_test=SYNTHETIC_RENDER_PIPELINE_TEST.read_text() if SYNTHETIC_RENDER_PIPELINE_TEST.is_file() else ''
-synthetic_window_pixels=SYNTHETIC_WINDOW_PIXELS.read_text() if SYNTHETIC_WINDOW_PIXELS.is_file() else ''
-synthetic_window_pixels_test=SYNTHETIC_WINDOW_PIXELS_TEST.read_text() if SYNTHETIC_WINDOW_PIXELS_TEST.is_file() else ''
-synthetic_window_pixel_lease=SYNTHETIC_WINDOW_PIXEL_LEASE.read_text() if SYNTHETIC_WINDOW_PIXEL_LEASE.is_file() else ''
-synthetic_window_pixel_lease_test=SYNTHETIC_WINDOW_PIXEL_LEASE_TEST.read_text() if SYNTHETIC_WINDOW_PIXEL_LEASE_TEST.is_file() else ''
-synthetic_window_pixel_instrumentation=SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION.read_text() if SYNTHETIC_WINDOW_PIXEL_INSTRUMENTATION.is_file() else ''
-title_watched_instrumentation=TITLE_WATCHED_INSTRUMENTATION.read_text() if TITLE_WATCHED_INSTRUMENTATION.is_file() else ''
-mobile_title_watched_instrumentation=MOBILE_TITLE_WATCHED_INSTRUMENTATION.read_text() if MOBILE_TITLE_WATCHED_INSTRUMENTATION.is_file() else ''
-story_order_instrumentation=STORY_ORDER_INSTRUMENTATION.read_text() if STORY_ORDER_INSTRUMENTATION.is_file() else ''
-mobile_story_order_instrumentation=MOBILE_STORY_ORDER_INSTRUMENTATION.read_text() if MOBILE_STORY_ORDER_INSTRUMENTATION.is_file() else ''
-native_subtitle_provenance=NATIVE_SUBTITLE_PROVENANCE.read_text() if NATIVE_SUBTITLE_PROVENANCE.is_file() else ''
-native_subtitle_provenance_test=NATIVE_SUBTITLE_PROVENANCE_TEST.read_text() if NATIVE_SUBTITLE_PROVENANCE_TEST.is_file() else ''
-native_subtitle_store=NATIVE_SUBTITLE_STORE.read_text() if NATIVE_SUBTITLE_STORE.is_file() else ''
-native_subtitle_store_test=NATIVE_SUBTITLE_STORE_TEST.read_text() if NATIVE_SUBTITLE_STORE_TEST.is_file() else ''
-native_subtitle_codec=NATIVE_SUBTITLE_CODEC.read_text() if NATIVE_SUBTITLE_CODEC.is_file() else ''
-native_subtitle_codec_test=NATIVE_SUBTITLE_CODEC_TEST.read_text() if NATIVE_SUBTITLE_CODEC_TEST.is_file() else ''
-android_subtitle_storage=ANDROID_SUBTITLE_STORAGE.read_text() if ANDROID_SUBTITLE_STORAGE.is_file() else ''
-android_subtitle_storage_test=ANDROID_SUBTITLE_STORAGE_TEST.read_text() if ANDROID_SUBTITLE_STORAGE_TEST.is_file() else ''
-subtitle_digest_source=SUBTITLE_DIGEST_SOURCE.read_text() if SUBTITLE_DIGEST_SOURCE.is_file() else ''
-subtitle_digest_source_test=SUBTITLE_DIGEST_SOURCE_TEST.read_text() if SUBTITLE_DIGEST_SOURCE_TEST.is_file() else ''
-android_subtitle_store_owner=ANDROID_SUBTITLE_STORE_OWNER.read_text() if ANDROID_SUBTITLE_STORE_OWNER.is_file() else ''
-android_subtitle_store_owner_test=ANDROID_SUBTITLE_STORE_OWNER_TEST.read_text() if ANDROID_SUBTITLE_STORE_OWNER_TEST.is_file() else ''
-android_subtitle_choice_session=ANDROID_SUBTITLE_CHOICE_SESSION.read_text() if ANDROID_SUBTITLE_CHOICE_SESSION.is_file() else ''
-android_subtitle_choice_session_test=ANDROID_SUBTITLE_CHOICE_SESSION_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_SESSION_TEST.is_file() else ''
-android_subtitle_choice_transaction=ANDROID_SUBTITLE_CHOICE_TRANSACTION.read_text() if ANDROID_SUBTITLE_CHOICE_TRANSACTION.is_file() else ''
-android_subtitle_choice_transaction_test=ANDROID_SUBTITLE_CHOICE_TRANSACTION_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_TRANSACTION_TEST.is_file() else ''
-android_subtitle_choice_widget_controller=ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER.is_file() else ''
-android_subtitle_choice_widget_controller_test=ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_CONTROLLER_TEST.is_file() else ''
-android_subtitle_choice_widget_port=ANDROID_SUBTITLE_CHOICE_WIDGET_PORT.read_text() if ANDROID_SUBTITLE_CHOICE_WIDGET_PORT.is_file() else ''
-android_subtitle_choice_screen_owner=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER.read_text() if ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER.is_file() else ''
-android_subtitle_choice_screen_owner_test=ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.read_text() if ANDROID_SUBTITLE_CHOICE_SCREEN_OWNER_TEST.is_file() else ''
-synthetic_subtitle_host=SYNTHETIC_SUBTITLE_HOST.read_text() if SYNTHETIC_SUBTITLE_HOST.is_file() else ''
-synthetic_subtitle_host_test=SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
-persistent_synthetic_subtitle_host=PERSISTENT_SYNTHETIC_SUBTITLE_HOST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST.is_file() else ''
-persistent_synthetic_subtitle_host_test=PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_HOST_TEST.is_file() else ''
-persistent_synthetic_subtitle_screen_owner=PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER.is_file() else ''
-persistent_synthetic_subtitle_screen_owner_test=PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST.read_text() if PERSISTENT_SYNTHETIC_SUBTITLE_SCREEN_OWNER_TEST.is_file() else ''
-native_subtitle_playback_actuator=NATIVE_SUBTITLE_PLAYBACK_ACTUATOR.read_text() if NATIVE_SUBTITLE_PLAYBACK_ACTUATOR.is_file() else ''
-native_subtitle_playback_actuator_test=NATIVE_SUBTITLE_PLAYBACK_ACTUATOR_TEST.read_text() if NATIVE_SUBTITLE_PLAYBACK_ACTUATOR_TEST.is_file() else ''
-media3_subtitle_playback_adapter=MEDIA3_SUBTITLE_PLAYBACK_ADAPTER.read_text() if MEDIA3_SUBTITLE_PLAYBACK_ADAPTER.is_file() else ''
-media3_subtitle_playback_adapter_test=MEDIA3_SUBTITLE_PLAYBACK_ADAPTER_TEST.read_text() if MEDIA3_SUBTITLE_PLAYBACK_ADAPTER_TEST.is_file() else ''
-story=STORY.read_text() if STORY.is_file() else ''
-story_test=STORY_TEST.read_text() if STORY_TEST.is_file() else ''
-mobile_story=MOBILE_STORY.read_text() if MOBILE_STORY.is_file() else ''
-mobile_story_test=MOBILE_STORY_TEST.read_text() if MOBILE_STORY_TEST.is_file() else ''
-mobile_story_host=MOBILE_STORY_HOST.read_text() if MOBILE_STORY_HOST.is_file() else ''
-mobile_story_host_test=MOBILE_STORY_HOST_TEST.read_text() if MOBILE_STORY_HOST_TEST.is_file() else ''
-android_mobile_story_widget_port=ANDROID_MOBILE_STORY_WIDGET_PORT.read_text() if ANDROID_MOBILE_STORY_WIDGET_PORT.is_file() else ''
-android_mobile_story_screen_owner=ANDROID_MOBILE_STORY_SCREEN_OWNER.read_text() if ANDROID_MOBILE_STORY_SCREEN_OWNER.is_file() else ''
-mobile_story_activity=MOBILE_STORY_ACTIVITY.read_text() if MOBILE_STORY_ACTIVITY.is_file() else ''
-synthetic_watched_host=SYNTHETIC_WATCHED_HOST.read_text() if SYNTHETIC_WATCHED_HOST.is_file() else ''
-synthetic_watched_host_test=SYNTHETIC_WATCHED_HOST_TEST.read_text() if SYNTHETIC_WATCHED_HOST_TEST.is_file() else ''
-if ('class MobileStoryOrderLabActivity : Activity()' not in mobile_story_activity or
-    'AndroidMobileStoryOrderScreenOwner.create(' not in mobile_story_activity or
-    'createdStory.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
-    fail.append('mobile_story_launcher_composition_missing')
-if ('current.consumeSelection()' not in mobile_story_activity or
-    'current.render(MobileStoryOrderMode.STORY)' not in mobile_story_activity):
-    fail.append('mobile_story_selection_mailbox_or_rerender_missing')
-if ('AndroidMobileTitleWatchedScreenOwner.create(' not in mobile_story_activity or
-    'createdWatched.render(1)' not in mobile_story_activity or
-    'current.consumeOutcome()' not in mobile_story_activity):
-    fail.append('mobile_title_action_lab_composition_or_mailbox_missing')
-if ('ui.removeCallbacks(outcomePump)' not in mobile_story_activity or
-    'storyOwner?.close()' not in mobile_story_activity or
-    'watchedOwner?.close()' not in mobile_story_activity or
-    'subtitleOwner?.close()' not in mobile_story_activity or
-    'override fun onDestroy()' not in mobile_story_activity):
-    fail.append('mobile_lab_lifecycle_close_missing')
-if ('local:mobile-story:1:1' not in mobile_story_activity or
-    'SYNTHETIC_STORY_WATCHED_IDS' not in mobile_story_activity or
-    'Synthetic local metadata and watched state only.' not in mobile_story_activity or
-    'change production watched history' not in mobile_story_activity):
-    fail.append('mobile_lab_synthetic_disclosure_missing')
-allowed_pss_imports={
-    'import org.pss.stremio.tv.NativeMobileTitleWatchedOutcome',
-    'import org.pss.stremio.tv.TvWatchedCoordinator',
-}
-actual_pss_imports={
-    line for line in mobile_story_activity.splitlines()
-    if line.startswith('import org.pss.stremio.tv.')
-}
-if actual_pss_imports != allowed_pss_imports:
-    fail.append('mobile_lab_unreviewed_pss_surface:'+repr(actual_pss_imports))
-if any(token in mobile_story_activity for token in [
-    'androidx.media3', 'android.net.', 'java.net.',
-    'getIntent(', 'intent.get', 'startActivity(', 'startService(',
-    'ContentResolver', 'AccountManager', 'Datastore'
-]):
-    fail.append('mobile_lab_external_or_player_surface')
-if ('Looper.getMainLooper()' not in mobile_story_activity or
-    'ui.post(outcomePump)' not in mobile_story_activity or
-    'ui.postDelayed(this, OUTCOME_POLL_MS)' not in mobile_story_activity):
-    fail.append('mobile_lab_main_thread_mailbox_pump_missing')
-if not all(x in mobile_story_activity for x in [
-    'PersistentSyntheticSubtitlePreferenceScreenOwner.open(',
-    'PersistentSyntheticSubtitlePreferenceHost.Namespace.MOBILE',
-    'getSharedPreferences(SYNTHETIC_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
-    'getSharedPreferences(SYNTHETIC_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'val initialSubtitle = createdSubtitle?.initialState()',
-    'createdSubtitle.renderInitial()',
-    'current.currentPreference()',
-    'current.renderSettings()',
-    'current.consumeOutcome()'
-]):
-    fail.append('mobile_subtitle_lab_composition_or_mailbox_missing')
-if not all(x in mobile_story_activity for x in [
-    'Explicitly Off when no choice is stored.',
-    'own app-private preference and provenance receipt',
-    'The mobile and TV lab namespaces are independent.',
-    'Current enabled state has no matching same-installation receipt and is ',
-    'not admitted as consent.',
-    'Production Stremio preferences were not read or changed.',
-    'unverified rollback; ',
-    'the subtitle lab is held closed.'
-]):
-    fail.append('mobile_subtitle_lab_disclosure_or_hold_missing')
-if ('private const val SYNTHETIC_SUBTITLE_RECEIPT_PREFS' not in mobile_story_activity or
-    '"synthetic_mobile_subtitle_receipt_v1"' not in mobile_story_activity or
-    'private const val SYNTHETIC_SUBTITLE_STATE_PREFS' not in mobile_story_activity or
-    '"synthetic_mobile_subtitle_state_v1"' not in mobile_story_activity or
-    '"synthetic_tv_subtitle_state_v1"' in mobile_story_activity):
-    fail.append('mobile_subtitle_lab_private_namespaces_missing')
-if not all(x in java_text for x in [
-    'PersistentSyntheticSubtitlePreferenceScreenOwner.open(',
-    'PersistentSyntheticSubtitlePreferenceHost.Namespace.TV',
-    'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_STATE_PREFS, MODE_PRIVATE)',
-    'getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE)',
-    'val initialSubtitle = createdSubtitle?.initialState()',
-    'createdSubtitle.renderInitial()',
-    'current.currentPreference()',
-    'current.renderSettings()',
-    'pollSubtitleOutcome()',
-    'current.consumeOutcome()'
-]):
-    fail.append('tv_subtitle_lab_composition_or_mailbox_missing')
-if not all(x in java_text for x in [
-    "this TV lab's app-private state, which starts explicitly Off.",
-    "this TV lab's preference and provenance receipt may be stored.",
-    'The TV and mobile lab namespaces are independent.',
-    'Current enabled TV state has no matching same-installation receipt and is ',
-    'not admitted as consent.',
-    'Production Stremio preferences were not read or changed.',
-    'unverified rollback; ',
-    'the TV subtitle lab is held closed.'
-]):
-    fail.append('tv_subtitle_lab_disclosure_or_hold_missing')
-if not all(x in java_text for x in [
-    'subtitleOwner?.close()',
-    'ui.removeCallbacks(refresh)',
-    'override fun onDestroy()'
-]):
-    fail.append('tv_subtitle_lab_lifecycle_close_missing')
-if ('private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS' not in java_text or
-    '"synthetic_tv_subtitle_receipt_v1"' not in java_text or
-    'private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS' not in java_text or
-    '"synthetic_tv_subtitle_state_v1"' not in java_text or
-    '"synthetic_mobile_subtitle_receipt_v1"' in java_text):
-    fail.append('tv_subtitle_lab_private_receipt_namespace_missing')
-if not all(x in java_text for x in [
-    'Media3SubtitlePlaybackPreferenceAdapter.open(',
-    'createdSubtitle.currentPlaybackPreference()',
-    'NativeSubtitlePlaybackPreferenceActuator.Trigger.PREFERENCE_CHANGE',
-    'NativeSubtitlePlaybackPreferenceActuator.Trigger.INITIAL_LOAD',
-    'NativeSubtitlePlaybackPreferenceActuator.Trigger.EPISODE_TRANSITION',
-    'NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY',
-    'reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO',
-    'sourceId = if (fixtureLoaded) SYNTHETIC_SOURCE_ID else ""',
-    'nextEpisodeRequested = false',
-    'subtitlePlayback?.close()',
-    'subtitlePlayback = null',
-    'private const val SYNTHETIC_SOURCE_ID = "local:synthetic-wav"'
-]):
-    fail.append('tv_subtitle_media3_lab_binding_missing')
-if java_text.find('subtitlePlayback?.close()') > java_text.find('subtitleOwner?.close()'):
-    fail.append('tv_subtitle_media3_close_order_weakened')
-if not all(x in synthetic_subtitle_host for x in [
-    'internal class SyntheticSubtitlePreferenceHost',
-    'AndroidSubtitlePreferenceChoiceSession.SnapshotPort',
-    'AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort',
-    'private var current = snapshot(enabled = false)',
-    'expected != current',
-    'sessionPreference = beforePreference.copy(enabled = enabled)',
-    'transition !== lastIssued',
-    'current != transition.after'
-]):
-    fail.append('synthetic_subtitle_host_exact_transaction_contract_missing')
-if any(x in synthetic_subtitle_host for x in [
-    'android.content', 'SharedPreferences', 'DataStore', 'AccountManager',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_subtitle_host_forbidden_surface')
-if not all(x in synthetic_subtitle_host for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'private var closed = false',
-    'fun close(): Boolean',
-    'lastIssued = null',
-    'value.copy(sessionPreference = value.sessionPreference?.copy())'
-]):
-    fail.append('synthetic_subtitle_host_lifecycle_or_detachment_missing')
-if not all(x in synthetic_subtitle_host_test for x in [
-    'startsExplicitlyOffWithFixedSyntheticBinding',
-    'enabledChoiceChangesOnlyEnabledValue',
-    'explicitOffChangesOnlyEnabledValue',
-    'staleExpectedSnapshotCannotApply',
-    'exactIssuedRollbackRestoresBeforeSnapshot',
-    'forgedAndCrossHostTransitionsCannotRollback',
-    'newerChoiceRevokesOlderRollbackObject',
-    'foreignThreadCannotReadApplyRollbackOrClose',
-    'closeRevokesEveryFutureOperation'
-]):
-    fail.append('synthetic_subtitle_host_regressions_missing')
-if not all(x in persistent_synthetic_subtitle_host for x in [
-    'internal class PersistentSyntheticSubtitlePreferenceHost private constructor',
-    'enum class Namespace(internal val legacyKey: String, internal val key: String)',
-    'synthetic.mobile.subtitle.enabled.v1',
-    'synthetic.mobile.subtitle.enabled.v2',
-    'synthetic.tv.subtitle.enabled.v1',
-    'synthetic.tv.subtitle.enabled.v2',
-    'AndroidSubtitlePreferenceChoiceSession.SnapshotPort',
-    'AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort',
-    'private data class MigrationState',
-    'if (before.current.present) return !before.legacy.present',
-    'if (!before.legacy.present) return true',
-    'val committed = writeMigrationState(after)',
-    'if (committed && exactReadback == after) return true',
-    'if (exactReadback == after) restoreMigrationState(before, after)',
-    'writeSlot(editor, namespace.legacyKey, state.legacy)',
-    'writeSlot(editor, namespace.key, state.current)',
-    'if (host.migrateLegacyState())',
-    'val first = readState()',
-    'val second = readState()',
-    'editor.commit()',
-    'if (transition !== issued.transition)',
-    'if (current != issued.after)',
-    'if (leases[namespace] === token) leases.remove(namespace)'
-]):
-    fail.append('persistent_synthetic_subtitle_host_exact_contract_missing')
-if any(x in persistent_synthetic_subtitle_host for x in [
-    'AccountManager', 'java.net.', 'http://', 'https://', 'getAuthKey',
-    'System.getenv', 'Log.d(', 'clear()', 'MODE_MULTI_PROCESS'
-]):
-    fail.append('persistent_synthetic_subtitle_host_forbidden_surface')
-if not all(x in persistent_synthetic_subtitle_host_test for x in [
-    'absentStateStartsOffOnFirstRunWithoutWriting',
-    'enabledChoicePersistsAcrossFreshOwner',
-    'explicitOffPersistsAcrossFreshOwner',
-    'legacyEnabledMigratesAtomicallyToCurrentKey',
-    'legacyExplicitOffMigratesWithoutBecomingFirstRun',
-    'currentAndLegacyCollisionFailsClosedWithoutMutation',
-    'corruptLegacyTypeFailsClosedWithoutMutation',
-    'migrationCommitRefusalPreservesLegacyAndUnrelatedState',
-    'postMigrationDriftIsPreservedWithoutAcceptance',
-    'mobileAndTvNamespacesRemainIndependent',
-    'exactRollbackRestoresAbsentStorageShape',
-    'exactRollbackRestoresStoredEnabledValue',
-    'staleExpectedSnapshotCannotWrite',
-    'forgedAndCrossNamespaceTransitionsCannotRollback',
-    'commitRefusalPreservesPriorStateAndUnrelatedKeys',
-    'corruptTypeFailsClosedWithoutOverwrite',
-    'postCommitDriftIsPreservedAndCannotBeRolledBack',
-    'acceptedTransactionPersistsStateAndInstallationReceipt',
-    'receiptCommitFailureRestoresExactAbsentState',
-    'ownerThreadCloseAndNamespaceLeaseFailClosed'
-]):
-    fail.append('persistent_synthetic_subtitle_host_regressions_missing')
-if not all(x in persistent_synthetic_subtitle_screen_owner for x in [
-    'internal class PersistentSyntheticSubtitlePreferenceScreenOwner private constructor',
-    'if (statePreferences === receiptPreferences) return null',
-    'PersistentSyntheticSubtitlePreferenceHost.open(',
-    'val surface = host.presentationSurface()',
-    'val preference = host.readPreferenceSnapshot()?.sessionPreference',
-    'val stored = screen.loadStoredPreference()',
-    'fun currentPlaybackPreference()',
-    'val preference = host.readPreferenceSnapshot()',
-    '?.sessionPreference ?: return null',
-    'val enabled = preference.enabled ?: return null',
-    'stored?.get("kind") == "same-installation-setting"',
-    'Admission.ENABLED_SAME_INSTALLATION',
-    'Admission.ENABLED_UNADMITTED',
-    'val screenClosed = screen.close()',
-    'val hostClosed = host.close()',
-    'private val ownerThread = Thread.currentThread()'
-]):
-    fail.append('persistent_synthetic_subtitle_screen_owner_contract_missing')
-if any(x in persistent_synthetic_subtitle_screen_owner for x in [
-    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)'
-]):
-    fail.append('persistent_synthetic_subtitle_screen_owner_forbidden_surface')
-if not all(x in persistent_synthetic_subtitle_screen_owner_test for x in [
-    'identicalStateAndReceiptObjectIsRefusedBeforeLease',
-    'explicitOffDoesNotReadOrManufactureReceiptAdmission',
-    'enabledStateWithoutExactReceiptRemainsUnadmitted',
-    'enabledStateIsAdmittedOnlyThroughScreenReceiptValidator',
-    'explicitOffPlaybackPreferenceDoesNotReadReceipt',
-    'enabledPlaybackPreferenceRequiresExactStoredReceipt',
-    'compositeOwnsRenderOutcomeRerenderAndScreenFirstClose',
-    'failedRenderPoisonsBothScreenAndStateLease',
-    'constructionFailureAndForeignThreadCannotLeakAuthority'
-]):
-    fail.append('persistent_synthetic_subtitle_screen_owner_regressions_missing')
-if not all(x in persistent_synthetic_subtitle_screen_owner_test for x in [
-    'assertNull(open(preferences, preferences, MOBILE, ScreenFixture()))',
-    'assertEquals(0, fixture.port!!.loadCalls)',
-    'assertEquals(ENABLED_UNADMITTED, owner.initialState()!!.admission)',
-    'assertEquals(ENABLED_SAME_INSTALLATION, owner.initialState()!!.admission)',
-    'NativeSubtitlePlaybackPreferenceActuator.Preference(false, false)',
-    'NativeSubtitlePlaybackPreferenceActuator.Preference(true, true)',
-    'NativeSubtitlePlaybackPreferenceActuator.Preference(true, false)',
-    'assertTrue(screenClosedWhileStateLeased.get())',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('persistent_synthetic_subtitle_screen_owner_adversarial_assertions')
-if not all(x in native_subtitle_playback_actuator for x in [
-    'internal class NativeSubtitlePlaybackPreferenceActuator(',
-    'enum class Trigger',
-    'PREFERENCE_CHANGE',
-    'EPISODE_TRANSITION',
-    'RECOVERY',
-    'enum class SelectionOrigin',
-    'MANUAL',
-    'sameInstallationReceipt',
-    'if (origin == SelectionOrigin.MANUAL) return null',
-    'preference.enabled && preference.sameInstallationReceipt',
-    'Action.APPLY_AUTOMATIC',
-    'Action.CLEAR_AUTOMATIC',
-    'issued = null',
-    'if (lease !== accepted) return false',
-    'if (finalPreference != lease.preference || finalSnapshot != lease.snapshot) return false',
-    'actionPort.apply(lease.action, lease.trigger, lease.snapshot)',
-    'private val ownerThread = Thread.currentThread()'
-]):
-    fail.append('native_subtitle_playback_actuator_exact_contract_missing')
-if any(x in native_subtitle_playback_actuator for x in [
-    'import android.', 'androidx.media3', 'ExoPlayer(', 'AccountManager',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'catch (_: Throwable)'
-]):
-    fail.append('native_subtitle_playback_actuator_forbidden_surface')
-if not all(x in native_subtitle_playback_actuator_test for x in [
-    'explicitOffClearsOnlyAutomaticSelection',
-    'explicitOffPreservesManualSelectionAcrossEpisodeTransition',
-    'explicitOffWithNoSelectedTrackNeedsNoPlayerMutation',
-    'admittedEnabledAppliesAutomaticOnlyWhenNothingIsSelected',
-    'admittedEnabledNeverReplacesManualSelection',
-    'unadmittedEnabledCannotApplyAutomaticSelection',
-    'playerIdentityDriftConsumesLeaseBeforePortCall',
-    'preferenceOrReceiptDriftConsumesLeaseBeforePortCall',
-    'forgedCrossInstanceAndDuplicateLeasesFailClosed',
-    'transitionAndUnsafePlayerStatesCannotPrepare',
-    'unstableThrowingAndRejectedPortsFailClosed',
-    'foreignThreadCannotPrepareExecuteOrClose'
-]):
-    fail.append('native_subtitle_playback_actuator_regressions_missing')
-if not all(x in media3_subtitle_playback_adapter for x in [
-    'internal class Media3SubtitlePlaybackPreferenceAdapter private constructor(',
-    'NativeSubtitlePlaybackPreferenceActuator(',
-    'NativeSubtitlePlaybackPreferenceActuator.SelectionOrigin.MANUAL',
-    'C.TRACK_TYPE_TEXT in parameters.disabledTrackTypes',
-    'parameters.overrides.keys.any',
-    'it.type == C.TRACK_TYPE_TEXT',
-    'player.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)',
-    '.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, disabled)',
-    'if (readState() != expected || expected.manualTextOverride',
-    'val first = player.trackSelectionParameters',
-    'val second = player.trackSelectionParameters',
-    'second.overrides.keys.none { it.type == C.TRACK_TYPE_TEXT }',
-    'private val ownerThread = Thread.currentThread()',
-    'fun close(): Boolean',
-    'fun currentSelectionOrigin()',
-    'private fun readStableMediaState()',
-    'fun open(',
-    'internal fun openForTest('
-]):
-    fail.append('media3_subtitle_playback_adapter_exact_contract_missing')
-if any(x in media3_subtitle_playback_adapter for x in [
-    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)',
-    'clearOverrides', 'setOverrideForType', 'setPreferredTextLanguage'
-]):
-    fail.append('media3_subtitle_playback_adapter_forbidden_surface')
-if not all(x in media3_subtitle_playback_adapter_test for x in [
-    'explicitOffDisablesOnlyAutomaticTextSelection',
-    'admittedEnabledReenablesAutomaticTextSelection',
-    'unadmittedEnabledCannotLeaveAutomaticSelectionEnabled',
-    'manualOverrideAlwaysBlocksPlayerMutation',
-    'unchangedPolicyRequiresNoMedia3Mutation',
-    'contextAndMediaDriftFailClosedBeforeMutation',
-    'rejectedAndConcurrentMedia3WritesAreNotAccepted',
-    'stableSelectionOriginIsExposedWithoutMutation',
-    'unstableClosedAndForeignSelectionOriginReadsFailClosed',
-    'ownerThreadAndCloseRevokeAdapter'
-]):
-    fail.append('media3_subtitle_playback_adapter_regressions_missing')
-if ('class SyntheticTitleWatchedAccountHost' not in synthetic_watched_host or
-    ': CanonicalWatchedAccountHostPort' not in synthetic_watched_host or
-    'private val epoch = 1L' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_missing_or_unbounded')
-if ('message.keys != setOf("action", "args")' not in synthetic_watched_host or
-    'inner.keys != setOf("action", "args")' not in synthetic_watched_host or
-    '"MarkAsWatched"' not in synthetic_watched_host or
-    '"MarkSeasonAsWatched"' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_exact_dispatch_gate_missing')
-if ('TvWatchedCoordinator()' not in synthetic_watched_host or
-    '.prepare(snapshot, WatchedScope.Series, markWatched)' not in synthetic_watched_host or
-    '.filter { it.season == season && released(it) }' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_core_story_membership_or_season_gate_missing')
-if not all(x in synthetic_watched_host for x in [
-    '"local:mobile-watched:0:2"',
-    '"local:mobile-watched:1:3"',
-    '"local:mobile-watched:0:99"',
-    '"2035-01-03T00:00:00Z"'
-]):
-    fail.append('synthetic_watched_host_narrative_future_ancillary_fixture_missing')
-if ('snapshot.videos.map { it.copy() }' not in synthetic_watched_host or
-    'watchedVideoIds = watched.toList()' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_detached_observation_missing')
-if ('expected != currentDispatchExpectation()' not in synthetic_watched_host or
-    'CanonicalWatchedDispatchExpectation(' not in synthetic_watched_host or
-    synthetic_watched_host.count('@Synchronized') < 3):
-    fail.append('synthetic_watched_host_atomic_expectation_missing')
-if ('resumeVideoId: String? = "local:mobile-watched:0:99"' not in synthetic_watched_host or
-    'resumeTimeOffset = 42_000L' not in synthetic_watched_host or
-    'resumeTimeOffset = 0L' not in synthetic_watched_host or
-    'fun resumeState(): Pair<String?, Long>' not in synthetic_watched_host):
-    fail.append('synthetic_watched_host_core_resume_consequence_missing')
-if any(name not in synthetic_watched_host_test for name in [
-    'seriesActionUsesReleasedValidatedStoryMembership',
-    'seasonActionIsBoundedToRequestedSyntheticSeason',
-    'malformedOrStaleDispatchNeverMutatesSyntheticState',
-    'sameEpochStaleExpectationCannotApplyASecondMutation',
-    'tvHostBindingAppliesOnlyLocalSyntheticSeriesState',
-    'observationsAndReadbackListsAreDetached',
-    'titleUnwatchedPreservesSyntheticResumeState',
-]):
-    fail.append('synthetic_watched_host_regressions_missing')
-recovery=RECOVERY.read_text() if RECOVERY.is_file() else ''
-recovery_test=RECOVERY_TEST.read_text() if RECOVERY_TEST.is_file() else ''
-classifier=CLASSIFIER.read_text() if CLASSIFIER.is_file() else ''
-classifier_test=CLASSIFIER_TEST.read_text() if CLASSIFIER_TEST.is_file() else ''
-media3_intake=MEDIA3_INTAKE.read_text() if MEDIA3_INTAKE.is_file() else ''
-media3_intake_test=MEDIA3_INTAKE_TEST.read_text() if MEDIA3_INTAKE_TEST.is_file() else ''
-media3_retry_actuator=MEDIA3_RETRY_ACTUATOR.read_text() if MEDIA3_RETRY_ACTUATOR.is_file() else ''
-media3_retry_actuator_test=MEDIA3_RETRY_ACTUATOR_TEST.read_text() if MEDIA3_RETRY_ACTUATOR_TEST.is_file() else ''
-actuator=ACTUATOR.read_text() if ACTUATOR.is_file() else ''
-actuator_test=ACTUATOR_TEST.read_text() if ACTUATOR_TEST.is_file() else ''
-ports=PORTS.read_text()
-episode=EPISODE.read_text()
-title_watched_menu=TITLE_WATCHED_MENU.read_text() if TITLE_WATCHED_MENU.is_file() else ''
-title_watched_menu_test=TITLE_WATCHED_MENU_TEST.read_text() if TITLE_WATCHED_MENU_TEST.is_file() else ''
-mobile_title_watched_menu=MOBILE_TITLE_WATCHED_MENU.read_text() if MOBILE_TITLE_WATCHED_MENU.is_file() else ''
-mobile_title_watched_menu_test=MOBILE_TITLE_WATCHED_MENU_TEST.read_text() if MOBILE_TITLE_WATCHED_MENU_TEST.is_file() else ''
-mobile_title_host_binding=MOBILE_TITLE_HOST_BINDING.read_text() if MOBILE_TITLE_HOST_BINDING.is_file() else ''
-mobile_title_host_binding_test=MOBILE_TITLE_HOST_BINDING_TEST.read_text() if MOBILE_TITLE_HOST_BINDING_TEST.is_file() else ''
-tv_title_host_binding=TV_TITLE_HOST_BINDING.read_text() if TV_TITLE_HOST_BINDING.is_file() else ''
-tv_title_host_binding_test=TV_TITLE_HOST_BINDING_TEST.read_text() if TV_TITLE_HOST_BINDING_TEST.is_file() else ''
-tv_title_widget_controller=TV_TITLE_WIDGET_CONTROLLER.read_text() if TV_TITLE_WIDGET_CONTROLLER.is_file() else ''
-tv_title_widget_controller_test=TV_TITLE_WIDGET_CONTROLLER_TEST.read_text() if TV_TITLE_WIDGET_CONTROLLER_TEST.is_file() else ''
-android_tv_title_widget_port=ANDROID_TV_TITLE_WIDGET_PORT.read_text() if ANDROID_TV_TITLE_WIDGET_PORT.is_file() else ''
-mobile_title_widget_controller=MOBILE_TITLE_WIDGET_CONTROLLER.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER.is_file() else ''
-mobile_title_widget_controller_test=MOBILE_TITLE_WIDGET_CONTROLLER_TEST.read_text() if MOBILE_TITLE_WIDGET_CONTROLLER_TEST.is_file() else ''
-android_mobile_title_widget_port=ANDROID_MOBILE_TITLE_WIDGET_PORT.read_text() if ANDROID_MOBILE_TITLE_WIDGET_PORT.is_file() else ''
-title_watched_view_port_relay=TITLE_WATCHED_VIEW_PORT_RELAY.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY.is_file() else ''
-title_watched_view_port_relay_test=TITLE_WATCHED_VIEW_PORT_RELAY_TEST.read_text() if TITLE_WATCHED_VIEW_PORT_RELAY_TEST.is_file() else ''
-android_title_watched_screen_owners=ANDROID_TITLE_WATCHED_SCREEN_OWNERS.read_text() if ANDROID_TITLE_WATCHED_SCREEN_OWNERS.is_file() else ''
-canonical_watched_account_adapter=CANONICAL_WATCHED_ACCOUNT_ADAPTER.read_text() if CANONICAL_WATCHED_ACCOUNT_ADAPTER.is_file() else ''
-canonical_watched_account_adapter_test=CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST.read_text() if CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST.is_file() else ''
-gradle=BUILD.read_text()
-if "applicationId 'org.thiajay.stremiotvcompanion'" not in gradle:fail.append('app_package_changed')
-if not re.search(r"EXTERNAL_SOURCE_ENABLED'\s*,\s*'false'",gradle):fail.append('external_source_gate_missing')
-if not re.search(r"STREMIO_ACCOUNT_WRITES_ENABLED'\s*,\s*'false'",gradle):fail.append('account_gate_missing')
-if 'TvSkipCoordinator' not in java_text or 'NightAudioMedia3Processor' not in java_text or 'ExoPlayer.Builder' not in java_text:
-    fail.append('real_media3_bridge_or_pcm_missing')
-if 'player.seekTo(ms)' not in java_text or 'fun seekWithinSelectedVideo' not in ports:
-    fail.append('same_media_seek_binding_missing')
-if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' not in episode:
-    fail.append('individual_episode_core_action_not_present')
-if 'issued.add(plan.fingerprint)' not in episode or 'port.currentSnapshot()' not in episode:
-    fail.append('episode_account_refresh_or_one_shot_not_enforced')
-if not all(fragment in episode for fragment in (
-    'videoFingerprint',
-    'snapshotCoreVideo(videoSource)',
-    'snapshotCoreVideo(secondSource)',
-    'MAX_CANONICAL_VIDEO_DEPTH',
-    'MAX_CANONICAL_VIDEO_NODES',
-    'MAX_CANONICAL_VIDEO_COLLECTION_ENTRIES',
-    'MAX_CANONICAL_VIDEO_STRING_LENGTH',
-    'MAX_CANONICAL_VIDEO_TOTAL_STRING_LENGTH',
-    'Cyclic Core Video metadata',
-)):
-    fail.append('core_video_double_read_or_bounded_snapshot_missing')
-if not all(fragment in episode for fragment in (
-    'is Int -> "i32:$value"',
-    'is Long -> "i64:$value"',
-    '"f32:${java.lang.Integer.toUnsignedString(value.toRawBits(), 16)}"',
-    '"f64:${java.lang.Long.toUnsignedString(value.toRawBits(), 16)}"',
-)):
-    fail.append('core_video_numeric_type_fingerprint_missing')
-if ('class NativeTvTitleWatchedMenu' not in title_watched_menu or
-    'class NativeTvTitleWatchedAction internal constructor' not in title_watched_menu):
-    fail.append('native_tv_title_watched_menu_missing')
-if ('val snapshot = snapshotOrNull() ?: return emptyList()' not in title_watched_menu or
-    'coordinatorFor(watched).prepare(snapshot, scope, watched)' not in title_watched_menu):
-    fail.append('title_watched_menu_not_built_from_one_fresh_core_snapshot')
-if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED\n        issued.clear()' not in title_watched_menu or
-    'record.action !== action' not in title_watched_menu or
-    'account.currentSnapshot()' not in title_watched_menu):
-    fail.append('title_watched_menu_issuance_or_fresh_read_missing')
-if ('focusedActionId != action.actionId' not in title_watched_menu or
-    'remoteKey != "ENTER" && remoteKey != "DPAD_CENTER"' not in title_watched_menu or
-    'unwatchAcknowledged = unwatchAcknowledged' not in title_watched_menu):
-    fail.append('title_watched_remote_focus_or_unwatch_confirmation_missing')
-if ('Thread.currentThread() === ownerThread' not in title_watched_menu or
-    'private var closed = false' not in title_watched_menu or
-    'const val MAX_PRESENTED_ACTIONS = 4' not in title_watched_menu):
-    fail.append('title_watched_thread_lifecycle_or_bound_missing')
-if ('interface CanonicalWatchedStatePort : StremioAccountPort' not in title_watched_menu or
-    'DISPATCHED_PENDING_READBACK' not in title_watched_menu or
-    'private var pendingReadback: PendingReadback? = null' not in title_watched_menu or
-    'if (!confirmPendingReadback(snapshot)) return emptyList()' not in title_watched_menu or
-    'if (currentPlan != pending.plan) return false' not in title_watched_menu or
-    'coordinators[!pending.plan.watched] = TvWatchedCoordinator()' not in title_watched_menu or
-    'coordinatorFor(record.plan.watched).confirm(' not in title_watched_menu or
-    'if (currentPlan.selectedIds != pending.plan.selectedIds)' in title_watched_menu or
-    'state.copy(watchedVideoIds = state.watchedVideoIds.toList())' not in title_watched_menu or
-    'state.watchedVideoIds.size != state.watchedVideoIds.toSet().size' not in title_watched_menu):
-    fail.append('title_watched_canonical_post_write_readback_gate_missing')
-if ('val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()' not in title_watched_menu or
-    'canonicalVideoIds.containsAll(state.watchedVideoIds)' not in title_watched_menu or
-    'state.resumeVideoId in canonicalVideoIds' not in title_watched_menu):
-    fail.append('title_watched_unknown_canonical_id_gate_missing')
-if ('val before: CanonicalWatchedStateReadback' not in title_watched_menu or
-    'beforeIds + selectedIds' not in title_watched_menu or
-    'beforeIds - selectedIds' not in title_watched_menu or
-    'state.resumeVideoId == pending.before.resumeVideoId' not in title_watched_menu or
-    'state.resumeTimeOffset == 0L' not in title_watched_menu or
-    'state.resumeTimeOffset == pending.before.resumeTimeOffset' not in title_watched_menu):
-    fail.append('title_watched_exact_membership_or_core_resume_readback_missing')
-if ('private val account: CanonicalWatchedStatePort' not in title_watched_menu or
-    'account: CanonicalWatchedStatePort' not in mobile_title_watched_menu or
-    'account: CanonicalWatchedStatePort' not in mobile_title_host_binding or
-    'account: CanonicalWatchedStatePort' not in tv_title_host_binding or
-    any('account: StremioAccountPort' in source for source in [
-        title_watched_menu,
-        mobile_title_watched_menu,
-        mobile_title_host_binding,
-        tv_title_host_binding
-    ]) or
-    '(account as? CanonicalWatchedStatePort)' in title_watched_menu):
-    fail.append('android_title_ui_canonical_readback_port_not_mandatory')
-if ('NativeTvTitleWatchedMenu(' in java_text or 'NativeTvTitleWatchedAction(' in java_text):
-    fail.append('title_watched_menu_wired_to_synthetic_activity')
-if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED\n        issued.clear()' not in title_watched_menu):
-    fail.append('tv_title_watched_activation_does_not_revoke_generation')
-if any(name not in title_watched_menu_test for name in [
-    'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting',
-    'futureEpisodeSuppressesUnsafeSeasonActions',
-    'focusAndRemoteConfirmationDispatchExactSeriesAction',
-    'activatingOneActionRevokesEverySiblingFromThatGeneration',
-    'unwatchRequiresAcknowledgementAndPresentationIsOneShot',
-    'accountDriftRefusesPresentedAction',
-    'staleAndForgedActionsCannotExecute',
-    'ownerThreadAndCloseFailClosed',
-    'snapshotAndDispatchExceptionsFailClosed',
-    'canonicalReadbackRearmsOnlyOppositeWatchedDirection',
-    'acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches',
-    'pendingReadbackCannotCrossAccountOrLibraryIdentity',
-    'mismatchedOrDuplicateCanonicalReadbackNeverReopensGeneration',
-    'unknownCanonicalWatchedIdNeverReopensGeneration',
-    'throwingCanonicalWatchedCollectionFailsClosedWithoutEscaping',
-    'seriesWatchedRequiresExactMembershipAndClearedResumeReadback',
-    'seriesUnwatchedPreservesResumeAndRejectsUnselectedMutation'
-]):
-    fail.append('native_tv_title_watched_menu_regressions_missing')
-if ('class NativeMobileTitleWatchedMenu' not in mobile_title_watched_menu or
-    'class NativeMobileTitleWatchedAction internal constructor' not in mobile_title_watched_menu):
-    fail.append('native_mobile_title_watched_menu_missing')
-if ('private val delegate = NativeTvTitleWatchedMenu(coordinator, account)' not in mobile_title_watched_menu or
-    'val delegated = delegate.present(seasonNumber)' not in mobile_title_watched_menu):
-    fail.append('mobile_title_watched_menu_bypasses_guarded_core_delegate')
-if ('const val SEMANTIC_ACTIVATION = "ACTIVATE"' not in mobile_title_watched_menu or
-    'semanticEvent != SEMANTIC_ACTIVATION' not in mobile_title_watched_menu or
-    'selectedActionId != action.actionId' not in mobile_title_watched_menu):
-    fail.append('mobile_semantic_accessibility_activation_gate_missing')
-if ('val record = issued[action.actionId] ?: return NativeMobileTitleWatchedOutcome.REFUSED\n        issued.clear()' not in mobile_title_watched_menu or
-    mobile_title_watched_menu.find('val record = issued[action.actionId]') > mobile_title_watched_menu.find('delegate.activate(')):
-    fail.append('mobile_title_action_not_consumed_before_core_delegate')
-if ('Thread.currentThread() === ownerThread' not in mobile_title_watched_menu or
-    'private var closed = false' not in mobile_title_watched_menu or
-    'return delegate.close()' not in mobile_title_watched_menu):
-    fail.append('mobile_title_thread_or_lifecycle_guard_missing')
-if ('NativeMobileTitleWatchedMenu(' in java_text or 'NativeMobileTitleWatchedAction(' in java_text):
-    fail.append('mobile_title_watched_menu_wired_to_synthetic_activity')
-if ('val record = issued[action.actionId] ?: return NativeMobileTitleWatchedOutcome.REFUSED\n        issued.clear()' not in mobile_title_watched_menu):
-    fail.append('mobile_title_watched_activation_does_not_revoke_generation')
-if any(name not in mobile_title_watched_menu_test for name in [
-    'mobilePresentationMirrorsFourGuardedTitleActionsWithoutWriting',
-    'semanticAccessibilityActivationDispatchesExactSeriesAction',
-    'mobileActivationRevokesEverySiblingFromThatGeneration',
-    'rawPointerAndLongPressEventsNeverImplyConsent',
-    'mobileUnwatchRequiresAcknowledgementAndConsumesIssuance',
-    'futureEpisodeStillSuppressesUnsafeMobileSeasonActions',
-    'staleSelectedAndForgedMobileActionsFailClosed',
-    'accountDriftAndRejectedDispatchFailClosedOnMobile',
-    'mobileOwnerThreadAndCloseRevokeOutstandingActions',
-    'mobileAcceptedDispatchCannotReissueBeforeCanonicalReadback'
-]):
-    fail.append('native_mobile_title_watched_menu_regressions_missing')
-if ('class NativeMobileTitleWatchedHostBinding' not in mobile_title_host_binding or
-    'interface NativeMobileTitleWatchedViewPort' not in mobile_title_host_binding or
-    'class NativeMobileTitleWatchedViewAction internal constructor' not in mobile_title_host_binding):
-    fail.append('native_mobile_title_host_binding_missing')
-if ('private val menu = NativeMobileTitleWatchedMenu(coordinator, account)' not in mobile_title_host_binding or
-    'menu.activate(' not in mobile_title_host_binding):
-    fail.append('mobile_host_binding_bypasses_canonical_core_menu')
-if ('view.replaceTitleActions(viewActions.toList())' not in mobile_title_host_binding or
-    'view.clearTitleActions()' not in mobile_title_host_binding):
-    fail.append('mobile_host_render_or_clear_port_missing')
-if ('record.viewAction === action' not in mobile_title_host_binding or
-    'action.mobileFor(bindingSeal)' not in mobile_title_host_binding or
-    'selectedActionId == action.actionId' not in mobile_title_host_binding):
-    fail.append('mobile_host_exact_object_or_selection_gate_missing')
-if ('issued.remove(action.actionId)' not in mobile_title_host_binding or
-    mobile_title_host_binding.find('issued.remove(action.actionId)') > mobile_title_host_binding.find('menu.activate(')):
-    fail.append('mobile_host_action_not_consumed_before_core_menu')
-if ('revokeRenderedGeneration()' not in mobile_title_host_binding or
-    'menu.present(lastSeasonNumber)' not in mobile_title_host_binding):
-    fail.append('mobile_host_generation_revocation_missing')
-if ('Thread.currentThread() === ownerThread' not in mobile_title_host_binding or
-    'private var closed = false' not in mobile_title_host_binding or
-    'val menuClosed = menu.close()' not in mobile_title_host_binding or
-    'fun isOperational(): Boolean = onOwnerThread() && !closed' not in mobile_title_host_binding):
-    fail.append('mobile_host_thread_or_lifecycle_guard_missing')
-if ('NativeMobileTitleWatchedHostBinding(' in java_text or
-    'NativeMobileTitleWatchedViewAction(' in java_text):
-    fail.append('mobile_title_host_binding_wired_to_synthetic_activity')
-if any(name not in mobile_title_host_binding_test for name in [
-    'hostRenderPublishesFourDisplayModelsWithoutWriting',
-    'exactSemanticViewActionDispatchesAndClearsWholeGeneration',
-    'rawPointerAndLongPressCallbacksNeverImplyHostConsent',
-    'staleOrForgedViewObjectsRevokeCurrentPresentation',
-    'unwatchAcknowledgementPassesOnlyThroughExactIssuedViewAction',
-    'accountDriftAndRejectedDispatchClearHostPresentation',
-    'futureEpisodeFilteringSurvivesRealHostBoundary',
-    'rejectedOrThrowingViewPortPermanentlyPoisonsBinding',
-    'hostOwnerThreadAndCloseRevokeOutstandingCallbacks',
-    'mobileHostCannotRenderAgainWhileAcceptedWriteLacksReadback',
-    'mobileHostOperationalStateDistinguishesFatalFailureFromPendingReadback'
-]):
-    fail.append('native_mobile_title_host_binding_regressions_missing')
-if ('class NativeTvTitleWatchedHostBinding' not in tv_title_host_binding or
-    'interface NativeTvTitleWatchedViewPort' not in tv_title_host_binding or
-    'class NativeTvTitleWatchedViewAction internal constructor' not in tv_title_host_binding):
-    fail.append('native_tv_title_host_binding_missing')
-if ('private val menu = NativeTvTitleWatchedMenu(coordinator, account)' not in tv_title_host_binding or
-    'menu.activate(' not in tv_title_host_binding):
-    fail.append('tv_host_binding_bypasses_canonical_core_menu')
-if ('view.replaceTitleActions(viewActions.toList())' not in tv_title_host_binding or
-    'view.clearTitleActions()' not in tv_title_host_binding):
-    fail.append('tv_host_render_or_clear_port_missing')
-if ('record.viewAction === action' not in tv_title_host_binding or
-    'action.menuFor(bindingSeal)' not in tv_title_host_binding or
-    'focusedActionId == action.actionId' not in tv_title_host_binding):
-    fail.append('tv_host_exact_object_or_focus_gate_missing')
-if ('remoteKey = remoteKey' not in tv_title_host_binding or
-    'focusedActionId = focusedActionId' not in tv_title_host_binding):
-    fail.append('tv_host_remote_confirmation_not_delegated')
-if ('issued.remove(action.actionId)' not in tv_title_host_binding or
-    tv_title_host_binding.find('issued.remove(action.actionId)') > tv_title_host_binding.find('menu.activate(')):
-    fail.append('tv_host_action_not_consumed_before_core_menu')
-if ('revokeRenderedGeneration()' not in tv_title_host_binding or
-    'menu.present(lastSeasonNumber)' not in tv_title_host_binding):
-    fail.append('tv_host_generation_revocation_missing')
-if ('Thread.currentThread() === ownerThread' not in tv_title_host_binding or
-    'private var closed = false' not in tv_title_host_binding or
-    'val menuClosed = menu.close()' not in tv_title_host_binding or
-    'fun isOperational(): Boolean = onOwnerThread() && !closed' not in tv_title_host_binding):
-    fail.append('tv_host_thread_or_lifecycle_guard_missing')
-if ('val focusable: Boolean = true' not in tv_title_host_binding or
-    'val requiresAcknowledgement: Boolean = !watched' not in tv_title_host_binding):
-    fail.append('tv_host_focus_or_destructive_metadata_missing')
-if ('NativeTvTitleWatchedHostBinding(' in java_text or
-    'NativeTvTitleWatchedViewAction(' in java_text):
-    fail.append('tv_title_host_binding_wired_to_synthetic_activity')
-if any(name not in tv_title_host_binding_test for name in [
-    'tvHostRenderPublishesFourFocusableModelsWithoutWriting',
-    'enterOnExactFocusedTvActionDispatchesAndClearsGeneration',
-    'dpadCenterIsTheOnlyAlternateAcceptedTvConfirmation',
-    'focusMismatchAndOtherRemoteKeysFailClosedAndRevoke',
-    'staleOrForgedTvViewObjectsRevokeCurrentPresentation',
-    'tvUnwatchRequiresAcknowledgementOnExactIssuedAction',
-    'tvAccountDriftAndRejectedDispatchClearPresentation',
-    'futureEpisodeFilteringSurvivesTvHostBoundary',
-    'rejectedOrThrowingTvViewPortPermanentlyPoisonsBinding',
-    'clearFailureAfterAppliedTvActionClosesWithoutReplay',
-    'tvHostOwnerThreadAndCloseRevokeOutstandingCallbacks',
-    'tvHostCannotRenderAgainWhileAcceptedWriteLacksReadback',
-    'tvHostOperationalStateDistinguishesFatalFailureFromPendingReadback'
-]):
-    fail.append('native_tv_title_host_binding_regressions_missing')
-if ('class NativeTvTitleWatchedWidgetController' not in tv_title_widget_controller or
-    'class NativeTvTitleWatchedWidget internal constructor' not in tv_title_widget_controller or
-    'class NativeTvTitleWatchedWidgetIntent internal constructor' not in tv_title_widget_controller or
-    'class NativeTvTitleWatchedConfirmation internal constructor' not in tv_title_widget_controller):
-    fail.append('native_tv_title_widget_controller_missing')
-if ('actions.size > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in tv_title_widget_controller or
-    'actions.map { it.actionId }.toSet().size != actions.size' not in tv_title_widget_controller or
-    'it.confirmation.isBlank() || !it.focusable' not in tv_title_widget_controller):
-    fail.append('tv_widget_generation_validation_missing')
-if ('record.widget !== widget' not in tv_title_widget_controller or
-    'widget.actionFor(controllerSeal)' not in tv_title_widget_controller or
-    'focusedActionId != widget.actionId' not in tv_title_widget_controller):
-    fail.append('tv_widget_exact_object_or_focus_gate_missing')
-if ('if (keyAction != KEY_ACTION_UP) return null' not in tv_title_widget_controller or
-    'remoteKey != KEY_ENTER && remoteKey != KEY_DPAD_CENTER' not in tv_title_widget_controller):
-    fail.append('tv_widget_remote_keyup_gate_missing')
-if ('val record = issued.remove(widget.actionId)' not in tv_title_widget_controller or
-    tv_title_widget_controller.find('issued.clear()', tv_title_widget_controller.find('fun consume(')) >
-        tv_title_widget_controller.find('widget.actionFor(controllerSeal)')):
-    fail.append('tv_widget_generation_not_revoked_before_validation')
-if ('Thread.currentThread() === ownerThread' not in tv_title_widget_controller or
-    'fun clear(): Boolean' not in tv_title_widget_controller or
-    'fun close(): Boolean' not in tv_title_widget_controller):
-    fail.append('tv_widget_thread_or_lifecycle_guard_missing')
-if ('confirmableIntent !== intent' not in tv_title_widget_controller or
-    'pendingConfirmation !== confirmation' not in tv_title_widget_controller or
-    '!confirmation.issuedBy(confirmationSeal)' not in tv_title_widget_controller or
-    'fun invalidateConfirmation(): Boolean' not in tv_title_widget_controller):
-    fail.append('tv_widget_confirmation_exact_lease_missing')
-if (tv_title_widget_controller.count('pendingConfirmation = null') != 5 or
-    tv_title_widget_controller.count('confirmableIntent = null') != 5 or
-    tv_title_widget_controller.count(
-        'confirmableIntent = null\n        pendingConfirmation = null'
-    ) != 4):
-    fail.append('tv_widget_confirmation_lifecycle_revocation_missing')
-if ('class AndroidTvTitleWatchedWidgetPort' not in android_tv_title_widget_port or
-    ': NativeTvTitleWatchedViewPort' not in android_tv_title_widget_port or
-    'private val controller = NativeTvTitleWatchedWidgetController()' not in android_tv_title_widget_port):
-    fail.append('actual_android_tv_title_widget_port_missing')
-if ('Looper.myLooper() === Looper.getMainLooper()' not in android_tv_title_widget_port or
-    '!view.hasFocus()' not in android_tv_title_widget_port or
-    'KeyEvent.KEYCODE_ENTER' not in android_tv_title_widget_port or
-    'KeyEvent.KEYCODE_DPAD_CENTER' not in android_tv_title_widget_port):
-    fail.append('android_tv_widget_main_thread_focus_or_remote_gate_missing')
-if ('.setPositiveButton("Confirm")' not in android_tv_title_widget_port or
-    '.setNegativeButton("Cancel")' not in android_tv_title_widget_port or
-    '.setOnCancelListener { resolve(false) }' not in android_tv_title_widget_port):
-    fail.append('android_tv_unwatch_confirmation_or_cancel_gate_missing')
-if ('result.intent.action' not in android_tv_title_widget_port or
-    'result.intent.focusedActionId' not in android_tv_title_widget_port or
-    'result.intent.remoteKey' not in android_tv_title_widget_port or
-    'setOnClickListener' in android_tv_title_widget_port):
-    fail.append('android_tv_widget_exact_callback_or_remote_only_gate_missing')
-if ('activeConfirmationDialog' not in android_tv_title_widget_port or
-    'controller.invalidateConfirmation()' not in android_tv_title_widget_port or
-    'controller.beginConfirmation(intent)' not in android_tv_title_widget_port or
-    'controller.resolveConfirmation(' not in android_tv_title_widget_port or
-    'dialog.dismiss()' not in android_tv_title_widget_port):
-    fail.append('android_tv_stale_confirmation_dialog_gate_missing')
-if ('AndroidTvTitleWatchedWidgetPort(' in java_text or
-    'NativeTvTitleWatchedWidgetController(' in java_text):
-    fail.append('android_tv_title_widget_port_wired_to_synthetic_activity')
-if any(name not in tv_title_widget_controller_test for name in [
-    'widgetControllerBuildsFocusableModelsWithoutActivation',
-    'actionUpEnterReturnsExactIntentAndRevokesWidgetGeneration',
-    'actionUpDpadCenterReturnsExactIntent',
-    'keyDownDoesNotConsumeWidgetGeneration',
-    'focusMismatchAndOtherRemoteKeyRevokeWidgetGeneration',
-    'staleAndForgedWidgetObjectsCannotActivate',
-    'malformedOrNonFocusableWidgetGenerationFailsClosed',
-    'widgetOwnerThreadClearAndCloseFailClosed',
-    'destructiveConfirmationLeaseReturnsExactIntentOnce',
-    'replacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease',
-    'forgedAndForeignConfirmationCallbacksPreserveOwnerLease',
-    'clearAndCloseRevokePendingConfirmations'
-]):
-    fail.append('native_tv_title_widget_controller_regressions_missing')
-if ('class NativeMobileTitleWatchedWidgetController' not in mobile_title_widget_controller or
-    'class NativeMobileTitleWatchedWidget internal constructor' not in mobile_title_widget_controller or
-    'class NativeMobileTitleWatchedWidgetIntent internal constructor' not in mobile_title_widget_controller or
-    'class NativeMobileTitleWatchedConfirmation internal constructor' not in mobile_title_widget_controller):
-    fail.append('native_mobile_title_widget_controller_missing')
-if ('actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in mobile_title_widget_controller or
-    'actions.map { it.actionId }.toSet().size != actions.size' not in mobile_title_widget_controller or
-    'it.confirmation.isBlank()' not in mobile_title_widget_controller):
-    fail.append('mobile_widget_generation_validation_missing')
-if ('record.widget !== widget' not in mobile_title_widget_controller or
-    'widget.actionFor(controllerSeal)' not in mobile_title_widget_controller or
-    'selectedActionId != widget.actionId' not in mobile_title_widget_controller):
-    fail.append('mobile_widget_exact_object_or_selection_gate_missing')
-if ('semanticEvent != NativeMobileTitleWatchedMenu.SEMANTIC_ACTIVATION' not in mobile_title_widget_controller):
-    fail.append('mobile_widget_semantic_activation_gate_missing')
-if ('val record = issued.remove(widget.actionId)' not in mobile_title_widget_controller or
-    mobile_title_widget_controller.find('issued.clear()', mobile_title_widget_controller.find('fun consume(')) >
-        mobile_title_widget_controller.find('widget.actionFor(controllerSeal)')):
-    fail.append('mobile_widget_generation_not_revoked_before_validation')
-if ('Thread.currentThread() === ownerThread' not in mobile_title_widget_controller or
-    'fun clear(): Boolean' not in mobile_title_widget_controller or
-    'fun close(): Boolean' not in mobile_title_widget_controller):
-    fail.append('mobile_widget_thread_or_lifecycle_guard_missing')
-if ('confirmableIntent !== intent' not in mobile_title_widget_controller or
-    'pendingConfirmation !== confirmation' not in mobile_title_widget_controller or
-    '!confirmation.issuedBy(confirmationSeal)' not in mobile_title_widget_controller or
-    'fun invalidateConfirmation(): Boolean' not in mobile_title_widget_controller):
-    fail.append('mobile_widget_confirmation_exact_lease_missing')
-if (mobile_title_widget_controller.count('pendingConfirmation = null') != 5 or
-    mobile_title_widget_controller.count('confirmableIntent = null') != 5 or
-    mobile_title_widget_controller.count(
-        'confirmableIntent = null\n        pendingConfirmation = null'
-    ) != 4):
-    fail.append('mobile_widget_confirmation_lifecycle_revocation_missing')
-if ('class AndroidMobileTitleWatchedWidgetPort' not in android_mobile_title_widget_port or
-    ': NativeMobileTitleWatchedViewPort' not in android_mobile_title_widget_port or
-    'private val controller = NativeMobileTitleWatchedWidgetController()' not in android_mobile_title_widget_port):
-    fail.append('actual_android_mobile_title_widget_port_missing')
-if ('Looper.myLooper() === Looper.getMainLooper()' not in android_mobile_title_widget_port or
-    'setOnClickListener' not in android_mobile_title_widget_port or
-    'setOnLongClickListener { true }' not in android_mobile_title_widget_port):
-    fail.append('android_mobile_widget_main_thread_or_semantic_click_gate_missing')
-if ('.setPositiveButton("Confirm")' not in android_mobile_title_widget_port or
-    '.setNegativeButton("Cancel")' not in android_mobile_title_widget_port or
-    '.setOnCancelListener { resolve(false) }' not in android_mobile_title_widget_port):
-    fail.append('android_mobile_unwatch_confirmation_or_cancel_gate_missing')
-if ('result.intent.action' not in android_mobile_title_widget_port or
-    'result.intent.selectedActionId' not in android_mobile_title_widget_port or
-    'result.intent.semanticEvent' not in android_mobile_title_widget_port or
-    'setOnTouchListener' in android_mobile_title_widget_port):
-    fail.append('android_mobile_widget_exact_callback_or_raw_touch_gate_missing')
-if ('activeConfirmationDialog' not in android_mobile_title_widget_port or
-    'controller.invalidateConfirmation()' not in android_mobile_title_widget_port or
-    'controller.beginConfirmation(intent)' not in android_mobile_title_widget_port or
-    'controller.resolveConfirmation(' not in android_mobile_title_widget_port or
-    'dialog.dismiss()' not in android_mobile_title_widget_port):
-    fail.append('android_mobile_stale_confirmation_dialog_gate_missing')
-if ('AndroidMobileTitleWatchedWidgetPort(' in java_text or
-    'NativeMobileTitleWatchedWidgetController(' in java_text):
-    fail.append('android_mobile_title_widget_port_wired_to_synthetic_activity')
-if any(name not in mobile_title_widget_controller_test for name in [
-    'mobileWidgetControllerBuildsDisplayModelsWithoutActivation',
-    'semanticMobileClickReturnsExactIntentAndRevokesGeneration',
-    'nonSemanticMobileEventNeverActivatesAndRevokesGeneration',
-    'mobileSelectionMismatchRevokesWidgetGeneration',
-    'staleAndForgedMobileWidgetObjectsCannotActivate',
-    'malformedMobileWidgetGenerationFailsClosed',
-    'mobileWidgetPreservesDestructiveAcknowledgementMetadata',
-    'mobileWidgetOwnerThreadClearAndCloseFailClosed',
-    'destructiveMobileConfirmationLeaseReturnsExactIntentOnce',
-    'mobileReplacementInvalidatesStaleConfirmationWithoutRevokingCurrentLease',
-    'forgedAndForeignMobileConfirmationCallbacksPreserveOwnerLease',
-    'mobileClearAndCloseRevokePendingConfirmations'
-]):
-    fail.append('native_mobile_title_widget_controller_regressions_missing')
-if ('class NativeMobileTitleWatchedViewPortRelay : NativeMobileTitleWatchedViewPort' not in title_watched_view_port_relay or
-    'class NativeTvTitleWatchedViewPortRelay : NativeTvTitleWatchedViewPort' not in title_watched_view_port_relay):
-    fail.append('mobile_or_tv_title_view_port_relay_missing')
-if (title_watched_view_port_relay.count('if (delegate != null || view === this) return poison()') != 2 or
-    title_watched_view_port_relay.count('delegate = view') != 2):
-    fail.append('title_view_port_relay_one_time_bind_missing')
-if (title_watched_view_port_relay.count('Thread.currentThread() === ownerThread') != 2 or
-    title_watched_view_port_relay.count('fun close(): Boolean') != 2):
-    fail.append('title_view_port_relay_thread_or_close_guard_missing')
-if (title_watched_view_port_relay.count('if (!accepted) return poison()') != 4 or
-    title_watched_view_port_relay.count('catch (_: Exception)') != 2 or
-    title_watched_view_port_relay.count('catch (_: LinkageError)') != 2):
-    fail.append('title_view_port_relay_rejection_or_exception_poison_missing')
-if ('class AndroidMobileTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners or
-    'class AndroidTvTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners):
-    fail.append('actual_android_title_screen_composition_owners_missing')
-if (android_title_watched_screen_owners.count('Looper.myLooper() !== Looper.getMainLooper()') != 4 or
-    android_title_watched_screen_owners.count('Thread.currentThread() === ownerThread') != 2):
-    fail.append('android_title_screen_main_owner_thread_gate_missing')
-if ('NativeMobileTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
-    'NativeTvTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
-    'private var ready = relay.bind(port)' not in android_title_watched_screen_owners):
-    fail.append('android_title_screen_host_widget_composition_missing')
-if ('import org.pss.stremio.tv.CanonicalWatchedStatePort' not in android_title_watched_screen_owners or
-    android_title_watched_screen_owners.count('account: CanonicalWatchedStatePort') != 4 or
-    'account: StremioAccountPort' in android_title_watched_screen_owners):
-    fail.append('android_title_screen_canonical_readback_port_not_mandatory')
-if ('class SessionBoundCanonicalWatchedAccountAdapter' not in canonical_watched_account_adapter or
-    ': CanonicalWatchedStatePort' not in canonical_watched_account_adapter or
-    'interface CanonicalWatchedAccountHostPort' not in canonical_watched_account_adapter):
-    fail.append('session_bound_canonical_watched_account_adapter_missing')
-if ('val before = host.sessionEpoch()' not in canonical_watched_account_adapter or
-    'raw.sessionEpoch != before' not in canonical_watched_account_adapter or
-    'val after = host.sessionEpoch()' not in canonical_watched_account_adapter or
-    'after != before' not in canonical_watched_account_adapter):
-    fail.append('canonical_account_epoch_sandwich_missing')
-if ('raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.watchedVideoIds.toList())' not in
-        canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(it.toList())' not in canonical_watched_account_adapter or
-    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_host_collections_not_detached')
-if ('val resumeVideoId: String?' not in canonical_watched_account_adapter or
-    'val resumeTimeOffset: Long' not in canonical_watched_account_adapter or
-    'raw.resumeTimeOffset < 0L' not in canonical_watched_account_adapter or
-    'resumeVideoId = raw.resumeVideoId' not in canonical_watched_account_adapter or
-    'resumeTimeOffset = raw.resumeTimeOffset' not in canonical_watched_account_adapter or
-    'malformedResumeReadbackFailsClosedBeforeDispatch' not in canonical_watched_account_adapter_test):
-    fail.append('canonical_account_core_resume_readback_contract_missing')
-if ('message.keys != setOf("action", "args")' not in canonical_watched_account_adapter or
-    '"MarkAsWatched"' not in canonical_watched_account_adapter or
-    '"MarkSeasonAsWatched"' not in canonical_watched_account_adapter or
-    'else -> return null' not in canonical_watched_account_adapter):
-    fail.append('canonical_account_dispatch_not_narrowly_allowlisted')
-adapter_dispatch = canonical_watched_account_adapter[
-    canonical_watched_account_adapter.find('override fun dispatch('):
-    canonical_watched_account_adapter.find('fun close(): Boolean')
-]
-if ('latestLease = null' not in adapter_dispatch or
-    adapter_dispatch.find('latestLease = null') >
-        adapter_dispatch.find('host.dispatchTitleWatched(dispatchExpectation, command)')):
-    fail.append('canonical_account_lease_not_consumed_before_dispatch')
-if ('data class CanonicalWatchedDispatchExpectation(' not in canonical_watched_account_adapter or
-    'val snapshot: SeriesAccountSnapshot' not in canonical_watched_account_adapter or
-    'val readback: CanonicalWatchedStateReadback' not in canonical_watched_account_adapter or
-    'host.dispatchTitleWatched(dispatchExpectation, command)' not in canonical_watched_account_adapter or
-    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_atomic_complete_state_dispatch_missing')
-if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
-    'private val lifecycleLock = Any()' not in canonical_watched_account_adapter or
-    canonical_watched_account_adapter.count('synchronized(lifecycleLock)') != 4 or
-    '@Volatile\n    private var closed = false' not in canonical_watched_account_adapter or
-    'fun close(): Boolean = synchronized(lifecycleLock)' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_owner_thread_or_close_missing')
-if ('SessionBoundCanonicalWatchedAccountAdapter(' in java_text or
-    'CanonicalWatchedAccountHostPort' in java_text):
-    fail.append('canonical_account_adapter_wired_to_synthetic_activity')
-if ('latestLease = null\n        val observation = observeOrNull()' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_failed_refresh_retains_snapshot_lease')
-if ('if (observation == null || observation.identity != expected.identity) {' not in
-        canonical_watched_account_adapter or
-    'latestLease = null\n                return@synchronized null' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_failed_readback_retains_snapshot_lease')
-if ('val expected = latestLease ?: return@synchronized false\n        latestLease = null' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_dispatch_preconditions_retain_snapshot_lease')
-if ('private data class DispatchLease(' not in canonical_watched_account_adapter or
-    'latestLease = DispatchLease(observation.identity, observation.readback)' not in
-        canonical_watched_account_adapter or
-    'observation.readback != expected.readback' not in canonical_watched_account_adapter or
-    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState' not in
-        canonical_watched_account_adapter_test or
-    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_watched_resume_dispatch_lease_missing')
-if any(name not in canonical_watched_account_adapter_test for name in [
-    'detachesSnapshotAndWatchedIdsFromHostCollections',
-    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease',
-    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState',
-    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch',
-    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift',
-    'watchedReadbackRequiresMatchingObservedSnapshot',
-    'failedSnapshotRefreshCannotReviveEarlierLease',
-    'mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba',
-    'failedDispatchPreconditionsConsumeLeaseBeforeIdentityAba',
-    'dispatchAcceptsOnlyExactTitleWatchedCommands',
-    'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall',
-    'dispatchBindsHostCallToObservedSessionEpoch',
-    'sessionEpochDriftFailsClosed',
-    'closedAdapterNeverTouchesHostCallbacks',
-    'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess',
-    'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle',
-    'externalScreenConstructionFailuresAreContainedWithoutOwnership',
-    'foreignThreadCloseRevokesWithoutHostAccess',
-    'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes',
-    'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess',
-    'externalScreenAccountLeaseNeverOwnsCallerPort',
-    'screenOwnedLeaseTerminationRequestIsStickyAndRevokesAccount',
-    'externalScreenLeaseTerminationNeverOwnsCallerPort',
-    'throwingHostCollectionsAndCallbacksFailClosed'
-]):
-    fail.append('canonical_account_adapter_regressions_missing')
-if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
-    android_title_watched_screen_owners.count('val outcome = host.activate(') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = outcome') != 2):
-    fail.append('android_title_screen_one_outcome_mailbox_missing')
-if (android_title_watched_screen_owners.count('fun consumeOutcome()') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = null') < 8 or
-    android_title_watched_screen_owners.count(
-        'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
-    ) != 2 or
-    android_title_watched_screen_owners.count('return outcome') != 4):
-    fail.append('android_title_screen_outcome_consumption_missing')
-if (android_title_watched_screen_owners.count('val hostClosed = host.close()') != 2 or
-    android_title_watched_screen_owners.count('val relayClosed = relay.close()') != 2):
-    fail.append('android_title_screen_lifecycle_close_missing')
-if (android_title_watched_screen_owners.count(
-        'val rendered = host.render(seasonNumber)'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'if (!rendered && !host.isOperational()) poison()'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'if (!host.isOperational()) {\n            ownedAccountLease.requestTermination()'
-    ) != 2):
-    fail.append('android_title_screen_fatal_host_liveness_not_propagated')
-if (android_title_watched_screen_owners.count('accountHost: CanonicalWatchedAccountHostPort') != 2 or
-    android_title_watched_screen_owners.count(
-        'CanonicalWatchedScreenConstructionBoundary.owned(accountHost)'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'CanonicalWatchedScreenConstructionBoundary.external'
-    ) != 2):
-    fail.append('android_title_screen_owned_account_host_overloads_missing')
-if ('internal object CanonicalWatchedScreenConstructionBoundary' not in
-        canonical_watched_account_adapter or
-    'if (owner == null) account.close()' not in canonical_watched_account_adapter or
-    'catch (_: Exception)' not in canonical_watched_account_adapter or
-    'catch (_: LinkageError)' not in canonical_watched_account_adapter):
-    fail.append('android_title_screen_construction_failure_boundary_missing')
-if ('class CanonicalWatchedScreenOwnedAccountLease' not in
-        canonical_watched_account_adapter or
-    'private val terminationRequested = AtomicBoolean(false)' not in
-        canonical_watched_account_adapter or
-    'private val revoked = AtomicBoolean(false)' not in
-        canonical_watched_account_adapter or
-    'terminationRequested.set(true)' not in canonical_watched_account_adapter or
-    'fun isTerminationRequested(): Boolean = terminationRequested.get()' not in
-        canonical_watched_account_adapter or
-    'if (!revoked.compareAndSet(false, true)) return true' not in
-        canonical_watched_account_adapter):
-    fail.append('android_title_screen_owned_account_termination_lease_missing')
-if android_title_watched_screen_owners.count(
-        'private val ownedAccount: SessionBoundCanonicalWatchedAccountAdapter?'
-    ) != 2:
-    fail.append('android_title_screen_owned_adapter_not_retained')
-if (android_title_watched_screen_owners.count('if (!ready) {') != 2 or
-    android_title_watched_screen_owners.count(
-        'private val ownedAccountLease = CanonicalWatchedScreenOwnedAccountLease(ownedAccount)'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'ownedAccountLease.requestTermination()'
-    ) != 12 or
-    android_title_watched_screen_owners.count(
-        'ownedAccountLease.isTerminationRequested()'
-    ) != 6):
-    fail.append('android_title_screen_owned_adapter_failure_or_close_missing')
-if (android_title_watched_screen_owners.count(
-        'val accountClosed = ownedAccountLease.requestTermination()'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'return hostClosed && relayClosed && accountClosed'
-    ) != 2):
-    fail.append('android_title_screen_close_does_not_revoke_owned_adapter')
-if android_title_watched_screen_owners.count(
-        'if (!onMainOwnerThread()) {\n            ownedAccountLease.requestTermination()'
-    ) != 4:
-    fail.append('android_title_screen_foreign_teardown_or_callback_not_contained')
-if (android_title_watched_screen_owners.count(
-        'if (ownedAccountLease.isTerminationRequested()) {\n            poison()'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
-    ) != 2):
-    fail.append('android_title_screen_requested_termination_not_cleaned_on_owner_thread')
-if any(name in java_text for name in [
-        'AndroidMobileTitleWatchedScreenOwner',
-        'NativeMobileTitleWatchedViewPortRelay',
-        'NativeTvTitleWatchedViewPortRelay'
-    ]):
-    fail.append('unreviewed_title_screen_surface_wired_to_tv_activity')
-if ('AndroidTvTitleWatchedScreenOwner.create(' not in java_text or
-    'createdWatched.render(1)' not in java_text or
-    'current.consumeOutcome()' not in java_text):
-    fail.append('tv_title_action_lab_composition_or_mailbox_missing')
-if ('SyntheticTitleWatchedAccountHost()' not in java_text or
-    'watchedHost.watchedIds()' not in java_text or
-    'current.render(1)' not in java_text):
-    fail.append('tv_title_action_synthetic_readback_or_rerender_missing')
-if ('watchedOwner?.close()' not in java_text or
-    'watchedOwner = null' not in java_text or
-    'ui.removeCallbacks(refresh)' not in java_text):
-    fail.append('tv_title_action_lab_lifecycle_close_missing')
-if ('local in-memory fixture only' not in java_text or
-    'cannot read' not in java_text or
-    'change a Stremio account' not in java_text):
-    fail.append('tv_title_action_synthetic_disclosure_missing')
-if any(name in java_text for name in [
-        'SessionBoundCanonicalWatchedAccountAdapter(',
-        'NativeTvTitleWatchedHostBinding(',
-        'NativeTvTitleWatchedViewPortRelay(',
-        'CanonicalWatchedStatePort',
-        'CanonicalWatchedAccountHostPort'
-    ]):
-    fail.append('tv_activity_bypasses_reviewed_screen_owner')
-if ('NativeTvTitleWatchedOutcome.APPLIED' not in java_text or
-    'DISPATCHED_PENDING_READBACK' not in java_text or
-    'NativeTvTitleWatchedOutcome.REFUSED' not in java_text):
-    fail.append('tv_title_action_outcome_handling_missing')
-if ('tvHostBindingAppliesOnlyLocalSyntheticSeriesState' not in
-        synthetic_watched_host_test or
-    'binding.activate(selected, selected.actionId, "ENTER")' not in
-        synthetic_watched_host_test):
-    fail.append('tv_title_action_synthetic_host_composition_regression_missing')
-if any(name not in title_watched_view_port_relay_test for name in [
-    'mobileRelayRefusesBeforeBindingAndDelegatesAfterBinding',
-    'mobileRelayCloseClearsAndPermanentlyRevokes',
-    'mobileRelayRejectingPortPermanentlyPoisons',
-    'mobileRelayThrowingPortPermanentlyPoisons',
-    'tvRelayRefusesBeforeBindingAndDelegatesAfterBinding',
-    'tvRelayCloseClearsAndPermanentlyRevokes',
-    'tvRelayRejectingPortPermanentlyPoisons',
-    'tvRelayThrowingPortPermanentlyPoisons',
-    'foreignThreadCannotTakeOverOrCloseEitherRelay'
-]):
-    fail.append('native_title_view_port_relay_regressions_missing')
-if 'SnapshotBoundNativeSeekPort' not in java_text or 'SnapshotBoundNativeSeekPort' not in ports:
-    fail.append('atomic_enough_main_looper_seek_guard_missing')
-if ('watchedButtons' in java_text or
-    'watched (unavailable)' in java_text):
-    fail.append('stale_disabled_tv_watched_placeholders_present')
-if 'StoryOrderContract.presentation' not in java_text or 'StoryOrderContract.next' not in java_text:
-    fail.append('story_order_not_bound_to_focusable_local_ui')
-if 'storyOrderToggle = button(' not in java_text or 'isFocusable = true' not in java_text:
-    fail.append('story_order_tv_focus_path_missing')
-if 'canonical.any { it.season > 0 && it.id !in seen }' not in story:
-    fail.append('story_order_regular_episode_completeness_guard_missing')
-if 'NextStoryDecision.UseExistingContinuation' not in story or 'byId[id]' not in story:
-    fail.append('story_order_stable_identity_or_fail_closed_continuation_missing')
-if 'assertSame(narrativeSpecial' not in story_test or 'missingRegularEpisodeFailsClosed' not in story_test:
-    fail.append('story_order_identity_regression_missing')
-if (('private fun <T> snapshotList(value: List<T>, maximum: Int)' not in story) or
-    ('repeat(expectedSize)' not in story) or
-    ('if (iterator.hasNext()) return null' not in story) or
-    ('Collections.unmodifiableList(detached)' not in story) or
-    ('INPUT_SNAPSHOT_FAILED' not in story) or
-    ('snapshotHints(hints) ?: return canonicalSnapshot' not in story) or
-    ('assertEquals(canonical, fallback)' not in story_test) or
-    ('fallback !== canonical' not in story_test)):
-    fail.append('story_order_host_collection_snapshot_guard_missing')
-if any(name not in story_test for name in [
-    'callerMutationCannotChangeDetachedStoryPresentation',
-    'changingCardinalityFailsClosedWithoutEscaping',
-    'throwingCanonicalCollectionFailsClosedWithoutEscaping'
-]):
-    fail.append('story_order_host_collection_snapshot_regressions_missing')
-if any(token not in mobile_story for token in [
-    'class MobileStoryOrderController',
-    'StoryOrderContract.resolve(canonicalSnapshot, hints)',
-    'snapshotWatchedIds(watchedStableIds, canonicalSnapshot)',
-    'watched = watchedSnapshot!!.contains(episode.id)',
-    'record.row !== row',
-    'semanticEvent != SEMANTIC_SELECTION',
-    'activeEpisodes.indexOfFirst { it.id == currentVideoId }'
-]):
-    fail.append('android_mobile_story_order_controller_missing')
-if any(name not in mobile_story_test for name in [
-    'mobileStoryModePresentsNarrativeSpecialWithStableIdentity',
-    'malformedHintsFallBackToCanonicalAndDisableStoryNext',
-    'semanticSelectionRequiresExactIssuedRowAndStableId',
-    'rawPointerAndForgedRowsNeverAuthorizeSelection',
-    'watchedMarkersStayBoundToStableIdsAcrossPresentationOrder',
-    'mobileNextUsesPresentedStableIdentityAndSurvivesCallerMutation',
-    'ownerThreadAndCloseFailClosed'
-]):
-    fail.append('android_mobile_story_order_regressions_missing')
-if any(token not in mobile_story_host for token in [
-    'class MobileStoryOrderViewAction internal constructor',
-    'interface MobileStoryOrderViewPort',
-    'class MobileStoryOrderHostBinding',
-    'const val MAX_PRESENTED_ROWS = 500',
-    'record.action === action',
-    'action.rowFor(bindingSeal)',
-    'semanticEvent == MobileStoryOrderController.SEMANTIC_SELECTION',
-    'watched = row.watched',
-    'view.replaceStoryRows(mode, actions.toList())',
-    'view.clearStoryRows()'
-]):
-    fail.append('android_mobile_story_order_host_binding_missing')
-if any(name not in mobile_story_host_test for name in [
-    'hostRendersStoryRowsWithoutSelecting',
-    'hostPreservesWatchedMarkersByStableIdAcrossViewReplacement',
-    'exactSemanticActionReturnsOriginalCanonicalAndRevokesGeneration',
-    'canonicalModeAndMalformedHintsPreserveOrdinaryRows',
-    'rawStaleAndForgedActionsFailClosed',
-    'viewReplacementAndClearFailuresPoisonHost',
-    'hostNextUsesPresentedStoryIdentityOnly',
-    'oversizedMobilePresentationFailsClosedBeforeView',
-    'hostOwnerThreadAndCloseRevokeOutstandingActions'
-]):
-    fail.append('android_mobile_story_order_host_regressions_missing')
-if any(token not in android_mobile_story_widget_port for token in [
-    'class AndroidMobileStoryOrderWidgetPort',
-    'Looper.myLooper() === Looper.getMainLooper()',
-    'createModeButton(mode)',
-    '"Show season order"',
-    '"Show story order"',
-    '"  â€¢ Watched"',
-    'setOnLongClickListener { true }',
-    'MobileStoryOrderController.SEMANTIC_SELECTION',
-    'container.addView(view)'
-]):
-    fail.append('android_mobile_story_order_widget_port_missing')
-if ('setOnTouchListener' in android_mobile_story_widget_port or
-    'MotionEvent' in android_mobile_story_widget_port):
-    fail.append('android_mobile_story_order_raw_touch_admission')
-if any(token not in android_mobile_story_screen_owner for token in [
-    'class AndroidMobileStoryOrderScreenOwner private constructor',
-    'Looper.myLooper() !== Looper.getMainLooper()',
-    'private var pendingSelection: CanonicalEpisode? = null',
-    'watchedStableIds: Set<String>',
-    'private val host = MobileStoryOrderHostBinding(',
-    'fun consumeSelection(): CanonicalEpisode?',
-    'pendingSelection != null',
-    'return host.next(currentVideoId)'
-]):
-    fail.append('android_mobile_story_order_screen_owner_missing')
-if any(name in java_text for name in [
-    'MobileStoryOrderHostBinding',
-    'AndroidMobileStoryOrderWidgetPort',
-    'AndroidMobileStoryOrderScreenOwner'
-]):
-    fail.append('android_mobile_story_order_wired_to_synthetic_activity')
-if any(token in android_mobile_story_screen_owner+android_mobile_story_widget_port for token in [
-    'ExoPlayer',
-    'StremioAccountPort',
-    'http://',
-    'https://',
-    'getAuthKey',
-    'System.getenv'
-]):
-    fail.append('android_mobile_story_order_ui_crosses_player_account_or_network_boundary')
-if 'private val TERMINAL' not in recovery or 'private val RETRYABLE' not in recovery:
-    fail.append('classification_first_authority_sets_missing')
-if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
-    fail.append('exact_playback_delegation_missing')
-if 'observation?.attemptedRecoveries == null' not in recovery or 'recoveryContextId != value.currentContextId' not in recovery:
-    fail.append('bounded_context_ledger_gate_missing')
-if (('private fun snapshotAttemptHistory(value: List<String>?)' not in recovery) or
-    ('val history = snapshotAttemptHistory(value.attemptedRecoveries) ?: return null' not in recovery) or
-    ('repeat(expectedSize) { index ->' not in recovery) or
-    ('recoveryHistoryIsSnapshottedOnceAndFailuresFailClosed' not in recovery_test)):
-    fail.append('native_recovery_history_single_snapshot_missing')
-if 'terminalClassificationsCannotBeBypassedByPlayerCapabilities' not in recovery_test:
-    fail.append('terminal_composition_regression_missing')
-if 'dolbyVisionProfileSevenRecoveryIsOrderedAndNeverLoops' not in recovery_test:
-    fail.append('dolby_vision_recovery_order_regression_missing')
-if 'data class SanitisedStreamFailureFacts' not in classifier or 'object NativeStreamFailureClassifier' not in classifier:
-    fail.append('native_sanitised_stream_classifier_missing')
-if 'contractVersion = 1' not in classifier or 'rawLogExportAllowed = false' not in classifier:
-    fail.append('native_classifier_preservation_envelope_missing')
-if classifier.find('episodeAdvanced && !value.userRequestedNextEpisode') > classifier.find('if (value.playbackHealthEligible)'):
-    fail.append('native_classifier_terminal_order_weakened')
-if 'delegate_to_bounded_playback_recovery' not in classifier or 'sameEpisodeRetryCount' not in classifier:
-    fail.append('native_classifier_delegation_or_retry_budget_missing')
-if any(name not in classifier_test for name in ['invalidSanitisedFactsFailClosed','terminalEpisodeResourceContainerAndDecoderStopsWinBeforeDelegation','providerSourceAndTransportOwnExactlyOneSameEpisodeRetry','exactPlaybackDelegationOccursOnlyAfterClassificationClears']):
-    fail.append('native_classifier_contract_regressions_missing')
-if 'classifierOutputComposesWithNativeBudgetWithoutParallelRetry' not in classifier_test or 'NativePlaybackRecoveryPolicy.plan' not in classifier_test:
-    fail.append('native_classifier_policy_composition_regression_missing')
-if 'object NativeMedia3FailureIntake' not in media3_intake or 'errorCode: Int' not in media3_intake:
-    fail.append('media3_numeric_failure_intake_missing')
-if 'httpStatus = null' not in media3_intake or 'playbackHealthEligible = false' not in media3_intake:
-    fail.append('media3_intake_invents_http_or_playback_recovery')
-if 'error.message' in java_text+media3_intake or 'error.cause' in java_text+media3_intake or 'error: PlaybackException' in media3_intake:
-    fail.append('media3_raw_exception_boundary_exposed')
-if 'NativeMedia3FailureIntake.classify(error.errorCode)' not in java_text:
-    fail.append('media3_player_error_not_bound_to_sanitised_intake')
-if any(name not in media3_intake_test for name in ['networkSignalsMapToOneBoundedTransportRetry','genericHttpErrorNeverInventsResponseStatusOrCredentialFailure','parserSignalsStopWithoutInventingMatroskaEvidence','decoderAudioAndDrmSignalsRemainTerminal','unrequestedEpisodeAdvanceWinsBeforeRetryableTransport']):
-    fail.append('media3_failure_intake_regressions_missing')
-if 'class NativeMedia3RetryActuator' not in media3_retry_actuator or 'interface NativeMedia3RetryPort' not in media3_retry_actuator:
-    fail.append('media3_retry_actuator_boundary_missing')
-if ('NativeMedia3FailureIntake.sanitise(' not in media3_retry_actuator or
-    'NativePlaybackRecoveryPolicy.plan(facts = facts, observation = null)' not in media3_retry_actuator):
-    fail.append('media3_retry_not_composed_through_current_classifier_policy')
-snapshot_class=media3_retry_actuator[
-    media3_retry_actuator.find('data class NativeMedia3RetrySnapshot'):
-    media3_retry_actuator.find('interface NativeMedia3RetryPort')
-]
-if 'sameEpisodeRetryCount' in snapshot_class:
-    fail.append('media3_retry_snapshot_exposes_caller_controlled_attempt_count')
-if ('class NativeMedia3RetryBudget private constructor' not in media3_retry_actuator or
-    'private val budget: NativeMedia3RetryBudget' not in media3_retry_actuator):
-    fail.append('media3_episode_scoped_retry_budget_missing')
-if ('internal fun attemptCount(value: NativeMedia3RetrySnapshot): Int?' not in media3_retry_actuator or
-    'val sameEpisodeRetryCount = budget.attemptCount(lease) ?: return null' not in media3_retry_actuator or
-    'sameEpisodeRetryCount = sameEpisodeRetryCount' not in media3_retry_actuator):
-    fail.append('media3_retry_attempt_count_not_owned_by_shared_budget')
-if ('if (!budget.reserve(lease)) return null' not in media3_retry_actuator or
-    '!budget.contains(prepared.lease)' not in media3_retry_actuator):
-    fail.append('media3_retry_not_bound_to_shared_episode_budget')
-if ('issuedEpisodeBudgets' in media3_retry_actuator or
-    'MAX_EPISODE_BUDGETS' in media3_retry_actuator):
-    fail.append('media3_retry_actuator_local_budget_reintroduced')
-budget_class=media3_retry_actuator[
-    media3_retry_actuator.find('class NativeMedia3RetryBudget'):
-    media3_retry_actuator.find('/**\n * Binds the numeric-only Media3 intake')
-]
-if ('ownerThread = Thread.currentThread()' not in budget_class or
-    'Thread.currentThread() === ownerThread' not in budget_class or
-    'fun close(): Boolean' not in budget_class or
-    'fun reset' in budget_class):
-    fail.append('media3_retry_budget_thread_lifecycle_or_reset_guard_missing')
-actuator_close=media3_retry_actuator[
-    media3_retry_actuator.find('fun close(): Boolean', media3_retry_actuator.find('class NativeMedia3RetryActuator')):
-    media3_retry_actuator.find('private fun trustedTransportRetryPlan')
-]
-if 'budget.close()' in actuator_close:
-    fail.append('media3_actuator_close_resets_episode_budget')
-if (media3_retry_actuator.count('catch (_: Exception)') < 2 or
-    media3_retry_actuator.count('catch (_: LinkageError)') < 2):
-    fail.append('media3_retry_port_exception_boundary_missing')
-if any(name not in media3_retry_actuator_test for name in [
-    'firstTransportFailureExecutesOnceAndReservesEpisodeBudget',
-    'repeatedPreparationCannotMintAnotherAttemptBeforeOrAfterExecution',
-    'rejectedPortExecutionStillConsumesSameEpisodeBudget',
-    'finalSnapshotDriftRefusesAndBudgetStaysReserved',
-    'episodeBudgetCannotResetThroughGenerationOrSourceChange',
-    'terminalAndUnknownMedia3CodesNeverPrepare',
-    'episodeAdvanceAndInvalidStateFailClosed',
-    'preparedLeaseCannotCrossActuatorInstance',
-    'ownerThreadAndCloseRevokeOutstandingLeaseAndFutureUse',
-    'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption',
-    'sharedBudgetSurvivesActuatorCloseAndReplacement',
-    'retrySnapshotExposesNoCallerControlledAttemptCounter',
-    'budgetIdentityThreadAndLifecycleFailClosed'
-]):
-    fail.append('media3_retry_actuator_regressions_missing')
-if 'NativeMedia3RetryActuator(' in java_text:
-    fail.append('media3_retry_actuator_wired_without_live_host_review')
-if 'class ClassifiedStreamFailure internal constructor' not in recovery or 'private val provenanceSeal: Any' not in recovery or 'data class ClassifiedStreamFailure' in recovery:
-    fail.append('classifier_result_not_opaque_or_copy_safe')
-if 'NativeStreamFailureClassifier.isAuthentic(value)' not in recovery or 'value.wasIssuedBy(CLASSIFIER_SEAL)' not in classifier:
-    fail.append('classifier_authenticity_not_enforced')
-if 'facts: SanitisedStreamFailureFacts?' not in recovery or 'val classification = NativeStreamFailureClassifier.classify(facts)' not in recovery:
-    fail.append('policy_does_not_reclassify_current_facts')
-if 'facts: SanitisedStreamFailureFacts?' not in actuator or 'NativePlaybackRecoveryPolicy.plan(facts, observation)' not in actuator or 'classification: ClassifiedStreamFailure?' in actuator:
-    fail.append('actuator_accepts_preclassified_decision')
-if any(name not in classifier_test+recovery_test+actuator_test for name in ['classifierAuthenticityCannotBeRecreatedFromMatchingFields','policyExposesNoPreclassifiedDecisionParameter','actuatorExposesNoPreclassifiedDecisionParameter']):
-    fail.append('classifier_bypass_regressions_missing')
-if 'class NativePlaybackRecoveryActuator' not in actuator or 'interface NativePlaybackRecoveryPort' not in actuator:
-    fail.append('native_recovery_actuator_boundary_missing')
-if 'val current = snapshotOrNull() ?: return NativeRecoveryExecutionOutcome.REFUSED' not in actuator or 'current != prepared.lease' not in actuator:
-    fail.append('final_native_recovery_state_lease_missing')
-if actuator.find('consumed.add(prepared.token)') > actuator.find('executeOrFalse(prepared.plan.action)'):
-    fail.append('native_recovery_lease_not_consumed_before_port_call')
-if 'watchedStateFingerprint' not in actuator or 'resumeStateFingerprint' not in actuator:
-    fail.append('account_state_fingerprint_lease_missing')
-if 'issued.add(token)' not in actuator or 'prepared.token !in issued' not in actuator:
-    fail.append('actuator_instance_bound_issuance_missing')
-if 'preparedLeaseCannotCrossActuatorInstanceOrBeReissued' not in actuator_test:
-    fail.append('actuator_cross_instance_replay_regression_missing')
-if ('ownerThread = Thread.currentThread()' not in actuator or
-    'Thread.currentThread() === ownerThread' not in actuator or
-    'Thread.currentThread().id' in actuator):
-    fail.append('actuator_player_thread_ownership_missing')
-if 'preparationAndExecutionStayOnConstructionThread' not in actuator_test:
-    fail.append('actuator_cross_thread_regression_missing')
-if 'supportedRecoveryActions' not in actuator or 'plan.action !in lease.supportedRecoveryActions' not in actuator:
-    fail.append('actuator_native_capability_binding_missing')
-if 'supportedRecoveryActions.sorted().joinToString(",")' not in actuator:
-    fail.append('actuator_capability_set_not_bound_to_lease_token')
-if (('snapshotRecoveryActions(value.supportedRecoveryActions)' not in actuator) or
-    ('Collections.unmodifiableSet(snapshot)' not in actuator) or
-    ('recoveryCapabilitiesAreSnapshottedOnceAndFailuresFailClosed' not in actuator_test)):
-    fail.append('actuator_capability_set_single_immutable_snapshot_missing')
-if any(name not in actuator_test for name in ['unadvertisedNativeCapabilityCannotPrepare','capabilityChangeBeforeExecutionRefuses','malformedCapabilitySetFailsClosed']):
-    fail.append('actuator_capability_regressions_missing')
-if 'private var closed = false' not in actuator or 'fun close(): Boolean' not in actuator or 'issued.clear()' not in actuator or 'consumed.clear()' not in actuator:
-    fail.append('actuator_lifecycle_revocation_missing')
-if any(name not in actuator_test for name in ['ownerThreadCloseRevokesOutstandingLeaseAndFutureUse','foreignThreadCannotCloseOrRevokeOwnerLease']):
-    fail.append('actuator_lifecycle_regressions_missing')
-if 'const val MAX_ISSUED_LEASES = 256' not in actuator or 'issued.size >= MAX_ISSUED_LEASES' not in actuator:
-    fail.append('actuator_issued_lease_resource_cap_missing')
-if 'issuedLeaseSetIsBoundedWithoutReplayEviction' not in actuator_test:
-    fail.append('actuator_issued_lease_resource_cap_regression_missing')
-if ('private fun snapshotOrNull()' not in actuator or 'private fun executeOrFalse(action: String)' not in actuator or
-        actuator.count('catch (_: Exception)') < 2 or actuator.count('catch (_: LinkageError)') < 2):
-    fail.append('actuator_port_exception_boundary_missing')
-if actuator.find('consumed.add(prepared.token)') > actuator.find('executeOrFalse(prepared.plan.action)'):
-    fail.append('actuator_exception_path_not_consumed_before_call')
-if any(name not in actuator_test for name in ['throwingSnapshotDuringPreparationFailsClosed','throwingFinalSnapshotRefusesWithoutExecution','throwingPortExecutionConsumesLeaseAndFailsClosed']):
-    fail.append('actuator_port_exception_regressions_missing')
-if 'exactPlaybackPlanExecutesOnlyOnce' not in actuator_test or 'rejectedPortExecutionStillConsumesLease' not in actuator_test:
-    fail.append('native_recovery_one_shot_regressions_missing')
-if 'finalLeaseRejectsVideoSourceOrGenerationDrift' not in actuator_test or 'finalLeaseRejectsWatchedOrResumeFingerprintDrift' not in actuator_test:
-    fail.append('native_recovery_final_state_drift_regressions_missing')
-if 'terminalAndClassifierPlansNeverPrepare' not in actuator_test:
-    fail.append('classifier_exclusive_actuator_regression_missing')
-# Native subtitle preference provenance remains a pure translation of
-# Foundation PR #70, reached only through the bounded synthetic lab stack.
-# These checks prevent enabled/account/language state from becoming implicit
-# consent and keep private-client/device acceptance open.
-if not all(x in native_subtitle_provenance for x in [
-    '99ea3173184029bbd7ee5ae7dc33d31d553fc135',
-    'e63e9a35ec9e0bdeab0de17debaf5a3ce929d8d4',
-    'object NativeSubtitlePreferenceProvenance',
-    'This pure boundary performs no storage, account, player, network or UI work.'
-]):
-    fail.append('native_subtitle_provenance_contract_pin')
-if not all(x in native_subtitle_provenance for x in [
-    '^[0-9a-f]{64}$', 'MAX_SAFE_INTEGER', 'hasExactKeys',
-    '"same-installation-setting"', '"explicit-local-choice"',
-    '"schemaVersion"', '"preferenceRevision"', '"binding"'
-]):
-    fail.append('native_subtitle_provenance_exact_schema')
-if not all(x in native_subtitle_provenance for x in [
-    'lowercase(Locale.ROOT)', "replace('_', '-')",
-    'it == "embedded" || it == "external"', 'bindingKeys.all'
-]):
-    fail.append('native_subtitle_provenance_binding')
-if not all(x in native_subtitle_provenance for x in [
-    'setOf("first-run", "subtitle-settings")',
-    'event["choice"] != "enabled"',
-    'sessionPreference?.enabled != true',
-    'An enabled flag, account hydration or a preferred language is never consent.'
-]):
-    fail.append('native_subtitle_provenance_explicit_choice')
-if not all(x in native_subtitle_provenance for x in [
-    'readback["scope"] != "installation-local"',
-    'positiveRevision(readback["preferenceRevision"]) != revision',
-    '!sameBinding(readback["binding"], stored["binding"])',
-    '"kind" to "same-installation-setting"'
-]):
-    fail.append('native_subtitle_provenance_storage_promotion')
-if (
-    not all(x in native_subtitle_provenance for x in [
-        'Collections.unmodifiableMap(LinkedHashMap(value))',
-        'This function validates that event and cannot create it.',
-        'not prove UI, signed package, private-client or device acceptance.'
-    ]) or
-    'NativeSubtitlePreferenceProvenance' in java_text or
-    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation'])
-):
-    fail.append('native_subtitle_provenance_unwired_regressions')
-if not all(x in native_subtitle_provenance for x in [
-    'private fun snapshotExactObject(',
-    'val expectedSize = source.size',
-    'if (expectedSize !in 1..maxEntries) return null',
-    'if (count >= expectedSize) return null',
-    'if (count != expectedSize) return null',
-    'Collections.unmodifiableMap(copy)'
-]):
-    fail.append('native_subtitle_provenance_single_snapshot')
-if not all(x in native_subtitle_provenance for x in [
-    'snapshotExactObject(preferenceProvenance, explicitChoiceKeys.size, true)',
-    'snapshotExactObject(localChoiceEvent, choiceEventKeys.size, false)',
-    'snapshotExactObject(storedReceipt, explicitChoiceKeys.size, true)',
-    'snapshotExactObject(storageReadback, storageReadbackKeys.size, true)'
-]):
-    fail.append('native_subtitle_provenance_snapshot_entrypoints')
-if not all(x in native_subtitle_provenance for x in [
-    'catch (_: RuntimeException)',
-    'catch (_: LinkageError)'
-]) or 'catch (_: Throwable)' in native_subtitle_provenance:
-    fail.append('native_subtitle_provenance_exception_boundary')
-if not all(x in native_subtitle_provenance_test for x in ['callerMapsAreSnapshottedOnceBeforeValidation','throwingTopLevelAndNestedMapsFailClosedWithoutEscaping','iteratorCardinalityDriftFailsClosed','detachedReceiptCannotBeChangedByLaterCallerMutation']):
-    fail.append('native_subtitle_provenance_hostile_map_regressions')
-if not all(x in native_subtitle_codec for x in [
-    'object NativeSubtitlePreferenceReceiptCodec',
-    'private const val PREFIX = "nsp1:"',
-    'MAX_RAW_BYTES = 823',
-    'MAX_ENCODED_LENGTH = 1103',
-    'Base64.getUrlEncoder().withoutPadding()',
-    'CodingErrorAction.REPORT',
-    'receipt.takeIf { encode(it) == candidate }',
-    'Collections.unmodifiableMap(LinkedHashMap(value))'
-]):
-    fail.append('native_subtitle_receipt_codec_contract')
-if 'catch (_: Throwable)' in native_subtitle_codec or any(x in native_subtitle_codec for x in [
-    'SharedPreferences', 'DataStore', 'android.content', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('native_subtitle_receipt_codec_forbidden_surface')
-if not all(x in native_subtitle_codec_test for x in [
-    'canonicalReceiptRoundTripsExactly',
-    'mapOrderCannotChangeCanonicalEncoding',
-    'reviewedSurfacesHaveDistinctCanonicalValues',
-    'malformedPrefixBase64AndTrailingBytesFailClosed',
-    'nonCanonicalPaddingAndVersionFailClosed',
-    'invalidDigestAndRevisionBoundsCannotEncode',
-    'bindingRequiresExactClosedSchemaAndEnabledChoice',
-    'nonCanonicalOrOversizedTextFailsClosed',
-    'malformedUtf8FailsClosed',
-    'decodedTopLevelAndBindingAreImmutable'
-]):
-    fail.append('native_subtitle_receipt_codec_regressions')
-if not all(x in native_subtitle_store for x in [
-    'class NativeSubtitlePreferenceStore(',
-    'interface StoragePort',
-    'fun compareAndSetInstallationDigest(',
-    'fun compareAndSetPreferenceReceipt(',
-    'private fun readStableTuple()',
-    'private fun rollback(before: StoredTuple, target: StoredTuple)',
-    'current.installationDigest == before.installationDigest',
-    'current.receiptRaw == before.receiptRaw'
-]):
-    fail.append('native_subtitle_store_atomic_contract')
-if not all(x in native_subtitle_store for x in [
-    'fun loadStoredPreference(',
-    'fun recordExplicitLocalChoice(',
-    'fun clearStoredReceiptForExplicitOff(',
-    'NativeSubtitlePreferenceProvenance.issueExplicitLocalChoiceReceipt(',
-    'NativeSubtitlePreferenceProvenance.promoteStoredPreferenceReceipt('
-]):
-    fail.append('native_subtitle_store_provenance_composition')
-if not all(x in native_subtitle_store for x in [
-    'if (readStableTuple() != target) return rejected(rollback(before, target))',
-    'if (readStableTuple() != target || readStableTuple() != target)',
-    'Any other current value',
-    'is concurrent drift and is preserved without an overwrite'
-]):
-    fail.append('native_subtitle_store_readback_and_drift')
-if not all(x in native_subtitle_store for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'if (!onOwnerThread() || closed)',
-    'fun close(): Boolean'
-]):
-    fail.append('native_subtitle_store_owner_lifecycle')
-if 'NativeSubtitlePreferenceStore' in java_text or 'NativeSubtitlePreferenceStore' in mobile_story_activity:
-    fail.append('native_subtitle_store_must_remain_unwired')
-if 'catch (_: Throwable)' in native_subtitle_store or any(x in native_subtitle_store for x in [
-    'SharedPreferences', 'DataStore', 'android.content', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('native_subtitle_store_forbidden_surface')
-if not all(x in native_subtitle_store_test for x in [
-    'absentStorageLoadsNoPreference',
-    'firstExplicitChoicePersistsAndPromotes',
-    'repeatedChoiceIncrementsRevision',
-    'existingInstallationDigestIsReused',
-    'invalidOrThrowingDigestSourceLeavesStorageUntouched',
-    'receiptWithoutInstallationDigestFailsWithoutMutation',
-    'corruptStoredReceiptFailsWithoutMutation',
-    'unstablePrewriteTupleFailsWithoutMutation',
-    'digestCompareAndSetRefusalDoesNotWriteReceipt',
-    'receiptCompareAndSetRefusalRollsBackGeneratedDigest',
-    'falsePositiveReceiptWriteRollsBackExactTuple',
-    'unknownConcurrentDriftIsPreservedWithoutRollbackClaim',
-    'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest',
-    'explicitOffRefusalLeavesReceiptUntouched',
-    'loadingRequiresStableExactReadbackAndBinding',
-    'foreignThreadAndClosedStoreFailClosed',
-    'corruptConcurrentDriftIsPreservedWithoutRollbackClaim'
-]):
-    fail.append('native_subtitle_store_regressions')
-if not all(x in native_subtitle_store_test for x in [
-    'assertFalse(result.rollbackVerified)',
-    'assertEquals(foreign, port.receipt)',
-    'assertEquals(digest, port.installationDigest)',
-    'assertEquals(0, port.digestCasCalls)',
-    'assertEquals(0, port.receiptCasCalls)'
-]):
-    fail.append('native_subtitle_store_adversarial_assertions')
-if not all(x in android_subtitle_storage for x in [
-    'class AndroidSubtitlePreferenceSharedPreferencesPort(',
-    ') : NativeSubtitlePreferenceStore.StoragePort',
-    'synchronized(preferences)',
-    'if (!preferences.contains(key))',
-    'preferences.getString(key, null)',
-    'if (update == null) editor.remove(key) else editor.putString(key, update)',
-    'if (!editor.commit())',
-    'readback.ok && readback.value == update',
-    'exclusive to this adapter',
-    'cross-process atomicity'
-]):
-    fail.append('android_subtitle_shared_preferences_contract')
-if ('AndroidSubtitlePreferenceSharedPreferencesPort' in java_text or
-    'AndroidSubtitlePreferenceSharedPreferencesPort' in mobile_story_activity):
-    fail.append('android_subtitle_shared_preferences_must_remain_unwired')
-if 'catch (_: Throwable)' in android_subtitle_storage or any(x in android_subtitle_storage for x in [
-    'import android.content.Context', 'DataStore', 'AccountManager',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv',
-    'registerOnSharedPreferenceChangeListener', '.apply()', 'Log.d('
-]):
-    fail.append('android_subtitle_shared_preferences_forbidden_surface')
-if not all(x in android_subtitle_storage for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'if (!onOwnerThread() || closed)',
-    'fun close(): Boolean',
-    'INSTALLATION_DIGEST_KEY',
-    'PREFERENCE_RECEIPT_KEY',
-    'catch (_: RuntimeException)',
-    'catch (_: LinkageError)'
-]):
-    fail.append('android_subtitle_shared_preferences_lifecycle_or_exception_boundary')
-if not all(x in android_subtitle_storage_test for x in [
-    'absentSlotsReadAsSuccessfulNullWithoutMutation',
-    'exactCommitsUseOnlyTheTwoFixedPrivateKeys',
-    'compareAndSetMismatchDoesNotWrite',
-    'wrongTypeAndThrowingReadsFailClosed',
-    'commitRefusalFailsClosedWithoutAWriteClaim',
-    'changedPostCommitReadbackFailsClosedAndPreservesDrift',
-    'nullUpdateRemovesOnlyTheExactReceiptSlot',
-    'adapterInstancesSharingOneObjectRespectExactCas',
-    'editAndCommitExceptionsFailClosed',
-    'foreignThreadAndClosedPortFailClosed'
-]):
-    fail.append('android_subtitle_shared_preferences_regressions')
-if not all(x in android_subtitle_storage_test for x in [
-    'assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), fake.snapshot().keys)',
-    'assertEquals("__drift__", fake.value(RECEIPT_KEY))',
-    'assertEquals("preserved", fake.value("unrelated"))',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('android_subtitle_shared_preferences_adversarial_assertions')
-if not all(x in subtitle_digest_source for x in [
-    'class SecureRandomSubtitlePreferenceDigestSource internal constructor(',
-    ') : NativeSubtitlePreferenceStore.DigestSource',
-    'constructor() : this(SystemEntropy)',
-    'SecureRandom().nextBytes(target)',
-    'val bytes = ByteArray(DIGEST_BYTES)',
-    'bytes.all { it == 0.toByte() }',
-    'const val DIGEST_BYTES = 32',
-    'const val HEX = "0123456789abcdef"',
-    'bytes.fill(0)'
-]):
-    fail.append('subtitle_digest_source_contract')
-if ('SecureRandomSubtitlePreferenceDigestSource' in java_text or
-    'SecureRandomSubtitlePreferenceDigestSource' in mobile_story_activity):
-    fail.append('subtitle_digest_source_must_remain_unwired')
-if 'catch (_: Throwable)' in subtitle_digest_source or any(x in subtitle_digest_source for x in [
-    'android.content', 'SharedPreferences', 'DataStore', 'AccountManager',
-    'Settings.Secure', 'Build.SERIAL', 'AdvertisingId', 'UUID.',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('subtitle_digest_source_forbidden_surface')
-if not all(x in subtitle_digest_source for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'if (!onOwnerThread() || closed)',
-    'fun close(): Boolean',
-    'catch (_: RuntimeException)',
-    'catch (_: LinkageError)'
-]):
-    fail.append('subtitle_digest_source_lifecycle_or_exception_boundary')
-if not all(x in subtitle_digest_source_test for x in [
-    'deterministicEntropyProducesExactLowercaseDigest',
-    'eachRequestRequiresFreshEntropy',
-    'entropyRefusalReturnsNoIdentity',
-    'allZeroEntropyFailsClosed',
-    'runtimeAndLinkageFailuresAreContained',
-    'entropyBufferIsClearedAfterDigestCreation',
-    'callerCannotMutateReturnedDigestThroughEntropyBuffer',
-    'foreignThreadAndClosedSourceFailClosed'
-]):
-    fail.append('subtitle_digest_source_regressions')
-if not all(x in subtitle_digest_source_test for x in [
-    'assertEquals(32, requested)',
-    'assertEquals("02".repeat(32)',
-    'assertTrue(retained!!.all { it == 0.toByte() })',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('subtitle_digest_source_adversarial_assertions')
-if not all(x in android_subtitle_store_owner for x in [
-    'class AndroidSubtitlePreferenceStoreOwner private constructor(',
-    'AndroidSubtitlePreferenceSharedPreferencesPort(preferences)',
-    'SecureRandomSubtitlePreferenceDigestSource()',
-    'NativeSubtitlePreferenceStore(storagePort, digestSource)',
-    'IdentityHashMap<SharedPreferences, Any>()',
-    'if (activeOwners.containsKey(preferences)) return null',
-    'activeOwners[preferences] = token',
-    'if (activeOwners[preferences] === token)',
-    'activeOwners.remove(preferences)'
-]):
-    fail.append('android_subtitle_store_owner_composition_contract')
-if ('AndroidSubtitlePreferenceStoreOwner' in java_text or
-    'AndroidSubtitlePreferenceStoreOwner' in mobile_story_activity):
-    fail.append('android_subtitle_store_owner_must_remain_unwired')
-if 'catch (_: Throwable)' in android_subtitle_store_owner or any(x in android_subtitle_store_owner for x in [
-    'import android.content.Context', 'DataStore', 'AccountManager',
-    'Settings.Secure', 'Build.SERIAL', 'AdvertisingId', 'UUID.',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv',
-    'registerOnSharedPreferenceChangeListener', '.apply()', 'Log.d('
-]):
-    fail.append('android_subtitle_store_owner_forbidden_surface')
-if not all(x in android_subtitle_store_owner for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'if (!onOwnerThread() || closed) return false',
-    'closed = true',
-    'val storeClosed = store.close()',
-    'val digestClosed = digestSource.close()',
-    'val storageClosed = storagePort.close()',
-    'if (allClosed) releaseLease(preferences, leaseToken)',
-    'catch (_: RuntimeException)',
-    'catch (_: LinkageError)'
-]):
-    fail.append('android_subtitle_store_owner_lifecycle_or_lease_boundary')
-if not all(x in android_subtitle_store_owner_test for x in [
-    'exactPreferencesObjectHasOneProcessLocalOwner',
-    'distinctPreferencesObjectsHaveIndependentOwners',
-    'loadWithoutReceiptDoesNotGenerateOrWriteIdentity',
-    'explicitChoiceComposesDigestStorageAndCanonicalStore',
-    'entropyRefusalLeavesEveryPreferenceUntouched',
-    'explicitOffClearsOnlyReceiptAndKeepsIdentity',
-    'foreignThreadCannotUseCloseOrReleaseOwnerLease',
-    'closeRevokesOperationsAndFreshOwnerCanReadReceipt',
-    'corruptStoredTypeFailsClosedWithoutOverwrite'
-]):
-    fail.append('android_subtitle_store_owner_regressions')
-if not all(x in android_subtitle_store_owner_test for x in [
-    'assertNull(owner(preferences, 0x22))',
-    'assertEquals(0, entropyCalls)',
-    'assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), preferences.snapshot().keys)',
-    'assertEquals(mapOf("unrelated" to "preserved"), preferences.snapshot())',
-    'assertNull(owner(preferences, 0x52))',
-    'assertEquals(7, preferences.value(DIGEST_KEY))'
-]):
-    fail.append('android_subtitle_store_owner_adversarial_assertions')
-if not all(x in android_subtitle_store_owner for x in [
-    'internal fun recordExplicitLocalChoice(',
-    'internal fun clearStoredReceiptForExplicitOff('
-]):
-    fail.append('android_subtitle_store_mutations_must_remain_module_internal')
-if not all(x in android_subtitle_choice_session for x in [
-    'class AndroidSubtitlePreferenceChoiceSession private constructor(',
-    'enum class Surface(internal val wireValue: String)',
-    'FIRST_RUN("first-run")',
-    'SUBTITLE_SETTINGS("subtitle-settings")',
-    'enum class Choice',
-    'class ChoiceLease internal constructor(',
-    'fun prepareChoice(',
-    'fun commitChoice(',
-    'if (lease !== active.lease || lease.issuer !== issuer)',
-    'pending = null',
-    'if (finalSnapshot != active.snapshot)',
-    'storeOwner.recordExplicitLocalChoice(',
-    'storeOwner.clearStoredReceiptForExplicitOff('
-]):
-    fail.append('android_subtitle_choice_session_contract')
-if 'catch (_: Throwable)' in android_subtitle_choice_session or any(x in android_subtitle_choice_session for x in [
-    'import android.app.', 'import android.view.', 'import android.widget.',
-    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('android_subtitle_choice_session_forbidden_surface')
-if not all(x in android_subtitle_choice_session for x in [
-    'private val ownerThread = Thread.currentThread()',
-    'private var pending: PendingChoice? = null',
-    'if (!usable()) return rejected()',
-    'val first = snapshotPort.readPreferenceSnapshot()',
-    'val second = snapshotPort.readPreferenceSnapshot()',
-    'fun cancelChoice(lease: ChoiceLease?): Boolean',
-    'fun close(): Boolean',
-    'storeOwner.close()',
-    'catch (_: RuntimeException)',
-    'catch (_: LinkageError)'
-]):
-    fail.append('android_subtitle_choice_session_lifecycle_or_snapshot_boundary')
-if not all(x in android_subtitle_choice_session_test for x in [
-    'enabledChoiceRequiresExactIssuedLeaseAndStableSnapshot',
-    'duplicatePreparationCannotMintParallelConsent',
-    'forgedOrCrossSessionLeaseRevokesDisplayedGeneration',
-    'finalSnapshotDriftConsumesLeaseBeforeStorage',
-    'unstableAndThrowingSnapshotsFailClosedWithoutMutation',
-    'explicitOffRequiresPresentedOffAndClearsOnlyReceipt',
-    'cancellationConsumesOnlyTheExactPresentedLease',
-    'foreignThreadCannotPrepareCommitCancelOrClose',
-    'closeRevokesPendingChoiceAndReleasesStorageOwner'
-]):
-    fail.append('android_subtitle_choice_session_regressions')
-if not all(x in android_subtitle_choice_session_test for x in [
-    'assertTrue(preferences.snapshot().isEmpty())',
-    'assertFalse(second.commitChoice(firstLease).ok)',
-    'assertFalse(session.commitChoice(lease).ok)',
-    'assertEquals("preserved", preferences.value("unrelated"))',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('android_subtitle_choice_session_adversarial_assertions')
-if not all(x in android_subtitle_choice_transaction for x in [
-    'class AndroidSubtitlePreferenceChoiceTransaction internal constructor(',
-    'interface ApplicationPort',
-    'fun applyChoice(',
-    'fun rollbackChoice(transition: Transition): Boolean',
-    'fun applyAndCommitChoice(',
-    'val before = readStableSnapshot()',
-    'transition.before == before && exactReadback == transition.after',
-    'validSemanticTransition(transition)',
-    'session.prepareChoice(surface, choice)',
-    'session.commitChoice(lease)',
-    'session.loadStoredPreference()',
-    'fun loadStoredPreference(): Map<String, Any?>?',
-    'if (current != transition.after) return false',
-    'applicationPort.rollbackChoice(transition)',
-    'return acknowledged && readStableSnapshot() == transition.before'
-]):
-    fail.append('android_subtitle_choice_transaction_contract')
-if ('AndroidSubtitlePreferenceChoiceTransaction' in java_text or
-    'AndroidSubtitlePreferenceChoiceTransaction' in mobile_story_activity):
-    fail.append('android_subtitle_choice_transaction_must_remain_unwired')
-if any(x in android_subtitle_choice_transaction for x in [
-    'import android.', 'SharedPreferences', 'AccountManager', 'DataStore',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv', 'Log.d(',
-    'catch (_: Throwable)'
-]):
-    fail.append('android_subtitle_choice_transaction_forbidden_surface')
-if not all(x in android_subtitle_choice_transaction_test for x in [
-    'enabledApplicationCommitsOnlyAfterExactPreferenceReadback',
-    'explicitOffAppliesPreferenceThenClearsOnlyReceipt',
-    'alreadySelectedPreferenceMayRecordOnlyTheExplicitClick',
-    'bindingMutationIsRejectedAndExactPreferenceRollbackSucceeds',
-    'receiptCommitFailureRollsBackAppliedPreference',
-    'concurrentPreferenceDriftIsPreservedWithoutRollbackClaim',
-    'throwingApplicationPortFailsClosedBeforeReceipt',
-    'rollbackRefusalIsReportedWithoutOverwritingAppliedState',
-    'mismatchedTransitionCannotInventChoiceAuthority',
-    'storedPreferenceAdmissionIsOwnerThreadAndLifecycleBound',
-    'enabledSnapshotWithoutReceiptIsNeverAdmitted',
-    'ownerThreadAndCloseRevokeTransaction'
-]):
-    fail.append('android_subtitle_choice_transaction_regressions')
-if not all(x in android_subtitle_choice_transaction_test for x in [
-    'assertEquals(1, fixture.host.applyCalls)',
-    'assertEquals(1, fixture.host.rollbackCalls)',
-    'assertFalse(result.rollbackVerified)',
-    'assertEquals("French", fixture.host.current.globalLanguage)',
-    'assertTrue(fixture.preferences.snapshot().isEmpty())',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('android_subtitle_choice_transaction_adversarial_assertions')
-if not all(x in android_subtitle_choice_widget_controller for x in [
-    'class AndroidSubtitlePreferenceChoiceWidget internal constructor(',
-    'class AndroidSubtitlePreferenceChoiceWidgetIntent internal constructor(',
-    'class AndroidSubtitlePreferenceChoiceWidgetController',
-    'fun replace(',
-    'fun consume(',
-    'val exact = issued.remove(widget.choice)',
-    'issued.clear()',
-    'pendingIntent = null',
-    'exact !== widget',
-    'selectedChoice != widget.choice',
-    'semanticEvent != SEMANTIC_ACTIVATION',
-    'val exact = pendingIntent',
-    'return exact === intent',
-    'const val SEMANTIC_ACTIVATION = "ACTIVATE"'
-]):
-    fail.append('android_subtitle_choice_widget_controller_contract')
-if any(x in android_subtitle_choice_widget_controller for x in [
-    'import android.', 'SharedPreferences', 'AccountManager', 'DataStore',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv', 'Log.d(',
-    'catch (_: Throwable)'
-]):
-    fail.append('android_subtitle_choice_widget_controller_forbidden_surface')
-if not all(x in android_subtitle_choice_widget_port for x in [
-    'class AndroidSubtitlePreferenceChoiceWidgetPort private constructor(',
-    'Button(container.context)',
-    'contentDescription = widget.label',
-    'isFocusable = true',
-    'isClickable = true',
-    'setOnLongClickListener { true }',
-    'setOnClickListener',
-    'controller.consume(',
-    'removeOwnedViews()',
-    'transaction.applyAndCommitChoice(intent.surface, intent.choice)',
-    'override fun loadStoredPreference(): Map<String, Any?>?',
-    'transaction.loadStoredPreference()',
-    'Looper.myLooper() === Looper.getMainLooper()',
-    'transaction.close()',
-    'applicationPort: AndroidSubtitlePreferenceChoiceTransaction.ApplicationPort'
-]):
-    fail.append('android_subtitle_choice_widget_port_contract')
-if ('AndroidSubtitlePreferenceChoiceWidgetPort' in java_text or
-    'AndroidSubtitlePreferenceChoiceWidgetPort' in mobile_story_activity):
-    fail.append('android_subtitle_choice_widget_port_must_remain_unwired')
-if any(x in android_subtitle_choice_widget_port for x in [
-    'setOnTouchListener', 'MotionEvent', 'AccountManager', 'DataStore',
-    'java.net.', 'http://', 'https://', 'getAuthKey', 'System.getenv', 'Log.d(',
-    'catch (_: Throwable)'
-]):
-    fail.append('android_subtitle_choice_widget_port_forbidden_surface')
-if not all(x in android_subtitle_choice_widget_controller_test for x in [
-    'widgetControllerBuildsTwoSemanticChoicesWithoutConsent',
-    'semanticClickReturnsExactIntentAndRevokesGeneration',
-    'rawPointerOrLongPressNeverAuthorizesAndRevokesGeneration',
-    'selectedChoiceMismatchNeverAuthorizesAndRevokesGeneration',
-    'forgedOrCrossControllerWidgetCannotAuthorize',
-    'replacementMakesEarlierWidgetStale',
-    'nullSurfaceClearAndCloseFailClosed',
-    'foreignThreadCannotRenderConsumeClearOrClose'
-]):
-    fail.append('android_subtitle_choice_widget_controller_regressions')
-if not all(x in android_subtitle_choice_widget_controller_test for x in [
-    'assertEquals(2, widgets.size)',
-    'assertNull(controller.consume(widget, widget.choice, event))',
-    'assertNull(first.consume(',
-    'assertNull(second.consume(',
-    'assertFalse(closed.get())'
-]):
-    fail.append('android_subtitle_choice_widget_controller_adversarial_assertions')
-if not all(x in android_subtitle_choice_screen_owner for x in [
-    'interface AndroidSubtitlePreferenceChoiceScreenPort',
-    'class AndroidSubtitlePreferenceChoiceScreenOwner private constructor()',
-    'private var pendingOutcome: AndroidSubtitlePreferenceChoiceOutcome? = null',
-    'if (!usable() || pendingOutcome != null) return false',
-    'fun consumeOutcome(): AndroidSubtitlePreferenceChoiceOutcome?',
-    'fun loadStoredPreference(): Map<String, Any?>?',
-    'port?.loadStoredPreference()',
-    'pendingOutcome = null',
-    'fun close(): Boolean',
-    'active?.close() == true',
-    'private fun receiveOutcome(outcome: AndroidSubtitlePreferenceChoiceOutcome)',
-    'AndroidSubtitlePreferenceChoiceWidgetPort.open(',
-    'internal fun openForTest('
-]):
-    fail.append('android_subtitle_choice_screen_owner_contract')
-if any(x in android_subtitle_choice_screen_owner for x in [
-    'AccountManager', 'DataStore', 'java.net.', 'http://', 'https://',
-    'getAuthKey', 'System.getenv', 'Log.d(', 'catch (_: Throwable)'
-]):
-    fail.append('android_subtitle_choice_screen_owner_forbidden_surface')
-if ': AndroidSubtitlePreferenceChoiceScreenPort' not in android_subtitle_choice_widget_port:
-    fail.append('android_subtitle_choice_widget_port_not_screen_owned')
-if not all(x in android_subtitle_choice_screen_owner_test for x in [
-    'screenHoldsOneOutcomeUntilExplicitConsumption',
-    'refusedOutcomeIsHeldWithoutPromotionOrRerender',
-    'storedPreferenceAdmissionIsLifecycleBound',
-    'duplicateOutcomePermanentlyPoisonsAndClosesPort',
-    'renderOrClearRefusalPermanentlyPoisons',
-    'throwingPortOperationsAreContainedAndRevokeAuthority',
-    'nullOrThrowingFactoryFailsClosed',
-    'ownerThreadAndCloseRevokePendingOutcomeAndPort'
-]):
-    fail.append('android_subtitle_choice_screen_owner_regressions')
-if not all(x in android_subtitle_choice_screen_owner_test for x in [
-    'assertFalse(owner.render(',
-    'assertFalse(owner.clear())',
-    'assertSame(outcome, owner.consumeOutcome())',
-    'assertEquals(admitted, owner.loadStoredPreference())',
-    'assertEquals(1, fixture.port!!.closeCalls)',
-    'assertFalse(foreignClose.get())'
-]):
-    fail.append('android_subtitle_choice_screen_owner_adversarial_assertions')
-if not all(x in synthetic_fixtures for x in [
-    'object SyntheticSubtitleFixture',
-    'WEBVTT',
-    '00:00.500 --> 00:02.500',
-    '00:04.000 --> 00:06.000',
-    '00:08.000 --> 00:10.000',
-    'target.readText(Charsets.UTF_8) == CONTENT',
-    'Local subtitle fixture readback failed'
-]):
-    fail.append('synthetic_webvtt_fixture_contract_missing')
-if any(x in synthetic_fixtures for x in [
-    'java.net.', 'http://', 'https://', 'ContentResolver', 'AccountManager',
-    'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_webvtt_fixture_forbidden_surface')
-if not all(x in synthetic_fixtures_test for x in [
-    'localWebVttHasDeterministicCuesAndIsIdempotent',
-    'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles',
-    'assertEquals("preserved", unrelated.readText())'
-]):
-    fail.append('synthetic_webvtt_fixture_regressions_missing')
-if not all(x in java_text for x in [
-    'SyntheticSubtitleFixture.createIfMissing(cacheDir)',
-    'MediaItem.SubtitleConfiguration.Builder(',
-    '.setMimeType(MimeTypes.TEXT_VTT)',
-    '.setLanguage("en")',
-    '.setSelectionFlags(C.SELECTION_FLAG_DEFAULT)',
-    '.setSubtitleConfigurations(listOf(subtitleConfiguration))'
-]):
-    fail.append('synthetic_webvtt_media3_binding_missing')
-if not all(x in synthetic_cue_observer for x in [
-    'class SyntheticSubtitleCueDeliveryObserver',
-    'context.loadGeneration <= highestLoadGeneration',
-    'cueTexts.any { it.isBlank() || it !in EXPECTED_CUES }',
-    'poisonActiveGeneration()',
-    'allExpectedCuesObserved = delivered.containsAll(EXPECTED_CUES)',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_cue_observer_contract_missing')
-if any(x in synthetic_cue_observer for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_subtitle_cue_observer_forbidden_surface')
-if not all(x in synthetic_cue_observer_test for x in [
-    'exactFixtureCuesCompleteOnlyTheActiveGeneration',
-    'emptyAndDuplicateCallbacksAreBoundedAndIdempotent',
-    'changedPlayerIdentityCannotAffectActiveObservation',
-    'unknownOrOversizedCueInputPoisonsOnlyThatGeneration',
-    'loadGenerationMustIncreaseAndNewGenerationStartsEmpty',
-    'abandonThreadOwnershipAndCloseFailClosed',
-    'malformedContextNeverStartsObservation'
-]):
-    fail.append('synthetic_subtitle_cue_observer_regressions_missing')
-if not all(x in java_text for x in [
-    'override fun onCues(cueGroup: CueGroup)',
-    'subtitleCueObserver.observe(cueContext, cueTexts)',
-    'subtitleCueObserver.begin(cueContext)',
-    'visible output NOT accepted',
-    'subtitleCueObserver.close()'
-]):
-    fail.append('synthetic_subtitle_cue_observer_activity_binding_missing')
-if not all(x in synthetic_track_observer for x in [
-    'class SyntheticSubtitleTrackStateObserver',
-    'context.loadGeneration <= highestLoadGeneration',
-    'if (textTracks.size > MAX_TEXT_TRACKS)',
-    'State.PRESENT_UNSELECTED',
-    'State.PRESENT_SELECTED',
-    'application/x-media3-cues',
-    'track.codecs == WEBVTT_MIME_TYPE',
-    'track.language == EXPECTED_LANGUAGE',
-    'track.label == EXPECTED_LABEL',
-    'poisonActiveGeneration()',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_track_observer_contract_missing')
-if any(x in synthetic_track_observer for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_subtitle_track_observer_forbidden_surface')
-if not all(x in synthetic_track_observer_test for x in [
-    'exactLocalTrackReportsSelectedAndUnselectedWithoutVisualClaim',
-    'media3ExtractedCueFormatRetainsExactWebVttIdentity',
-    'media3CueFormatWithoutExactWebVttCodecFailsClosed',
-    'emptyTrackReportIsAbsentRatherThanAcceptedSelection',
-    'unexpectedOrDuplicateTextTrackPoisonsOnlyThatGeneration',
-    'oversizedTextTrackInputIsRefusedWithoutStatePromotion',
-    'changedIdentityCannotReadOrMutateActiveState',
-    'loadGenerationMustIncreaseAndStartsNotReported',
-    'ownerThreadAbandonAndCloseRevokeObservation',
-    'malformedContextNeverStartsTrackObservation'
-]):
-    fail.append('synthetic_subtitle_track_observer_regressions_missing')
-if not all(x in java_text for x in [
-    'override fun onTracksChanged(tracks: Tracks)',
-    'subtitleTrackObserver.observe(',
-    'group.type != C.TRACK_TYPE_TEXT',
-    'sampleMimeType = format.sampleMimeType',
-    'codecs = format.codecs',
-    'selected = group.isTrackSelected(index)',
-    'subtitleTrackObserver.close()'
-]):
-    fail.append('synthetic_subtitle_track_observer_activity_binding_missing')
-if not all(x in synthetic_playback_evidence for x in [
-    'class SyntheticSubtitlePlaybackEvidenceObserver',
-    'context.loadGeneration <= highestLoadGeneration',
-    'Status.CUES_WITHOUT_TRACK_REPORT',
-    'Status.SELECTED_ALL_CUES',
-    'selectedTrackAndAllCuesObserved = status == Status.SELECTED_ALL_CUES',
-    'delivered < deliveredCueCount',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_playback_evidence_contract_missing')
-if any(x in synthetic_playback_evidence for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_subtitle_playback_evidence_forbidden_surface')
-if not all(x in synthetic_playback_evidence_test for x in [
-    'selectedTrackAndAllCuesCorrelateWithoutVisualClaim',
-    'cuesMayArriveBeforeTrackSelectionAndRemainBounded',
-    'absentOrUnselectedTrackNeverProducesCorrelatedAcceptance',
-    'malformedCueEvidencePoisonsOnlyItsGeneration',
-    'cueCountRegressionPoisonsActiveGeneration',
-    'notReportedTrackAndExplicitInvalidationFailClosed',
-    'generationThreadAbandonAndCloseAreEnforced',
-    'malformedContextNeverStartsPlaybackEvidence'
-]):
-    fail.append('synthetic_subtitle_playback_evidence_regressions_missing')
-if not all(x in java_text for x in [
-    'subtitlePlaybackEvidenceObserver.observeCues(',
-    'subtitlePlaybackEvidenceObserver.observeTrack(evidenceContext, observed.state)',
-    'subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)',
-    'subtitlePlaybackEvidenceObserver.begin(evidenceContext)',
-    'Media3 subtitle callback correlation',
-    'subtitlePlaybackEvidenceObserver.close()'
-]):
-    fail.append('synthetic_subtitle_playback_evidence_activity_binding_missing')
-if not all(x in synthetic_preference_evidence for x in [
-    'class SyntheticSubtitlePreferenceEvidenceObserver',
-    'Status.UNADMITTED_ENABLED_HELD',
-    'Status.MANUAL_SELECTION_HELD',
-    'Status.ENABLED_CALLBACKS_COMPLETE',
-    'Status.OFF_CALLBACKS_COMPLETE',
-    'visibleRenderingAccepted: Boolean = false',
-    'activePreference != preference',
-    'evidence.context != context.toPlaybackContext()',
-    'playbackEnded && !ended',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_preference_evidence_contract_missing')
-if any(x in synthetic_preference_evidence for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d('
-]):
-    fail.append('synthetic_subtitle_preference_evidence_forbidden_surface')
-if not all(x in synthetic_preference_evidence_test for x in [
-    'admittedEnabledCompletesOnlyWithAutomaticSelectedTrackAndAllCues',
-    'enabledWithoutSameInstallationReceiptIsPermanentlyHeld',
-    'manualSelectionCanNeverBecomeAutomaticPreferenceEvidence',
-    'explicitOffRequiresUnselectedZeroCueEvidenceAtPlaybackEnd',
-    'explicitOffNeverCompletesWhileAutomaticSelectionOrCuesRemain',
-    'preferenceOrContextDriftPoisonsOnlyTheActiveGeneration',
-    'malformedEvidenceAndPlaybackEndRegressionFailClosed',
-    'generationThreadAbandonAndCloseAreEnforced',
-    'malformedContextAndImpossibleOffReceiptNeverStart'
-]):
-    fail.append('synthetic_subtitle_preference_evidence_regressions_missing')
-if not all(x in java_text for x in [
-    'subtitlePreferenceEvidenceObserver.begin(',
-    'refreshSubtitlePreferenceEvidence()',
-    'subtitlePlayback?.currentSelectionOrigin()',
-    'player.playbackState == Player.STATE_ENDED',
-    'Preference-bound subtitle callback evidence',
-    'subtitlePreferenceEvidenceObserver.close()'
-]):
-    fail.append('synthetic_subtitle_preference_evidence_activity_binding_missing')
-if not all(x in synthetic_render_pipeline for x in [
-    'class SyntheticSubtitleRenderPipelineObserver',
-    'Status.ENABLED_DRAW_PIPELINE_OBSERVED',
-    'Status.OFF_EMPTY_DRAW_PIPELINE_OBSERVED',
-    'visibleRenderingAccepted: Boolean = false',
-    'pixelOutputAccepted: Boolean = false',
-    'deviceAcceptance: Boolean = false',
-    'evidence.context != context.toPreferenceContext()',
-    'revision != cueRevision',
-    'state.attached && state.shown',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_render_pipeline_contract_missing')
-if any(x in synthetic_render_pipeline for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d(', 'PixelCopy'
-]):
-    fail.append('synthetic_subtitle_render_pipeline_forbidden_surface')
-if not all(x in synthetic_render_pipeline_test for x in [
-    'admittedEnabledRequiresReadyViewAndExactDrawAfterActiveCue',
-    'drawBeforePreferenceCallbacksCannotComplete',
-    'hiddenDetachedTransparentOrZeroSizedViewNeverCompletes',
-    'unadmittedAndManualPreferenceEvidenceRemainHeld',
-    'explicitOffRequiresCompletedCallbacksAndEmptyCueDraw',
-    'enabledEmptyCueAndOffActiveCueStayWaiting',
-    'staleDrawIsIgnoredWithoutPromotingOrPoisoning',
-    'contextPreferenceEvidenceAndRevisionDriftFailClosed',
-    'malformedContextViewAndCueInputNeverPromote',
-    'ownerThreadAbandonAndCloseRevokeObservation'
-]):
-    fail.append('synthetic_subtitle_render_pipeline_regressions_missing')
-if not all(x in java_text for x in [
-    'subtitleRenderView = video.subtitleView',
-    'addOnDrawListener(subtitleDrawListener)',
-    'subtitleRenderPipelineObserver.observeCueGroup(',
-    'subtitleRenderPipelineObserver.observePreferenceEvidence(',
-    'subtitleRenderPipelineObserver.observeDraw(',
-    'visible pixels and device output NOT accepted.',
-    'removeOnDrawListener(subtitleDrawListener)',
-    'subtitleRenderPipelineObserver.close()'
-]):
-    fail.append('synthetic_subtitle_render_pipeline_activity_binding_missing')
-if not all(x in synthetic_window_pixels for x in [
-    'class SyntheticSubtitleWindowPixelObserver',
-    'Status.ENABLED_WINDOW_PIXELS_OBSERVED',
-    'Status.OFF_DARK_WINDOW_OBSERVED',
-    'windowPixelEvidenceComplete: Boolean',
-    'visibleRenderingAccepted: Boolean = false',
-    'physicalDisplayAccepted: Boolean = false',
-    'deviceAcceptance: Boolean = false',
-    'argbPixels: IntArray',
-    'pixels.forEachIndexed',
-    'evidence.drawRevision == revision',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_window_pixel_contract_missing')
-if any(x in synthetic_window_pixels for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d(', 'PixelCopy', 'Bitmap',
-    'writeBytes', 'outputStream', 'compress('
-]):
-    fail.append('synthetic_subtitle_window_pixel_forbidden_surface')
-if not all(x in synthetic_window_pixels_test for x in [
-    'admittedEnabledAcceptsOnlyBoundedLowerBandWindowPixels',
-    'explicitOffAcceptsOnlyOpaqueDarkWindowFrame',
-    'enabledFrameWithoutEnoughLowerPixelsFailsClosed',
-    'enabledFrameDominatedByUpperPixelsFailsClosed',
-    'transparentOrBrightOffFrameFailsClosed',
-    'malformedDimensionsAndPixelCountNeverPromote',
-    'incompleteOrVisuallyPromotedRenderEvidenceIsRejected',
-    'revisionContextAndPreferenceDriftFailClosed',
-    'generationThreadAbandonAndCloseRevokePixelObservation'
-]):
-    fail.append('synthetic_subtitle_window_pixel_regressions_missing')
-if not all(x in synthetic_window_pixel_lease for x in [
-    'class SyntheticSubtitleWindowPixelCaptureLease',
-    'data class Lease',
-    'enum class Resolution',
-    'Resolution.CURRENT_SUCCESS',
-    'Resolution.CURRENT_FAILURE',
-    'Resolution.STALE_IGNORED',
-    'context.loadGeneration <= current.context.loadGeneration',
-    'active !== lease',
-    'fun pending(lease: Lease, currentContext: Context?)',
-    'Thread.currentThread() === ownerThread'
-]):
-    fail.append('synthetic_subtitle_window_pixel_capture_lease_missing')
-if any(x in synthetic_window_pixel_lease for x in [
-    'android.', 'androidx.', 'java.net.', 'http://', 'https://', 'ContentResolver',
-    'AccountManager', 'getAuthKey', 'System.getenv', 'Log.d(', 'PixelCopy', 'Bitmap'
-]):
-    fail.append('synthetic_subtitle_window_pixel_capture_lease_forbidden_surface')
-if not all(x in synthetic_window_pixel_lease_test for x in [
-    'exactCurrentLeaseCompletesOnce',
-    'currentCopyFailureClosesOnlyThatAttempt',
-    'sourceNoDataRetryRequiresExactActiveLeaseAndContext',
-    'duplicateCaptureForSameCueRevisionIsDenied',
-    'newerLoadSupersedesWithoutLateCallbackClearingIt',
-    'olderLoadCannotReplaceNewerPendingCapture',
-    'laterCueRevisionMayStartAfterResolvedAttempt',
-    'currentIdentityOrRevisionDriftFailsCurrentLease',
-    'malformedContextNeverCreatesLease',
-    'foreignThreadCannotResolveOrClearCurrentLease',
-    'exactAbandonAndCloseRevokePendingCapture'
-]):
-    fail.append('synthetic_subtitle_window_pixel_capture_lease_regressions_missing')
-if not all(x in java_text for x in [
-    'subtitleWindowPixelObserver.begin(',
-    'SyntheticSubtitleWindowPixelObserver.Status.RENDER_PIPELINE_PENDING',
-    'boundedSubtitleRuntimeStatusForInstrumentation()',
-    'subtitleWindowPixelCaptureLease.begin(captureContext)',
-    'subtitleWindowPixelCaptureLease.resolve(',
-    'subtitleWindowPixelCaptureLease.abandon(it)',
-    'Resolution.STALE_IGNORED',
-    'PixelCopy.request(window, rect, bitmap',
-    'PixelCopy.ERROR_SOURCE_NO_DATA',
-    'window.decorView.postOnAnimation',
-    'sourceNoDataRetryAvailable',
-    'pending(lease, callbackContext)',
-    'enum class SubtitleWindowPixelDiagnostic',
-    'SubtitleWindowPixelDiagnostic.OUTSIDE_WINDOW',
-    'SubtitleWindowPixelDiagnostic.COPY_SOURCE_NO_DATA',
-    'SubtitleWindowPixelDiagnostic.PIXEL_POLICY_REFUSED',
-    'diagnostic ${subtitleWindowPixelDiagnostic.name}',
-    'bitmap.getPixels(capturedPixels',
-    'subtitleWindowPixelObserver.observe(',
-    'pixels?.fill(0)',
-    'bitmap.eraseColor(Color.TRANSPARENT)',
-    'bitmap.recycle()',
-    'physical display and device output NOT accepted.',
-    'subtitleWindowPixelCaptureLease.close()',
-    'subtitleWindowPixelObserver.close()'
-]):
-    fail.append('synthetic_subtitle_window_pixel_activity_binding_missing')
-if not all(x in synthetic_window_pixel_instrumentation for x in [
-    'class CompanionTvPixelCopyInstrumentationTest',
-    '@RunWith(AndroidJUnit4::class)',
-    'ActivityScenario.launch(CompanionTvActivity::class.java)',
-    'InstrumentationRegistry.getInstrumentation()',
-    'scenario.onActivity',
-    'filterIsInstance<ScrollView>()',
-    'filterIsInstance<PlayerView>()',
-    'button?.clearFocus()',
-    'scroll.scrollTo(0, playerView.top)',
-    'boundedSubtitleRuntimeStatusForInstrumentation()',
-    'SUBTITLE_RUNTIME_STATUS_UNAVAILABLE',
-    '@Test',
-    'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
-    'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
-    'OFF_DARK_WINDOW_OBSERVED',
-    'ENABLED_WINDOW_PIXELS_OBSERVED',
-    'physical display and device output NOT accepted',
-    'getSharedPreferences(TV_STATE, 0).edit().clear().commit()',
-    'getSharedPreferences(TV_RECEIPT, 0).edit().clear().commit()'
-]):
-    fail.append('synthetic_subtitle_window_pixel_instrumentation_missing')
-if any(x in synthetic_window_pixel_instrumentation for x in [
-    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
-    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
-]):
-    fail.append('synthetic_subtitle_window_pixel_instrumentation_forbidden_surface')
-if not all(x in java_text for x in [
-    'boundedTitleWatchedRuntimeStatusForInstrumentation()',
-    'watchedStatus.parent !== controls',
-    'it.length <= 2_048'
-]):
-    fail.append('synthetic_title_watched_bounded_status_surface_missing')
-if not all(x in title_watched_instrumentation for x in [
-    'class CompanionTvTitleWatchedInstrumentationTest',
-    '@RunWith(AndroidJUnit4::class)',
-    'ActivityScenario.launch(CompanionTvActivity::class.java)',
-    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)',
-    'candidate.hasFocus()',
-    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)',
-    'boundedTitleWatchedRuntimeStatusForInstrumentation()',
-    'testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
-    'Mark all released episodes watched',
-    'Mark all released episodes unwatched',
-    'Applied to local synthetic watched state.',
-    'local:mobile-watched:1:1',
-    'local:mobile-watched:1:2',
-    'local:mobile-watched:0:2',
-    'local:mobile-watched:1:3',
-    'local:mobile-watched:0:99',
-    'assertTrue(status, status.contains(NARRATIVE_SPECIAL))',
-    'assertFalse(status, status.contains(FUTURE_EPISODE))',
-    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))'
-]):
-    fail.append('synthetic_title_watched_api30_instrumentation_missing')
-if any(x in title_watched_instrumentation for x in [
-    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
-    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
-]):
-    fail.append('synthetic_title_watched_instrumentation_forbidden_surface')
-if not all(x in title_watched_instrumentation for x in [
-    'awaitVisibleWindowFocus(5_000L)',
-    'root.isShown && root.hasWindowFocus()',
-    'SystemClock.sleep(100L)',
-    'awaitRemoteFocus(MARK_SERIES_WATCHED, 64)',
-    'awaitRemoteFocus(MARK_SERIES_UNWATCHED, 64)',
-    'awaitRemoteDialogFocus(CONFIRM, 8)',
-    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)',
-    'view?.let { it.isShown && it.hasWindowFocus() && it.hasFocus() }',
-    'Synthetic watched IDs: none',
-    'Canonical unwatched readback did not re-arm a remotely focusable watched action'
-]):
-    fail.append('synthetic_title_watched_visible_window_focus_gate_missing')
-if not all(x in mobile_title_watched_instrumentation for x in [
-    'class MobileTitleWatchedInstrumentationTest',
-    '@RunWith(AndroidJUnit4::class)',
-    'ActivityScenario.launch(MobileStoryOrderLabActivity::class.java)',
-    'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',
-    'exactButton.performClick()',
-    'Mark all released episodes watched',
-    'Mark all released episodes unwatched',
-    'Applied to local synthetic watched state.',
-    'local:mobile-watched:1:1',
-    'local:mobile-watched:1:2',
-    'local:mobile-watched:0:2',
-    'local:mobile-watched:1:3',
-    'local:mobile-watched:0:99',
-    'assertTrue(status, status.contains(NARRATIVE_SPECIAL))',
-    'assertFalse(status, status.contains(FUTURE_EPISODE))',
-    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))',
-    'filter { it.length <= 2_048 }'
-]):
-    fail.append('synthetic_mobile_title_watched_api30_instrumentation_missing')
-if ('clickUniqueButton(MARK_SERIES_UNWATCHED)' not in
-        mobile_title_watched_instrumentation or
-    'Synthetic watched IDs: none' not in mobile_title_watched_instrumentation):
-    fail.append('synthetic_mobile_title_unwatched_api30_readback_missing')
-if "'androidx.test.espresso:espresso-core:3.7.0'" not in gradle:
-    fail.append('synthetic_mobile_title_unwatched_espresso_dependency_missing')
-if not all(x in mobile_title_watched_instrumentation for x in [
-    'import androidx.test.espresso.Espresso.onView',
-    'import androidx.test.espresso.action.ViewActions.click',
-    'import androidx.test.espresso.matcher.ViewMatchers.withText',
-    'onView(withText(CONFIRM)).perform(click())',
-    'const val CONFIRM = "Confirm"'
-]):
-    fail.append('synthetic_mobile_title_unwatched_confirmation_missing')
-if ('Canonical mobile unwatched readback did not re-arm the watched action' not in
-        mobile_title_watched_instrumentation or
-    'it.text.toString() == MARK_SERIES_WATCHED' not in
-        mobile_title_watched_instrumentation):
-    fail.append('synthetic_mobile_title_unwatched_opposite_rearm_missing')
-if any(x in mobile_title_watched_instrumentation for x in [
-    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
-    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
-]):
-    fail.append('synthetic_mobile_title_watched_instrumentation_forbidden_surface')
-if not all(x in java_text for x in [
-    'boundedStoryOrderRuntimeStatusForInstrumentation()',
-    'storyOrderToggle.parent !== controls',
-    'storyOrderSummary.parent !== controls',
-    'STORY_WATCHED_IDS.contains(it.id)',
-    'No player, account or mutable watched-state binding.',
-    'it.length <= 4_096'
-]):
-    fail.append('synthetic_story_order_bounded_status_surface_missing')
-if not all(x in story_order_instrumentation for x in [
-    'class CompanionTvStoryOrderInstrumentationTest',
-    '@RunWith(AndroidJUnit4::class)',
-    'ActivityScenario.launch(CompanionTvActivity::class.java)',
-    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)',
-    'candidate.hasFocus()',
-    'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)',
-    'boundedStoryOrderRuntimeStatusForInstrumentation()',
-    'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
-    'Presentation: Canonical',
-    'Presentation: Story Order',
-    'Next Story item (local metadata only)',
-    'local:story:1:1',
-    'local:story:0:2',
-    'local:story:1:2',
-    'local:story:0:99',
-    'assertStableWatchedMarkers(canonical, shouldContainAncillary = true)',
-    'assertStableWatchedMarkers(selected, shouldContainAncillary = false)',
-    'assertStableWatchedMarkers(advanced, shouldContainAncillary = false)',
-    'local:story:0:2 [S0 E2] â€¢ Watched',
-    'local:story:1:2 [S1 E2] â€¢ Watched',
-    'Resolved the original canonical object by stable ID.'
-]):
-    fail.append('synthetic_story_order_api30_instrumentation_missing')
-if any(x in story_order_instrumentation for x in [
-    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
-    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
-]):
-    fail.append('synthetic_story_order_instrumentation_forbidden_surface')
-if not all(x in story_order_instrumentation for x in [
-    'awaitVisibleWindowFocus(5_000L)',
-    'root.isShown && root.hasWindowFocus()',
-    'SystemClock.sleep(100L)',
-    'awaitRemoteFocus(CANONICAL_LABEL, 64)'
-]):
-    fail.append('synthetic_story_order_visible_window_focus_gate_missing')
-if not all(x in mobile_story_order_instrumentation for x in [
-    'class MobileStoryOrderInstrumentationTest',
-    '@RunWith(AndroidJUnit4::class)',
-    'ActivityScenario.launch(MobileStoryOrderLabActivity::class.java)',
-    'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
-    'exactButton.performClick()',
-    'Show season order',
-    'Show story order',
-    'S0 E2  Narrative special',
-    'local:mobile-story:0:2',
-    'local:mobile-story:0:99',
-    'Selection resolved the original synthetic canonical object by stable ID.',
-    'â€¢ Watched',
-    'filter { it.length <= 2_048 }'
-]):
-    fail.append('synthetic_mobile_story_order_api30_instrumentation_missing')
-if any(x in mobile_story_order_instrumentation for x in [
-    'android.permission.INTERNET', 'java.net.', 'http://', 'https://',
-    'ContentResolver', 'AccountManager', 'getAuthKey', 'System.getenv',
-    'Log.d(', 'takeScreenshot', 'UiAutomation', 'writeBytes', 'outputStream'
-]):
-    fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
-if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
-    fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':511,'issues':fail,'tested_bridge_sha256':CHECKSUM,
-                  'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
-sys.exit(1 if fail else 0)
-
-
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éíçŽüñ:-jZ.¶›­–)Þ³R2÷W7"ö&–âöVçb—F†öã0¢""$f–ÂÖ6Æ÷6VBÂ6÷W&6RÖöæÇ’6fVwV&G2f÷"F†R—6öÆFVBæG&ö–BEb6ö×æ–öâ6æF–FFRâ"" ¦g&öÒõögWGW&Uõò–×÷'Bææ÷FF–öç0¦–×÷'B†6†Æ– ¦–×÷'B§6öà¦–×÷'BF†Æ– ¦–×÷'B&P¦–×÷'B7—0¦–×÷'B†ÖÂæWG&VRäVÆVÖVçEG&VR2U@ ¥$ôõC×F†Æ–"åF‚…õöf–ÆUõò’ç&W6öÇfR‚’ç&VçG5³Ð¤Ôä”dU5CÕ$ôõBòw7&2öÖ–âôæG&ö–DÖæ–fW7Bç†ÖÂp¤äE$ô”CÒw¶‡GG¢ò÷66†VÖ2ææG&ö–Bæ6öÒö²÷&W2öæG&ö–GÒp¥4õU$4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâô6ö×æ–öåGd7F—f—G’æ·Bp¥5”åD„UD”5ôd•…EU$U3Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–4VF–ôf—‡GW&Ræ·Bp¥5”åD„UD”5ôd•…EU$U5õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–4f—‡GW&UFW7Bæ·Bp¥5”åD„UD”5ô5TUôô%4U%dU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆT7VTFVÆ—fW'”ö'6W'fW"æ·Bp¥5”åD„UD”5ô5TUôô%4U%dU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆT7VTFVÆ—fW'”ö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õE$4µôô%4U%dU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUG&6µ7FFTö'6W'fW"æ·Bp¥5”åD„UD”5õE$4µôô%4U%dU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUG&6µ7FFTö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õÄ”$4µôUd”DTä4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUÆ–&6´Wf–FVæ6Tö'6W'fW"æ·Bp¥5”åD„UD”5õÄ”$4µôUd”DTä4UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUÆ–&6´Wf–FVæ6Tö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õ$TdU$Tä4UôUd”DTä4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VfW&Væ6TWf–FVæ6Tö'6W'fW"æ·Bp¥5”åD„UD”5õ$TdU$Tä4UôUd”DTä4UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VfW&Væ6TWf–FVæ6Tö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õ$TäDU%õ•TÄ”äSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VæFW%—VÆ–æTö'6W'fW"æ·Bp¥5”åD„UD”5õ$TäDU%õ•TÄ”äUõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VæFW%—VÆ–æTö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õt”äDõuõ•„TÅ3Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUv–æF÷u—†VÄö'6W'fW"æ·Bp¥5”åD„UD”5õt”äDõuõ•„TÅ5õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUv–æF÷u—†VÄö'6W'fW%FW7Bæ·Bp¥5”åD„UD”5õt”äDõuõ•„TÅôÄT4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUv–æF÷u—†VÄ6GW&TÆV6Ræ·Bp¥5”åD„UD”5õt”äDõuõ•„TÅôÄT4UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆUv–æF÷u—†VÄ6GW&TÆV6UFW7Bæ·Bp¥5”åD„UD”5õt”äDõuõ•„TÅô”å5E%TÔTåDD”ôãÕ$ôõBòw7&2öæG&ö–EFW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâô6ö×æ–öåGe—†VÄ6÷”–ç7G'VÖVçFF–öåFW7Bæ·Bp¥D•DÄUõtD4„TEô”å5E%TÔTåDD”ôãÕ$ôõBòw7&2öæG&ö–EFW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâô6ö×æ–öåGeF—FÆUvF6†VD–ç7G'VÖVçFF–öåFW7Bæ·Bp¤Ôô$”ÄUõD•DÄUõtD4„TEô”å5E%TÔTåDD”ôãÕ$ôõBòw7&2öæG&ö–EFW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆUF—FÆUvF6†VD–ç7G'VÖVçFF–öåFW7Bæ·Bp¥5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôãÕ$ôõBòw7&2öæG&ö–EFW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâô6ö×æ–öåGe7F÷'”÷&FW$–ç7G'VÖVçFF–öåFW7Bæ·Bp¤Ôô$”ÄUõ5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôãÕ$ôõBòw7&2öæG&ö–EFW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW$–ç7G'VÖVçFF–öåFW7Bæ·Bp¤äD•dUõ5T%D•DÄUõ$õdTää4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U&÷fVææ6Ræ·Bp¤äD•dUõ5T%D•DÄUõ$õdTää4UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U&÷fVææ6UFW7Bæ·Bp¤äD•dUõ5T%D•DÄUõ5Dõ$SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U7F÷&Ræ·Bp¤äD•dUõ5T%D•DÄUõ5Dõ$UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U7F÷&UFW7Bæ·Bp¤äD•dUõ5T%D•DÄUô4ôDT3Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U&V6V—D6öFV2æ·Bp¤äD•dUõ5T%D•DÄUô4ôDT5õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆU&VfW&Væ6U&V6V—D6öFV5FW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUõ5Dõ$tSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6U6†&VE&VfW&Væ6W5÷'Bæ·Bp¤äE$ô”Eõ5T%D•DÄUõ5Dõ$tUõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6U6†&VE&VfW&Væ6W5÷'EFW7Bæ·Bp¥5T%D•DÄUôD”tU5Eõ4õU$4SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ6V7W&U&æFöÕ7V'F—FÆU&VfW&Væ6TF–vW7E6÷W&6Ræ·Bp¥5T%D•DÄUôD”tU5Eõ4õU$4UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ6V7W&U&æFöÕ7V'F—FÆU&VfW&Væ6TF–vW7E6÷W&6UFW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6U7F÷&T÷væW"æ·Bp¤äE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6U7F÷&T÷væW%FW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôãÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U6W76–öâæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôåõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U6W76–öåFW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôãÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6UG&ç67F–öâæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôåõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6UG&ç67F–öåFW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6Uv–FvWD6öçG&öÆÆW"æ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6Uv–FvWD6öçG&öÆÆW%FW7Bæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEõõ%CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6Uv–FvWE÷'Bæ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U67&VVä÷væW"æ·Bp¤äE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U67&VVä÷væW%FW7Bæ·Bp¥5”åD„UD”5õ5T%D•DÄUô„õ5CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7Bæ·Bp¥5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7EFW7Bæ·Bp¥U%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7Bæ·Bp¥U%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7EFW7Bæ·Bp¥U%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6U67&VVä÷væW"æ·Bp¥U%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6U67&VVä÷væW%FW7Bæ·Bp¤äD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"æ·Bp¤äD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷%FW7Bæ·Bp¤ÔTD”5õ5T%D•DÄUõÄ”$4µôDDU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖVF–57V'F—FÆUÆ–&6µ&VfW&Væ6TFFW"æ·Bp¤ÔTD”5õ5T%D•DÄUõÄ”$4µôDDU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖVF–57V'F—FÆUÆ–&6µ&VfW&Væ6TFFW%FW7Bæ·Bp¥5Dõ%“Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7F÷'”÷&FW$6öçG&7Bæ·Bp¥5Dõ%•õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7F÷'”÷&FW$6öçG&7EFW7Bæ·Bp¤Ôô$”ÄUõ5Dõ%“Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW$6öçG&öÆÆW"æ·Bp¤Ôô$”ÄUõ5Dõ%•õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW$6öçG&öÆÆW%FW7Bæ·Bp¤Ôô$”ÄUõ5Dõ%•ô„õ5CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW%f–Wt†÷7Bæ·Bp¤Ôô$”ÄUõ5Dõ%•ô„õ5EõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW%f–Wt†÷7EFW7Bæ·Bp¤äE$ô”EôÔô$”ÄUõ5Dõ%•õt”DtUEõõ%CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–DÖö&–ÆU7F÷'”÷&FW%v–FvWE÷'Bæ·Bp¤äE$ô”EôÔô$”ÄUõ5Dõ%•õ45$TTåôõtäU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–DÖö&–ÆU7F÷'”÷&FW%67&VVä÷væW"æ·Bp¤Ôô$”ÄUõ5Dõ%•ô5D•d•E“Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôÖö&–ÆU7F÷'”÷&FW$Æ$7F—f—G’æ·Bp¥5”åD„UD”5õtD4„TEô„õ5CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–5F—FÆUvF6†VD66÷VçD†÷7Bæ·Bp¥5”åD„UD”5õtD4„TEô„õ5EõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâõ7–çF†WF–5F—FÆUvF6†VD66÷VçD†÷7EFW7Bæ·Bp¤Ôô$”ÄUô”4ôãÕ$ôõBòw7&2öÖ–â÷&W2öG&v&ÆRö6ö×æ–öåöÖö&–ÆUö–6öâç†ÖÂp¥$T4õdU%“Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUÆ–&6µ&V6÷fW'•öÆ–7’æ·Bp¥$T4õdU%•õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUÆ–&6µ&V6÷fW'•öÆ–7•FW7Bæ·Bp¤4Ä54”d”U#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fU7G&VÔf–ÇW&T6Æ76–f–W"æ·Bp¤4Ä54”d”U%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fU7G&VÔf–ÇW&T6Æ76–f–W%FW7Bæ·Bp¤ÔTD”5ô”åD´SÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖVF–4f–ÇW&T–çF¶Ræ·Bp¤ÔTD”5ô”åD´UõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖVF–4f–ÇW&T–çF¶UFW7Bæ·Bp¤ÔTD”5õ$UE%•ô5ETDõ#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖVF–5&WG'”7GVF÷"æ·Bp¤ÔTD”5õ$UE%•ô5ETDõ%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖVF–5&WG'”7GVF÷%FW7Bæ·Bp¤5ETDõ#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUÆ–&6µ&V6÷fW'”7GVF÷"æ·Bp¤5ETDõ%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUÆ–&6µ&V6÷fW'”7GVF÷%FW7Bæ·Bp¤%$”DtSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGd'&–FvRæ·Bp¥õ%E3Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGe÷'G2æ·Bp¤U•4ôDSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTW—6öFUvF6†VD7F–öâæ·Bp¥D•DÄUõtD4„TEôÔTåSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VDÖVçRæ·Bp¥D•DÄUõtD4„TEôÔTåUõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VDÖVçUFW7Bæ·Bp¤Ôô$”ÄUõD•DÄUõtD4„TEôÔTåSÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçRæ·Bp¤Ôô$”ÄUõD•DÄUõtD4„TEôÔTåUõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçUFW7Bæ·Bp¤Ôô$”ÄUõD•DÄUô„õ5Eô$”äD”äsÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VD†÷7D&–æF–æræ·Bp¤Ôô$”ÄUõD•DÄUô„õ5Eô$”äD”äuõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VD†÷7D&–æF–æuFW7Bæ·Bp¥EeõD•DÄUô„õ5Eô$”äD”äsÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VD†÷7D&–æF–æræ·Bp¥EeõD•DÄUô„õ5Eô$”äD”äuõDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VD†÷7D&–æF–æuFW7Bæ·Bp¥EeõD•DÄUõt”DtUEô4ôåE$ôÄÄU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"æ·Bp¥EeõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUGeF—FÆUvF6†VEv–FvWD6öçG&öÆÆW%FW7Bæ·Bp¤äE$ô”EõEeõD•DÄUõt”DtUEõõ%CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–EGeF—FÆUvF6†VEv–FvWE÷'Bæ·Bp¤Ôô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"æ·Bp¤Ôô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD6öçG&öÆÆW%FW7Bæ·Bp¤äE$ô”EôÔô$”ÄUõD•DÄUõt”DtUEõõ%CÕ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–DÖö&–ÆUF—FÆUvF6†VEv–FvWE÷'Bæ·Bp¥D•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ“Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUF—FÆUvF6†VEf–Wu÷'E&VÆ’æ·Bp¥D•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ•õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷GbôæF—fUF—FÆUvF6†VEf–Wu÷'E&VÆ•FW7Bæ·Bp¤äE$ô”EõD•DÄUõtD4„TEõ45$TTåôõtäU%3Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷F†–¦’÷7G&VÖ–÷Gf6ö×æ–öâôæG&ö–EF—FÆUvF6†VE67&VVä÷væW'2æ·Bp¤4äôä”4ÅõtD4„TEô44õTåEôDDU#Õ$ôõBòw7&2öÖ–âö¦fö÷&r÷72÷7G&VÖ–ò÷Gbõ6W76–öä&÷VæD6æöæ–6ÅvF6†VD66÷VçDFFW"æ·Bp¤4äôä”4ÅõtD4„TEô44õTåEôDDU%õDU5CÕ$ôõBòw7&2÷FW7Bö¦fö÷&r÷72÷7G&VÖ–ò÷Gbõ6W76–öä&÷VæD6æöæ–6ÅvF6†VD66÷VçDFFW%FW7Bæ·Bp¤%T”ÄCÕ$ôõBòv'V–ÆBæw&FÆRp¤4„T4µ5TÓÒv#3C3v3Sf#Ss3CCƒ†&6#3c–##F3cV“3†C“3Cs3cSFf&C“Scbp ¦Öæ–fW7CÔUBç'6R„Ôä”dU5B’ævWG&ö÷B‚¦f–ÃÕµÐ§W&Ö—76–öåöæÖW3Õ·ævWB„äE$ô”B²væÖRr’f÷"–âÖæ–fW7Bæf–æFÆÂ‚wW6W2×W&Ö—76–öâr’–bævWB‚w¶‡GG¢ò÷66†VÖ2ææG&ö–Bæ6öÒ÷FööÇ7ÖæöFRr’Òw&VÖ÷fRuÐ¦–bW&Ö—76–öåöæÖW3¦f–ÂæVæB‚wW&Ö—76–öç5ö&Uöæ÷EöÆÆ÷vVC¢r·&W"‡W&Ö—76–öåöæÖW2’¦ÖÖæ–fW7Bæf–æB‚vÆ–6F–öâr¦–b—2æöæS¦f–ÂæVæB‚vÖ—76–æuöÆ–6F–öâr¦VÇ6S ¢–bævWB„äE$ô”B²v&ææW"r’ÒtG&v&ÆRö6ö×æ–öå÷Geö&ææW"s¦f–ÂæVæB‚vÆVæ&6µö&ææW%öÖ—76–ærr¢–bævWB„äE$ô”B²vÆÆ÷t&6·Wr’ÒvfÇ6Rs¦f–ÂæVæB‚v&6·Wöæ÷EöF—6&ÆVBr¢–bævWB„äE$ô”B²wW6W46ÆV'FW‡EG&ff–2r’ÒvfÇ6Rs¦f–ÂæVæB‚v6ÆV'FW‡Eöæ÷EöF—6&ÆVBr¢–bævWB„äE$ô”B²v–6öâr’ÒtG&v&ÆRö6ö×æ–öåöÖö&–ÆUö–6öâs ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö–6öåöÖ—76–ærr¢fVGW&W3×°¢fVGW&RævWB„äE$ô”B²væÖRr“¢fVGW&RævWB„äE$ô”B²w&WV—&VBr¢f÷"fVGW&R–âÖæ–fW7Bæf–æFÆÂ‚wW6W2ÖfVGW&Rr¢Ð¢–bfVGW&W2ævWB‚væG&ö–Bç6ögGv&RæÆVæ&6²r’ÒvfÇ6Rs ¢f–ÂæVæB‚vÆVæ&6µ÷7F–ÆÅ÷&WV—&VEöf÷%öÖö&–ÆUöÆ"r¢7F—f—F–W3Öæf–æFÆÂ‚v7F—f—G’r¢'•öæÖS×¶7F—f—G’ævWB„äE$ô”B²væÖRr“¢7F—f—G’f÷"7F—f—G’–â7F—f—F–W7Ð¢W‡V7FVC×²rä6ö×æ–öåGd7F—f—G’rÂräÖö&–ÆU7F÷'”÷&FW$Æ$7F—f—G’wÐ¢–b6WB†'•öæÖR’ÒW‡V7FVC¦f–ÂæVæB‚wVæW‡V7FVEö7F—f—G•÷6WC¢r·&W"‡6WB†'•öæÖR’’¢f÷"7F—f—G’–â7F—f—F–W3 ¢æÖW3Õ¶ævWB„äE$ô”B²væÖRr’f÷"–â7F—f—G’æf–æFÆÂ‚râòö7F–öâr•Ð¢–b7F—f—G’ævWB„äE$ô”B²vW‡÷'FVBr’ÒwG'VRs ¢f–ÂæVæB‚vÆVæ6†W%ö7F—f—G•öæ÷EöW‡Æ–6—FÇ•öW‡÷'FVBr¢–bvæG&ö–Bæ–çFVçBæ7F–öâåd”Urr–âæÖW3¦f–ÂæVæB‚vW‡FW&æÅöÖVF–÷f–WuöW‡÷6VBr¢–bç’‚væG&ö–Bæ–çFVçBæ7F–öâä$ôõEô4ôÕÄUDTBr–â†æÖR÷"rr’f÷"æÖR–âæÖW2“¦f–ÂæVæB‚v&ö÷E÷&V6V—fW"r¢GcÖ'•öæÖRævWB‚rä6ö×æ–öåGd7F—f—G’r¢Öö&–ÆSÖ'•öæÖRævWB‚räÖö&–ÆU7F÷'”÷&FW$Æ$7F—f—G’r¢Geö6FVv÷&–W3ÕµÒ–bGb—2æöæRVÇ6R¶2ævWB„äE$ô”B²væÖRr’f÷"2–âGbæf–æFÆÂ‚râòö6FVv÷'’r•Ð¢Öö&–ÆUö6FVv÷&–W3ÕµÒ–bÖö&–ÆR—2æöæRVÇ6R¶2ævWB„äE$ô”B²væÖRr’f÷"2–âÖö&–ÆRæf–æFÆÂ‚râòö6FVv÷'’r•Ð¢–bGeö6FVv÷&–W2Ò²væG&ö–Bæ–çFVçBæ6FVv÷'’äÄTä$4µôÄTä4„U"uÓ ¢f–ÂæVæB‚wGeöÆVæ6†W%ö6FVv÷'•ö6†ævVBr¢–bÖö&–ÆUö6FVv÷&–W2Ò²væG&ö–Bæ–çFVçBæ6FVv÷'’äÄTä4„U"uÓ ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö6FVv÷'•öÖ—76–æuö÷%ö'&öFVæVBr¢–bæf–æFÆÂ‚w6W'f–6Rr’÷"æf–æFÆÂ‚w&V6V—fW"r’÷"æf–æFÆÂ‚w&÷f–FW"r“ ¢f–ÂæVæB‚wVæW‡V7FVEö&6¶w&÷VæEö6ö×öæVçBr¤$ääU#Õ$ôõBòw7&2öÖ–â÷&W2öG&v&ÆRö6ö×æ–öå÷Geö&ææW"ç†ÖÂp¦–bæ÷B$ääU"æ—5öf–ÆR‚“ ¢f–ÂæVæB‚væF—fU÷Geö&ææW%÷&W6÷W&6UöÖ—76–ærr¦VÇ6S ¢G'“ ¢#ÔUBç'6R„$ääU"’ævWG&ö÷B‚¢–b"çFrÒwfV7F÷"ræBæ÷B"çFræVæG7v—F‚‚w×fV7F÷"r“ ¢f–ÂæVæB‚væF—fU÷Geö&ææW%öæ÷E÷fV7F÷"r¢–b"ævWB„äE$ô”B²wv–GF‚r’Òs3#Gr÷""ævWB„äE$ô”B²v†V–v‡Br’ÒsƒGs ¢f–ÂæVæB‚væF—fU÷Geö&ææW%÷w&öæuöF–ÖVç6–öç2r¢W†6WB„UBå'6TW'&÷"Äõ4W'&÷"“ ¢f–ÂæVæB‚væF—fU÷Geö&ææW%ö–çfÆ–E÷†ÖÂr¦–bæ÷BÔô$”ÄUô”4ôâæ—5öf–ÆR‚“ ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö–6öå÷&W6÷W&6UöÖ—76–ærr¦VÇ6S ¢G'“ ¢–6öãÔUBç'6R„Ôô$”ÄUô”4ôâ’ævWG&ö÷B‚¢–b–6öâçFrÒwfV7F÷"ræBæ÷B–6öâçFræVæG7v—F‚‚w×fV7F÷"r“ ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö–6öåöæ÷E÷fV7F÷"r¢–b–6öâævWB„äE$ô”B²wv–GF‚r’Òs†Gr÷"–6öâævWB„äE$ô”B²v†V–v‡Br’Òs†Gs ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö–6öå÷w&öæuöF–ÖVç6–öç2r¢W†6WB„UBå'6TW'&÷"Äõ4W'&÷"“ ¢f–ÂæVæB‚vÖö&–ÆUöÆVæ6†W%ö–6öåö–çfÆ–E÷†ÖÂr¦–b†6†Æ–"ç6†#Sb„%$”DtRç&VEö'—FW2‚’’æ†W†F–vW7B‚’Ô4„T4µ5TÓ ¢f–ÂæVæB‚wFW7FVEö'&–FvUöÖöF–f–VBr¦'&–FvU÷FW‡CÔ%$”DtRç&VE÷FW‡B‚¦–b‚w&WGW&â÷&FW"æÖæ÷DçVÆÂ²'”–E¶—EÒÒræ÷B–â'&–FvU÷FW‡B÷ ¢w&WGW&â÷&FW"æÖæ÷DçVÆÂ²'”–E¶—EÒÒæf–ÇFW"²—Bç6V6öââÒr–â'&–FvU÷FW‡B“ ¢f–ÂæVæB‚w6W&–W5÷vF6†VE÷7F÷'•ö÷&FW%öæ'&F—fUöÖVÖ&W'6†—öÖ—76–ærr¦¦f÷FW‡CÕ4õU$4Rç&VE÷FW‡B‚§7–çF†WF–5öf—‡GW&W3Õ5”åD„UD”5ôd•…EU$U2ç&VE÷FW‡B‚’–b5”åD„UD”5ôd•…EU$U2æ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5öf—‡GW&W5÷FW7CÕ5”åD„UD”5ôd•…EU$U5õDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5ôd•…EU$U5õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5ö7VUöö'6W'fW#Õ5”åD„UD”5ô5TUôô%4U%dU"ç&VE÷FW‡B‚’–b5”åD„UD”5ô5TUôô%4U%dU"æ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5ö7VUöö'6W'fW%÷FW7CÕ5”åD„UD”5ô5TUôô%4U%dU%õDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5ô5TUôô%4U%dU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷G&6µöö'6W'fW#Õ5”åD„UD”5õE$4µôô%4U%dU"ç&VE÷FW‡B‚’–b5”åD„UD”5õE$4µôô%4U%dU"æ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷G&6µöö'6W'fW%÷FW7CÕ5”åD„UD”5õE$4µôô%4U%dU%õDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õE$4µôô%4U%dU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷Æ–&6µöWf–FVæ6SÕ5”åD„UD”5õÄ”$4µôUd”DTä4Rç&VE÷FW‡B‚’–b5”åD„UD”5õÄ”$4µôUd”DTä4Ræ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷Æ–&6µöWf–FVæ6U÷FW7CÕ5”åD„UD”5õÄ”$4µôUd”DTä4UõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õÄ”$4µôUd”DTä4UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷&VfW&Væ6UöWf–FVæ6SÕ5”åD„UD”5õ$TdU$Tä4UôUd”DTä4Rç&VE÷FW‡B‚’–b5”åD„UD”5õ$TdU$Tä4UôUd”DTä4Ræ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷&VfW&Væ6UöWf–FVæ6U÷FW7CÕ5”åD„UD”5õ$TdU$Tä4UôUd”DTä4UõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õ$TdU$Tä4UôUd”DTä4UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷&VæFW%÷—VÆ–æSÕ5”åD„UD”5õ$TäDU%õ•TÄ”äRç&VE÷FW‡B‚’–b5”åD„UD”5õ$TäDU%õ•TÄ”äRæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷&VæFW%÷—VÆ–æU÷FW7CÕ5”åD„UD”5õ$TäDU%õ•TÄ”äUõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õ$TäDU%õ•TÄ”äUõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷v–æF÷u÷—†VÇ3Õ5”åD„UD”5õt”äDõuõ•„TÅ2ç&VE÷FW‡B‚’–b5”åD„UD”5õt”äDõuõ•„TÅ2æ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷v–æF÷u÷—†VÇ5÷FW7CÕ5”åD„UD”5õt”äDõuõ•„TÅ5õDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õt”äDõuõ•„TÅ5õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷v–æF÷u÷—†VÅöÆV6SÕ5”åD„UD”5õt”äDõuõ•„TÅôÄT4Rç&VE÷FW‡B‚’–b5”åD„UD”5õt”äDõuõ•„TÅôÄT4Ræ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷v–æF÷u÷—†VÅöÆV6U÷FW7CÕ5”åD„UD”5õt”äDõuõ•„TÅôÄT4UõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õt”äDõuõ•„TÅôÄT4UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷v–æF÷u÷—†VÅö–ç7G'VÖVçFF–öãÕ5”åD„UD”5õt”äDõuõ•„TÅô”å5E%TÔTåDD”ôâç&VE÷FW‡B‚’–b5”åD„UD”5õt”äDõuõ•„TÅô”å5E%TÔTåDD”ôâæ—5öf–ÆR‚’VÇ6Rrp§F—FÆU÷vF6†VEö–ç7G'VÖVçFF–öãÕD•DÄUõtD4„TEô”å5E%TÔTåDD”ôâç&VE÷FW‡B‚’–bD•DÄUõtD4„TEô”å5E%TÔTåDD”ôâæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆU÷vF6†VEö–ç7G'VÖVçFF–öãÔÔô$”ÄUõD•DÄUõtD4„TEô”å5E%TÔTåDD”ôâç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUõtD4„TEô”å5E%TÔTåDD”ôâæ—5öf–ÆR‚’VÇ6Rrp§7F÷'•ö÷&FW%ö–ç7G'VÖVçFF–öãÕ5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôâç&VE÷FW‡B‚’–b5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôâæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'•ö÷&FW%ö–ç7G'VÖVçFF–öãÔÔô$”ÄUõ5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôâç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%•ôõ$DU%ô”å5E%TÔTåDD”ôâæ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷&÷fVææ6SÔäD•dUõ5T%D•DÄUõ$õdTää4Rç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõ$õdTää4Ræ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷&÷fVææ6U÷FW7CÔäD•dUõ5T%D•DÄUõ$õdTää4UõDU5Bç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõ$õdTää4UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷7F÷&SÔäD•dUõ5T%D•DÄUõ5Dõ$Rç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõ5Dõ$Ræ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷7F÷&U÷FW7CÔäD•dUõ5T%D•DÄUõ5Dõ$UõDU5Bç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõ5Dõ$UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆUö6öFV3ÔäD•dUõ5T%D•DÄUô4ôDT2ç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUô4ôDT2æ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆUö6öFV5÷FW7CÔäD•dUõ5T%D•DÄUô4ôDT5õDU5Bç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUô4ôDT5õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆU÷7F÷&vSÔäE$ô”Eõ5T%D•DÄUõ5Dõ$tRç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUõ5Dõ$tRæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆU÷7F÷&vU÷FW7CÔäE$ô”Eõ5T%D•DÄUõ5Dõ$tUõDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUõ5Dõ$tUõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7V'F—FÆUöF–vW7E÷6÷W&6SÕ5T%D•DÄUôD”tU5Eõ4õU$4Rç&VE÷FW‡B‚’–b5T%D•DÄUôD”tU5Eõ4õU$4Ræ—5öf–ÆR‚’VÇ6Rrp§7V'F—FÆUöF–vW7E÷6÷W&6U÷FW7CÕ5T%D•DÄUôD”tU5Eõ4õU$4UõDU5Bç&VE÷FW‡B‚’–b5T%D•DÄUôD”tU5Eõ4õU$4UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆU÷7F÷&Uö÷væW#ÔäE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU"ç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU"æ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆU÷7F÷&Uö÷væW%÷FW7CÔäE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU%õDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUõ5Dõ$UôõtäU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷6W76–öãÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôâç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôâæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷6W76–öå÷FW7CÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôåõDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ4U54”ôåõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷G&ç67F–öãÔäE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôâç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôâæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷G&ç67F–öå÷FW7CÔäE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôåõDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4UõE$å45D”ôåõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷v–FvWEö6öçG&öÆÆW#ÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU"ç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU"æ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷v–FvWEö6öçG&öÆÆW%÷FW7CÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU%õDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEô4ôåE$ôÄÄU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷v–FvWE÷÷'CÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEõõ%Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõt”DtUEõõ%Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷67&VVåö÷væW#ÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU"ç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU"æ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷7V'F—FÆUö6†ö–6U÷67&VVåö÷væW%÷FW7CÔäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU%õDU5Bç&VE÷FW‡B‚’–bäE$ô”Eõ5T%D•DÄUô4„ô”4Uõ45$TTåôõtäU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷7V'F—FÆUö†÷7CÕ5”åD„UD”5õ5T%D•DÄUô„õ5Bç&VE÷FW‡B‚’–b5”åD„UD”5õ5T%D•DÄUô„õ5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷7V'F—FÆUö†÷7E÷FW7CÕ5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§W'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7CÕU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5Bç&VE÷FW‡B‚’–bU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5Bæ—5öf–ÆR‚’VÇ6Rrp§W'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7E÷FW7CÕU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5Bç&VE÷FW‡B‚’–bU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUô„õ5EõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§W'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW#ÕU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU"ç&VE÷FW‡B‚’–bU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU"æ—5öf–ÆR‚’VÇ6Rrp§W'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%÷FW7CÕU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU%õDU5Bç&VE÷FW‡B‚’–bU%4•5DTåEõ5”åD„UD”5õ5T%D•DÄUõ45$TTåôõtäU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷#ÔäD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ"ç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ"æ—5öf–ÆR‚’VÇ6Rrp¦æF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷%÷FW7CÔäD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ%õDU5Bç&VE÷FW‡B‚’–bäD•dUõ5T%D•DÄUõÄ”$4µô5ETDõ%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW#ÔÔTD”5õ5T%D•DÄUõÄ”$4µôDDU"ç&VE÷FW‡B‚’–bÔTD”5õ5T%D•DÄUõÄ”$4µôDDU"æ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW%÷FW7CÔÔTD”5õ5T%D•DÄUõÄ”$4µôDDU%õDU5Bç&VE÷FW‡B‚’–bÔTD”5õ5T%D•DÄUõÄ”$4µôDDU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§7F÷'“Õ5Dõ%’ç&VE÷FW‡B‚’–b5Dõ%’æ—5öf–ÆR‚’VÇ6Rrp§7F÷'•÷FW7CÕ5Dõ%•õDU5Bç&VE÷FW‡B‚’–b5Dõ%•õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'“ÔÔô$”ÄUõ5Dõ%’ç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%’æ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'•÷FW7CÔÔô$”ÄUõ5Dõ%•õDU5Bç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%•õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'•ö†÷7CÔÔô$”ÄUõ5Dõ%•ô„õ5Bç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%•ô„õ5Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'•ö†÷7E÷FW7CÔÔô$”ÄUõ5Dõ%•ô„õ5EõDU5Bç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%•ô„õ5EõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–EöÖö&–ÆU÷7F÷'•÷v–FvWE÷÷'CÔäE$ô”EôÔô$”ÄUõ5Dõ%•õt”DtUEõõ%Bç&VE÷FW‡B‚’–bäE$ô”EôÔô$”ÄUõ5Dõ%•õt”DtUEõõ%Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–EöÖö&–ÆU÷7F÷'•÷67&VVåö÷væW#ÔäE$ô”EôÔô$”ÄUõ5Dõ%•õ45$TTåôõtäU"ç&VE÷FW‡B‚’–bäE$ô”EôÔô$”ÄUõ5Dõ%•õ45$TTåôõtäU"æ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷7F÷'•ö7F—f—G“ÔÔô$”ÄUõ5Dõ%•ô5D•d•E’ç&VE÷FW‡B‚’–bÔô$”ÄUõ5Dõ%•ô5D•d•E’æ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷vF6†VEö†÷7CÕ5”åD„UD”5õtD4„TEô„õ5Bç&VE÷FW‡B‚’–b5”åD„UD”5õtD4„TEô„õ5Bæ—5öf–ÆR‚’VÇ6Rrp§7–çF†WF–5÷vF6†VEö†÷7E÷FW7CÕ5”åD„UD”5õtD4„TEô„õ5EõDU5Bç&VE÷FW‡B‚’–b5”åD„UD”5õtD4„TEô„õ5EõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦–b‚v6Æ72Öö&–ÆU7F÷'”÷&FW$Æ$7F—f—G’¢7F—f—G’‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢tæG&ö–DÖö&–ÆU7F÷'”÷&FW%67&VVä÷væW"æ7&VFR‚ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v7&VFVE7F÷'’ç&VæFW"„Öö&–ÆU7F÷'”÷&FW$ÖöFRå5Dõ%’’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆU÷7F÷'•öÆVæ6†W%ö6ö×÷6—F–öåöÖ—76–ærr¦–b‚v7W'&VçBæ6öç7VÖU6VÆV7F–öâ‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v7W'&VçBç&VæFW"„Öö&–ÆU7F÷'”÷&FW$ÖöFRå5Dõ%’’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆU÷7F÷'•÷6VÆV7F–öåöÖ–Æ&÷…ö÷%÷&W&VæFW%öÖ—76–ærr¦–b‚tæG&ö–DÖö&–ÆUF—FÆUvF6†VE67&VVä÷væW"æ7&VFR‚ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v7&VFVEvF6†VBç&VæFW"ƒ’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v7W'&VçBæ6öç7VÖT÷WF6öÖR‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆUö7F–öåöÆ%ö6ö×÷6—F–öåö÷%öÖ–Æ&÷…öÖ—76–ærr¦–b‚wV’ç&VÖ÷fT6ÆÆ&6·2†÷WF6öÖUV×’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢w7F÷'”÷væW#òæ6Æ÷6R‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢wvF6†VD÷væW#òæ6Æ÷6R‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢w7V'F—FÆT÷væW#òæ6Æ÷6R‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v÷fW'&–FRgVâöäFW7G&÷’‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆUöÆ%öÆ–fV7–6ÆUö6Æ÷6UöÖ—76–ærr¦–b‚vÆö6Ã¦Öö&–ÆR×7F÷'“££ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢u5”åD„UD”5õ5Dõ%•õtD4„TEô”E2ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢u7–çF†WF–2Æö6ÂÖWFFFæBvF6†VB7FFRöæÇ’âræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢v6†ævR&öGV7F–öâvF6†VB†—7F÷'’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆUöÆ%÷7–çF†WF–5öF—66Æ÷7W&UöÖ—76–ærr¦ÆÆ÷vVE÷75ö–×÷'G3×°¢v–×÷'B÷&rç72ç7G&VÖ–òçGbäæF—fTÖö&–ÆUF—FÆUvF6†VD÷WF6öÖRrÀ¢v–×÷'B÷&rç72ç7G&VÖ–òçGbåGevF6†VD6ö÷&F–æF÷"rÀ§Ð¦7GVÅ÷75ö–×÷'G3×°¢Æ–æRf÷"Æ–æR–âÖö&–ÆU÷7F÷'•ö7F—f—G’ç7Æ—FÆ–æW2‚¢–bÆ–æRç7F'G7v—F‚‚v–×÷'B÷&rç72ç7G&VÖ–òçGbâr§Ð¦–b7GVÅ÷75ö–×÷'G2ÒÆÆ÷vVE÷75ö–×÷'G3 ¢f–ÂæVæB‚vÖö&–ÆUöÆ%÷Vç&Wf–WvVE÷75÷7W&f6S¢r·&W"†7GVÅ÷75ö–×÷'G2’¦–bç’‡Fö¶Vâ–âÖö&–ÆU÷7F÷'•ö7F—f—G’f÷"Fö¶Vâ–â°¢væG&ö–G‚æÖVF–2rÂvæG&ö–BææWBârÂv¦fææWBârÀ¢vvWD–çFVçB‚rÂv–çFVçBævWBrÂw7F'D7F—f—G’‚rÂw7F'E6W'f–6R‚rÀ¢t6öçFVçE&W6öÇfW"rÂt66÷VçDÖævW"rÂtFF7F÷&Rp¥Ò“ ¢f–ÂæVæB‚vÖö&–ÆUöÆ%öW‡FW&æÅö÷%÷Æ–W%÷7W&f6Rr¦–b‚tÆö÷W"ævWDÖ–äÆö÷W"‚’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢wV’ç÷7B†÷WF6öÖUV×’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢wV’ç÷7DFVÆ–VB‡F†—2ÂõUD4ôÔUõôÄÅôÕ2’ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆUöÆ%öÖ–å÷F‡&VEöÖ–Æ&÷…÷V×öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âÖö&–ÆU÷7F÷'•ö7F—f—G’f÷"‚–â°¢uW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6U67&VVä÷væW"æ÷Vâ‚rÀ¢uW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7BäæÖW76RäÔô$”ÄRrÀ¢vvWE6†&VE&VfW&Væ6W2…5”åD„UD”5õ5T%D•DÄUõ5DDUõ$Te2ÂÔôDUõ$•dDR’rÀ¢vvWE6†&VE&VfW&Væ6W2…5”åD„UD”5õ5T%D•DÄUõ$T4T•Eõ$Te2ÂÔôDUõ$•dDR’rÀ¢wfÂ–æ—F–Å7V'F—FÆRÒ7&VFVE7V'F—FÆSòæ–æ—F–Å7FFR‚’rÀ¢v7&VFVE7V'F—FÆRç&VæFW$–æ—F–Â‚’rÀ¢v7W'&VçBæ7W'&VçE&VfW&Væ6R‚’rÀ¢v7W'&VçBç&VæFW%6WGF–æw2‚’rÀ¢v7W'&VçBæ6öç7VÖT÷WF6öÖR‚’p¥Ò“ ¢f–ÂæVæB‚vÖö&–ÆU÷7V'F—FÆUöÆ%ö6ö×÷6—F–öåö÷%öÖ–Æ&÷…öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âÖö&–ÆU÷7F÷'•ö7F—f—G’f÷"‚–â°¢tW‡Æ–6—FÇ’öfbv†Vâæò6†ö–6R—27F÷&VBârÀ¢v÷vâ×&—fFR&VfW&Væ6RæB&÷fVææ6R&V6V—BrÀ¢uF†RÖö&–ÆRæBEbÆ"æÖW76W2&R–æFWVæFVçBârÀ¢t7W'&VçBVæ&ÆVB7FFR†2æòÖF6†–ær6ÖRÖ–ç7FÆÆF–öâ&V6V—BæB—2rÀ¢væ÷BFÖ—GFVB26öç6VçBârÀ¢u&öGV7F–öâ7G&VÖ–ò&VfW&Væ6W2vW&Ræ÷B&VB÷"6†ævVBârÀ¢wVçfW&–f–VB&öÆÆ&6³²rÀ¢wF†R7V'F—FÆRÆ"—2†VÆB6Æ÷6VBâp¥Ò“ ¢f–ÂæVæB‚vÖö&–ÆU÷7V'F—FÆUöÆ%öF—66Æ÷7W&Uö÷%ö†öÆEöÖ—76–ærr¦–b‚w&—fFR6öç7BfÂ5”åD„UD”5õ5T%D•DÄUõ$T4T•Eõ$Te2ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢r'7–çF†WF–5öÖö&–ÆU÷7V'F—FÆU÷&V6V—E÷c"ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢w&—fFR6öç7BfÂ5”åD„UD”5õ5T%D•DÄUõ5DDUõ$Te2ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢r'7–çF†WF–5öÖö&–ÆU÷7V'F—FÆU÷7FFU÷c"ræ÷B–âÖö&–ÆU÷7F÷'•ö7F—f—G’÷ ¢r'7–çF†WF–5÷Ge÷7V'F—FÆU÷7FFU÷c"r–âÖö&–ÆU÷7F÷'•ö7F—f—G’“ ¢f–ÂæVæB‚vÖö&–ÆU÷7V'F—FÆUöÆ%÷&—fFUöæÖW76W5öÖ—76–ærr¦–bæ÷BÆÂ‡‚–â¦f÷FW‡Bf÷"‚–â°¢uW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6U67&VVä÷væW"æ÷Vâ‚rÀ¢uW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7BäæÖW76RåEbrÀ¢vvWE6†&VE&VfW&Væ6W2…5”åD„UD”5õEeõ5T%D•DÄUõ5DDUõ$Te2ÂÔôDUõ$•dDR’rÀ¢vvWE6†&VE&VfW&Væ6W2…5”åD„UD”5õEeõ5T%D•DÄUõ$T4T•Eõ$Te2ÂÔôDUõ$•dDR’rÀ¢wfÂ–æ—F–Å7V'F—FÆRÒ7&VFVE7V'F—FÆSòæ–æ—F–Å7FFR‚’rÀ¢v7&VFVE7V'F—FÆRç&VæFW$–æ—F–Â‚’rÀ¢v7W'&VçBæ7W'&VçE&VfW&Væ6R‚’rÀ¢v7W'&VçBç&VæFW%6WGF–æw2‚’rÀ¢wöÆÅ7V'F—FÆT÷WF6öÖR‚’rÀ¢v7W'&VçBæ6öç7VÖT÷WF6öÖR‚’p¥Ò“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÆ%ö6ö×÷6—F–öåö÷%öÖ–Æ&÷…öÖ—76–ærr¦–bæ÷BÆÂ‡‚–â¦f÷FW‡Bf÷"‚–â°¢'F†—2EbÆ"w2×&—fFR7FFRÂv†–6‚7F'G2W‡Æ–6—FÇ’öfbâ"À¢'F†—2EbÆ"w2&VfW&Væ6RæB&÷fVææ6R&V6V—BÖ’&R7F÷&VBâ"À¢uF†REbæBÖö&–ÆRÆ"æÖW76W2&R–æFWVæFVçBârÀ¢t7W'&VçBVæ&ÆVBEb7FFR†2æòÖF6†–ær6ÖRÖ–ç7FÆÆF–öâ&V6V—BæB—2rÀ¢væ÷BFÖ—GFVB26öç6VçBârÀ¢u&öGV7F–öâ7G&VÖ–ò&VfW&Væ6W2vW&Ræ÷B&VB÷"6†ævVBârÀ¢wVçfW&–f–VB&öÆÆ&6³²rÀ¢wF†REb7V'F—FÆRÆ"—2†VÆB6Æ÷6VBâp¥Ò“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÆ%öF—66Æ÷7W&Uö÷%ö†öÆEöÖ—76–ærr¦–bæ÷BÆÂ‡‚–â¦f÷FW‡Bf÷"‚–â°¢w7V'F—FÆT÷væW#òæ6Æ÷6R‚’rÀ¢wV’ç&VÖ÷fT6ÆÆ&6·2‡&Vg&W6‚’rÀ¢v÷fW'&–FRgVâöäFW7G&÷’‚’p¥Ò“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÆ%öÆ–fV7–6ÆUö6Æ÷6UöÖ—76–ærr¦–b‚w&—fFR6öç7BfÂ5”åD„UD”5õEeõ5T%D•DÄUõ$T4T•Eõ$Te2ræ÷B–â¦f÷FW‡B÷ ¢r'7–çF†WF–5÷Ge÷7V'F—FÆU÷&V6V—E÷c"ræ÷B–â¦f÷FW‡B÷ ¢w&—fFR6öç7BfÂ5”åD„UD”5õEeõ5T%D•DÄUõ5DDUõ$Te2ræ÷B–â¦f÷FW‡B÷ ¢r'7–çF†WF–5÷Ge÷7V'F—FÆU÷7FFU÷c"ræ÷B–â¦f÷FW‡B÷ ¢r'7–çF†WF–5öÖö&–ÆU÷7V'F—FÆU÷&V6V—E÷c"r–â¦f÷FW‡B“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÆ%÷&—fFU÷&V6V—EöæÖW76UöÖ—76–ærr¦–bæ÷BÆÂ‡‚–â¦f÷FW‡Bf÷"‚–â°¢tÖVF–57V'F—FÆUÆ–&6µ&VfW&Væ6TFFW"æ÷Vâ‚rÀ¢v7&VFVE7V'F—FÆRæ7W'&VçEÆ–&6µ&VfW&Væ6R‚’rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"åG&–vvW"å$TdU$Tä4Uô4„ätRrÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"åG&–vvW"ä”ä•D”ÅôÄôBrÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"åG&–vvW"äU•4ôDUõE$å4•D”ôârÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"åG&–vvW"å$T4õdU%’rÀ¢w&V6öâÓÒÆ–W"äÔTD”ô•DTÕõE$å4•D”ôåõ$T4ôåôUDòrÀ¢w6÷W&6T–BÒ–b†f—‡GW&TÆöFVB’5”åD„UD”5õ4õU$4Uô”BVÇ6R""rÀ¢væW‡DW—6öFU&WVW7FVBÒfÇ6RrÀ¢w7V'F—FÆUÆ–&6³òæ6Æ÷6R‚’rÀ¢w7V'F—FÆUÆ–&6²ÒçVÆÂrÀ¢w&—fFR6öç7BfÂ5”åD„UD”5õ4õU$4Uô”BÒ&Æö6Ã§7–çF†WF–2×vb"p¥Ò“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÖVF–5öÆ%ö&–æF–æuöÖ—76–ærr¦–b¦f÷FW‡Bæf–æB‚w7V'F—FÆUÆ–&6³òæ6Æ÷6R‚’r’â¦f÷FW‡Bæf–æB‚w7V'F—FÆT÷væW#òæ6Æ÷6R‚’r“ ¢f–ÂæVæB‚wGe÷7V'F—FÆUöÖVF–5ö6Æ÷6Uö÷&FW%÷vV¶VæVBr¦–bæ÷BÆÂ‡‚–â7–çF†WF–5÷7V'F—FÆUö†÷7Bf÷"‚–â°¢v–çFW&æÂ6Æ727–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7BrÀ¢tæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U6W76–öâå6æ6†÷E÷'BrÀ¢tæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6UG&ç67F–öâäÆ–6F–öå÷'BrÀ¢w&—fFRf"7W'&VçBÒ6æ6†÷B†Væ&ÆVBÒfÇ6R’rÀ¢vW‡V7FVBÒ7W'&VçBrÀ¢w6W76–öå&VfW&Væ6RÒ&Vf÷&U&VfW&Væ6Ræ6÷’†Væ&ÆVBÒVæ&ÆVB’rÀ¢wG&ç6—F–öâÓÒÆ7D—77VVBrÀ¢v7W'&VçBÒG&ç6—F–öâægFW"p¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷7V'F—FÆUö†÷7EöW†7E÷G&ç67F–öåö6öçG&7EöÖ—76–ærr¦–bç’‡‚–â7–çF†WF–5÷7V'F—FÆUö†÷7Bf÷"‚–â°¢væG&ö–Bæ6öçFVçBrÂu6†&VE&VfW&Væ6W2rÂtFF7F÷&RrÂt66÷VçDÖævW"rÀ¢v¦fææWBârÂv‡GG¢òòrÂv‡GG3¢òòrÂvvWDWF„¶W’rÂu7—7FVÒævWFVçbrÂtÆöræB‚p¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷7V'F—FÆUö†÷7Eöf÷&&–FFVå÷7W&f6Rr¦–bæ÷BÆÂ‡‚–â7–çF†WF–5÷7V'F—FÆUö†÷7Bf÷"‚–â°¢w&—fFRfÂ÷væW%F‡&VBÒF‡&VBæ7W'&VçEF‡&VB‚’rÀ¢w&—fFRf"6Æ÷6VBÒfÇ6RrÀ¢vgVâ6Æ÷6R‚“¢&ööÆVârÀ¢vÆ7D—77VVBÒçVÆÂrÀ¢wfÇVRæ6÷’‡6W76–öå&VfW&Væ6RÒfÇVRç6W76–öå&VfW&Væ6Sòæ6÷’‚’’p¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷7V'F—FÆUö†÷7EöÆ–fV7–6ÆUö÷%öFWF6†ÖVçEöÖ—76–ærr¦–bæ÷BÆÂ‡‚–â7–çF†WF–5÷7V'F—FÆUö†÷7E÷FW7Bf÷"‚–â°¢w7F'G4W‡Æ–6—FÇ”öfev—F„f—†VE7–çF†WF–4&–æF–ærrÀ¢vVæ&ÆVD6†ö–6T6†ævW4öæÇ”Væ&ÆVEfÇVRrÀ¢vW‡Æ–6—Döfd6†ævW4öæÇ”Væ&ÆVEfÇVRrÀ¢w7FÆTW‡V7FVE6æ6†÷D6ææ÷DÇ’rÀ¢vW†7D—77VVE&öÆÆ&6µ&W7F÷&W4&Vf÷&U6æ6†÷BrÀ¢vf÷&vVDæD7&÷74†÷7EG&ç6—F–öç46ææ÷E&öÆÆ&6²rÀ¢væWvW$6†ö–6U&Wfö¶W4öÆFW%&öÆÆ&6´ö&¦V7BrÀ¢vf÷&V–våF‡&VD6ææ÷E&VDÇ•&öÆÆ&6´÷$6Æ÷6RrÀ¢v6Æ÷6U&Wfö¶W4WfW'”gWGW&T÷W&F–öâp¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷7V'F—FÆUö†÷7E÷&Vw&W76–öç5öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7Bf÷"‚–â°¢v–çFW&æÂ6Æ72W'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7B&—fFR6öç7G'V7F÷"rÀ¢vVçVÒ6Æ72æÖW76R†–çFW&æÂfÂÆVv7”¶W“¢7G&–ærÂ–çFW&æÂfÂ¶W“¢7G&–ær’rÀ¢w7–çF†WF–2æÖö&–ÆRç7V'F—FÆRæVæ&ÆVBçcrÀ¢w7–çF†WF–2æÖö&–ÆRç7V'F—FÆRæVæ&ÆVBçc"rÀ¢w7–çF†WF–2çGbç7V'F—FÆRæVæ&ÆVBçcrÀ¢w7–çF†WF–2çGbç7V'F—FÆRæVæ&ÆVBçc"rÀ¢tæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6U6W76–öâå6æ6†÷E÷'BrÀ¢tæG&ö–E7V'F—FÆU&VfW&Væ6T6†ö–6UG&ç67F–öâäÆ–6F–öå÷'BrÀ¢w&—fFRFF6Æ72Ö–w&F–öå7FFRrÀ¢v–b†&Vf÷&Ræ7W'&VçBç&W6VçB’&WGW&â&Vf÷&RæÆVv7’ç&W6VçBrÀ¢v–b‚&Vf÷&RæÆVv7’ç&W6VçB’&WGW&âG'VRrÀ¢wfÂ6öÖÖ—GFVBÒw&—FTÖ–w&F–öå7FFR†gFW"’rÀ¢v–b†6öÖÖ—GFVBbbW†7E&VF&6²ÓÒgFW"’&WGW&âG'VRrÀ¢v–b†W†7E&VF&6²ÓÒgFW"’&W7F÷&TÖ–w&F–öå7FFR†&Vf÷&RÂgFW"’rÀ¢ww&—FU6Æ÷B†VF—F÷"ÂæÖW76RæÆVv7”¶W’Â7FFRæÆVv7’’rÀ¢ww&—FU6Æ÷B†VF—F÷"ÂæÖW76Ræ¶W’Â7FFRæ7W'&VçB’rÀ¢v–b††÷7BæÖ–w&FTÆVv7•7FFR‚’’rÀ¢wfÂf—'7BÒ&VE7FFR‚’rÀ¢wfÂ6V6öæBÒ&VE7FFR‚’rÀ¢vVF—F÷"æ6öÖÖ—B‚’rÀ¢v–b‡G&ç6—F–öâÓÒ—77VVBçG&ç6—F–öâ’rÀ¢v–b†7W'&VçBÒ—77VVBægFW"’rÀ¢v–b†ÆV6W5¶æÖW76UÒÓÓÒFö¶Vâ’ÆV6W2ç&VÖ÷fR†æÖW76R’p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7EöW†7Eö6öçG&7EöÖ—76–ærr¦–bç’‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7Bf÷"‚–â°¢t66÷VçDÖævW"rÂv¦fææWBârÂv‡GG¢òòrÂv‡GG3¢òòrÂvvWDWF„¶W’rÀ¢u7—7FVÒævWFVçbrÂtÆöræB‚rÂv6ÆV"‚’rÂtÔôDUôÕTÅD•õ$ô4U52p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7Eöf÷&&–FFVå÷7W&f6Rr¦–bæ÷BÆÂ‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7E÷FW7Bf÷"‚–â°¢v'6VçE7FFU7F'G4öfdöäf—'7E'Våv—F†÷WEw&—F–ærrÀ¢vVæ&ÆVD6†ö–6UW'6—7G47&÷74g&W6„÷væW"rÀ¢vW‡Æ–6—DöfeW'6—7G47&÷74g&W6„÷væW"rÀ¢vÆVv7”Væ&ÆVDÖ–w&FW4FöÖ–6ÆÇ•Fô7W'&VçD¶W’rÀ¢vÆVv7”W‡Æ–6—DöfdÖ–w&FW5v—F†÷WD&V6öÖ–ætf—'7E'VârÀ¢v7W'&VçDæDÆVv7”6öÆÆ—6–öäf–Ç46Æ÷6VEv—F†÷WD×WFF–öârÀ¢v6÷''WDÆVv7•G—Tf–Ç46Æ÷6VEv—F†÷WD×WFF–öârÀ¢vÖ–w&F–öä6öÖÖ—E&VgW6Å&W6W'fW4ÆVv7”æEVç&VÆFVE7FFRrÀ¢w÷7DÖ–w&F–öäG&–gD—5&W6W'fVEv—F†÷WD66WFæ6RrÀ¢vÖö&–ÆTæEGdæÖW76W5&VÖ–ä–æFWVæFVçBrÀ¢vW†7E&öÆÆ&6µ&W7F÷&W4'6VçE7F÷&vU6†RrÀ¢vW†7E&öÆÆ&6µ&W7F÷&W57F÷&VDVæ&ÆVEfÇVRrÀ¢w7FÆTW‡V7FVE6æ6†÷D6ææ÷Ew&—FRrÀ¢vf÷&vVDæD7&÷74æÖW76UG&ç6—F–öç46ææ÷E&öÆÆ&6²rÀ¢v6öÖÖ—E&VgW6Å&W6W'fW5&–÷%7FFTæEVç&VÆFVD¶W—2rÀ¢v6÷''WEG—Tf–Ç46Æ÷6VEv—F†÷WD÷fW'w&—FRrÀ¢w÷7D6öÖÖ—DG&–gD—5&W6W'fVDæD6ææ÷D&U&öÆÆVD&6²rÀ¢v66WFVEG&ç67F–öåW'6—7G57FFTæD–ç7FÆÆF–öå&V6V—BrÀ¢w&V6V—D6öÖÖ—Df–ÇW&U&W7F÷&W4W†7D'6VçE7FFRrÀ¢v÷væW%F‡&VD6Æ÷6TæDæÖW76TÆV6Tf–Ä6Æ÷6VBp¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆUö†÷7E÷&Vw&W76–öç5öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW"f÷"‚–â°¢v–çFW&æÂ6Æ72W'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6U67&VVä÷væW"&—fFR6öç7G'V7F÷"rÀ¢v–b‡7FFU&VfW&Væ6W2ÓÓÒ&V6V—E&VfW&Væ6W2’&WGW&âçVÆÂrÀ¢uW'6—7FVçE7–çF†WF–57V'F—FÆU&VfW&Væ6T†÷7Bæ÷Vâ‚rÀ¢wfÂ7W&f6RÒ†÷7Bç&W6VçFF–öå7W&f6R‚’rÀ¢wfÂ&VfW&Væ6RÒ†÷7Bç&VE&VfW&Væ6U6æ6†÷B‚“òç6W76–öå&VfW&Væ6RrÀ¢wfÂ7F÷&VBÒ67&VVâæÆöE7F÷&VE&VfW&Væ6R‚’rÀ¢vgVâ7W'&VçEÆ–&6µ&VfW&Væ6R‚’rÀ¢wfÂ&VfW&Væ6RÒ†÷7Bç&VE&VfW&Væ6U6æ6†÷B‚’rÀ¢sòç6W76–öå&VfW&Væ6Ró¢&WGW&âçVÆÂrÀ¢wfÂVæ&ÆVBÒ&VfW&Væ6RæVæ&ÆVBó¢&WGW&âçVÆÂrÀ¢w7F÷&VCòævWB‚&¶–æB"’ÓÒ'6ÖRÖ–ç7FÆÆF–öâ×6WGF–ær"rÀ¢tFÖ—76–öâäTä$ÄTEõ4ÔUô”å5DÄÄD”ôârÀ¢tFÖ—76–öâäTä$ÄTEõTäDÔ•EDTBrÀ¢wfÂ67&VVä6Æ÷6VBÒ67&VVâæ6Æ÷6R‚’rÀ¢wfÂ†÷7D6Æ÷6VBÒ†÷7Bæ6Æ÷6R‚’rÀ¢w&—fFRfÂ÷væW%F‡&VBÒF‡&VBæ7W'&VçEF‡&VB‚’p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%ö6öçG&7EöÖ—76–ærr¦–bç’‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW"f÷"‚–â°¢t66÷VçDÖævW"rÂtFF7F÷&RrÂv¦fææWBârÂv‡GG¢òòrÂv‡GG3¢òòrÀ¢vvWDWF„¶W’rÂu7—7FVÒævWFVçbrÂtÆöræB‚rÂv6F6‚…ó¢F‡&÷v&ÆR’p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%öf÷&&–FFVå÷7W&f6Rr¦–bæ÷BÆÂ‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%÷FW7Bf÷"‚–â°¢v–FVçF–6Å7FFTæE&V6V—Dö&¦V7D—5&VgW6VD&Vf÷&TÆV6RrÀ¢vW‡Æ–6—DöfdFöW4æ÷E&VD÷$ÖçVf7GW&U&V6V—DFÖ—76–öârÀ¢vVæ&ÆVE7FFUv—F†÷WDW†7E&V6V—E&VÖ–ç5VæFÖ—GFVBrÀ¢vVæ&ÆVE7FFT—4FÖ—GFVDöæÇ•F‡&÷Vv…67&VVå&V6V—EfÆ–FF÷"rÀ¢vW‡Æ–6—DöfeÆ–&6µ&VfW&Væ6TFöW4æ÷E&VE&V6V—BrÀ¢vVæ&ÆVEÆ–&6µ&VfW&Væ6U&WV—&W4W†7E7F÷&VE&V6V—BrÀ¢v6ö×÷6—FT÷vç5&VæFW$÷WF6öÖU&W&VæFW$æE67&VVäf—'7D6Æ÷6RrÀ¢vf–ÆVE&VæFW%ö—6öç4&÷F…67&VVäæE7FFTÆV6RrÀ¢v6öç7G'V7F–öäf–ÇW&TæDf÷&V–våF‡&VD6ææ÷DÆV´WF†÷&—G’p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%÷&Vw&W76–öç5öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%÷FW7Bf÷"‚–â°¢v76W'DçVÆÂ†÷Vâ‡&VfW&Væ6W2Â&VfW&Væ6W2ÂÔô$”ÄRÂ67&VVäf—‡GW&R‚’’’rÀ¢v76W'DWVÇ2ƒÂf—‡GW&Rç÷'BæÆöD6ÆÇ2’rÀ¢v76W'DWVÇ2„Tä$ÄTEõTäDÔ•EDTBÂ÷væW"æ–æ—F–Å7FFR‚’æFÖ—76–öâ’rÀ¢v76W'DWVÇ2„Tä$ÄTEõ4ÔUô”å5DÄÄD”ôâÂ÷væW"æ–æ—F–Å7FFR‚’æFÖ—76–öâ’rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"å&VfW&Væ6R†fÇ6RÂfÇ6R’rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"å&VfW&Væ6R‡G'VRÂG'VR’rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"å&VfW&Væ6R‡G'VRÂfÇ6R’rÀ¢v76W'EG'VR‡67&VVä6Æ÷6VEv†–ÆU7FFTÆV6VBævWB‚’’rÀ¢v76W'DfÇ6R†f÷&V–vä6Æ÷6RævWB‚’’p¥Ò“ ¢f–ÂæVæB‚wW'6—7FVçE÷7–çF†WF–5÷7V'F—FÆU÷67&VVåö÷væW%öGfW'6&–Åö76W'F–öç2r¦–bæ÷BÆÂ‡‚–âæF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷"f÷"‚–â°¢v–çFW&æÂ6Æ72æF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"‚rÀ¢vVçVÒ6Æ72G&–vvW"rÀ¢u$TdU$Tä4Uô4„ätRrÀ¢tU•4ôDUõE$å4•D”ôârÀ¢u$T4õdU%’rÀ¢vVçVÒ6Æ726VÆV7F–öä÷&–v–ârÀ¢tÔåTÂrÀ¢w6ÖT–ç7FÆÆF–öå&V6V—BrÀ¢v–b†÷&–v–âÓÒ6VÆV7F–öä÷&–v–âäÔåTÂ’&WGW&âçVÆÂrÀ¢w&VfW&Væ6RæVæ&ÆVBbb&VfW&Væ6Rç6ÖT–ç7FÆÆF–öå&V6V—BrÀ¢t7F–öâäÅ•ôUDôÔD”2rÀ¢t7F–öâä4ÄT%ôUDôÔD”2rÀ¢v—77VVBÒçVÆÂrÀ¢v–b†ÆV6RÓÒ66WFVB’&WGW&âfÇ6RrÀ¢v–b†f–æÅ&VfW&Væ6RÒÆV6Rç&VfW&Væ6RÇÂf–æÅ6æ6†÷BÒÆV6Rç6æ6†÷B’&WGW&âfÇ6RrÀ¢v7F–öå÷'BæÇ’†ÆV6Ræ7F–öâÂÆV6RçG&–vvW"ÂÆV6Rç6æ6†÷B’rÀ¢w&—fFRfÂ÷væW%F‡&VBÒF‡&VBæ7W'&VçEF‡&VB‚’p¥Ò“ ¢f–ÂæVæB‚væF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷%öW†7Eö6öçG&7EöÖ—76–ærr¦–bç’‡‚–âæF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷"f÷"‚–â°¢v–×÷'BæG&ö–BârÂvæG&ö–G‚æÖVF–2rÂtW†õÆ–W"‚rÂt66÷VçDÖævW"rÀ¢v¦fææWBârÂv‡GG¢òòrÂv‡GG3¢òòrÂvvWDWF„¶W’rÂu7—7FVÒævWFVçbrÀ¢tÆöræB‚rÂv6F6‚…ó¢F‡&÷v&ÆR’p¥Ò“ ¢f–ÂæVæB‚væF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷%öf÷&&–FFVå÷7W&f6Rr¦–bæ÷BÆÂ‡‚–âæF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷%÷FW7Bf÷"‚–â°¢vW‡Æ–6—Döfd6ÆV'4öæÇ”WFöÖF–56VÆV7F–öârÀ¢vW‡Æ–6—Döfe&W6W'fW4ÖçVÅ6VÆV7F–öä7&÷74W—6öFUG&ç6—F–öârÀ¢vW‡Æ–6—Döfev—F„æõ6VÆV7FVEG&6´æVVG4æõÆ–W$×WFF–öârÀ¢vFÖ—GFVDVæ&ÆVDÆ–W4WFöÖF–4öæÇ•v†Väæ÷F†–æt—56VÆV7FVBrÀ¢vFÖ—GFVDVæ&ÆVDæWfW%&WÆ6W4ÖçVÅ6VÆV7F–öârÀ¢wVæFÖ—GFVDVæ&ÆVD6ææ÷DÇ”WFöÖF–56VÆV7F–öârÀ¢wÆ–W$–FVçF—G”G&–gD6öç7VÖW4ÆV6T&Vf÷&U÷'D6ÆÂrÀ¢w&VfW&Væ6T÷%&V6V—DG&–gD6öç7VÖW4ÆV6T&Vf÷&U÷'D6ÆÂrÀ¢vf÷&vVD7&÷74–ç7Fæ6TæDGWÆ–6FTÆV6W4f–Ä6Æ÷6VBrÀ¢wG&ç6—F–öäæEVç6fUÆ–W%7FFW46ææ÷E&W&RrÀ¢wVç7F&ÆUF‡&÷v–ætæE&V¦V7FVE÷'G4f–Ä6Æ÷6VBrÀ¢vf÷&V–våF‡&VD6ææ÷E&W&TW†V7WFT÷$6Æ÷6Rp¥Ò“ ¢f–ÂæVæB‚væF—fU÷7V'F—FÆU÷Æ–&6µö7GVF÷%÷&Vw&W76–öç5öÖ—76–ærr¦–bæ÷BÆÂ‡‚–âÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW"f÷"‚–â°¢v–çFW&æÂ6Æ72ÖVF–57V'F—FÆUÆ–&6µ&VfW&Væ6TFFW"&—fFR6öç7G'V7F÷"‚rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"‚rÀ¢tæF—fU7V'F—FÆUÆ–&6µ&VfW&Væ6T7GVF÷"å6VÆV7F–öä÷&–v–âäÔåTÂrÀ¢t2åE$4µõE•UõDU…B–â&ÖWFW'2æF—6&ÆVEG&6µG—W2rÀ¢w&ÖWFW'2æ÷fW'&–FW2æ¶W—2æç’rÀ¢v—BçG—RÓÒ2åE$4µõE•UõDU…BrÀ¢wÆ–W"æ—46öÖÖæDf–Æ&ÆR…Æ–W"ä4ôÔÔäEõ4UEõE$4µõ4TÄT5D”ôåõ$ÔUDU%2’rÀ¢rç6WEG&6µG—TF—6&ÆVB„2åE$4µõE•UõDU…BÂF—6&ÆVB’rÀ¢v–b‡&VE7FFR‚’ÒW‡V7FVBÇÂW‡V7FVBæÖçVÅFW‡D÷fW'&–FRrÀ¢wfÂf—'7BÒÆ–W"çG&6µ6VÆV7F–öå&ÖWFW'2rÀ¢wfÂ6V6öæBÒÆ–W"çG&6µ6VÆV7F–öå&ÖWFW'2rÀ¢w6V6öæBæ÷fW'&–FW2æ¶W—2ææöæR²—BçG—RÓÒ2åE$4µõE•UõDU…BÒrÀ¢w&—fFRfÂ÷væW%F‡&VBÒF‡&VBæ7W'&VçEF‡&VB‚’rÀ¢vgVâ6Æ÷6R‚“¢&ööÆVârÀ¢vgVâ7W'&VçE6VÆV7F–öä÷&–v–â‚’rÀ¢w&—fFRgVâ&VE7F&ÆTÖVF–7FFR‚’rÀ¢vgVâ÷Vâ‚rÀ¢v–çFW&æÂgVâ÷Väf÷%FW7B‚p¥Ò“ ¢f–ÂæVæB‚vÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW%öW†7Eö6öçG&7EöÖ—76–ærr¦–bç’‡‚–âÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW"f÷"‚–â°¢t66÷VçDÖævW"rÂtFF7F÷&RrÂv¦fææWBârÂv‡GG¢òòrÂv‡GG3¢òòrÀ¢vvWDWF„¶W’rÂu7—7FVÒævWFVçbrÂtÆöræB‚rÂv6F6‚…ó¢F‡&÷v&ÆR’rÀ¢v6ÆV$÷fW'&–FW2rÂw6WD÷fW'&–FTf÷%G—RrÂw6WE&VfW'&VEFW‡DÆæwVvRp¥Ò“ ¢f–ÂæVæB‚vÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW%öf÷&&–FFVå÷7W&f6Rr¦–bæ÷BÆÂ‡‚–âÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW%÷FW7Bf÷"‚–â°¢vW‡Æ–6—DöfdF—6&ÆW4öæÇ”WFöÖF–5FW‡E6VÆV7F–öârÀ¢vFÖ—GFVDVæ&ÆVE&VVæ&ÆW4WFöÖF–5FW‡E6VÆV7F–öârÀ¢wVæFÖ—GFVDVæ&ÆVD6ææ÷DÆVfTWFöÖF–56VÆV7F–öäVæ&ÆVBrÀ¢vÖçVÄ÷fW'&–FTÇv—4&Æö6·5Æ–W$×WFF–öârÀ¢wVæ6†ævVEöÆ–7•&WV—&W4æôÖVF–4×WFF–öârÀ¢v6öçFW‡DæDÖVF–G&–gDf–Ä6Æ÷6VD&Vf÷&T×WFF–öârÀ¢w&V¦V7FVDæD6öæ7W'&VçDÖVF–5w&—FW4&Tæ÷D66WFVBrÀ¢w7F&ÆU6VÆV7F–öä÷&–v–ä—4W‡÷6VEv—F†÷WD×WFF–öârÀ¢wVç7F&ÆT6Æ÷6VDæDf÷&V–vå6VÆV7F–öä÷&–v–å&VG4f–Ä6Æ÷6VBrÀ¢v÷væW%F‡&VDæD6Æ÷6U&Wfö¶TFFW"p¥Ò“ ¢f–ÂæVæB‚vÖVF–5÷7V'F—FÆU÷Æ–&6µöFFW%÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ727–çF†WF–5F—FÆUvF6†VD66÷VçD†÷7Bræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢s¢6æöæ–6ÅvF6†VD66÷VçD†÷7E÷'Bræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢w&—fFRfÂWö6‚ÒÂræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7EöÖ—76–æuö÷%÷Væ&÷VæFVBr¦–b‚vÖW76vRæ¶W—2Ò6WDöb‚&7F–öâ"Â&&w2"’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢v–ææW"æ¶W—2Ò6WDöb‚&7F–öâ"Â&&w2"’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢r$Ö&´5vF6†VB"ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢r$Ö&µ6V6öä5vF6†VB"ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7EöW†7EöF—7F6…övFUöÖ—76–ærr¦–b‚uGevF6†VD6ö÷&F–æF÷"‚’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢rç&W&R‡6æ6†÷BÂvF6†VE66÷Rå6W&–W2ÂÖ&µvF6†VB’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢ræf–ÇFW"²—Bç6V6öâÓÒ6V6öâbb&VÆV6VB†—B’Òræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7Eö6÷&U÷7F÷'•öÖVÖ&W'6†—ö÷%÷6V6öåövFUöÖ—76–ærr¦–bæ÷BÆÂ‡‚–â7–çF†WF–5÷vF6†VEö†÷7Bf÷"‚–â°¢r&Æö6Ã¦Öö&–ÆR×vF6†VC££""rÀ¢r&Æö6Ã¦Öö&–ÆR×vF6†VC££2"rÀ¢r&Æö6Ã¦Öö&–ÆR×vF6†VC££“’"rÀ¢r##3RÓÓ5C££¢"p¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7Eöæ'&F—fUögWGW&Uöæ6–ÆÆ'•öf—‡GW&UöÖ—76–ærr¦–b‚w6æ6†÷Bçf–FV÷2æÖ²—Bæ6÷’‚’Òræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢wvF6†VEf–FVô–G2ÒvF6†VBçFôÆ—7B‚’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7EöFWF6†VEöö'6W'fF–öåöÖ—76–ærr¦–b‚vW‡V7FVBÒ7W'&VçDF—7F6„W‡V7FF–öâ‚’ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢t6æöæ–6ÅvF6†VDF—7F6„W‡V7FF–öâ‚ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢7–çF†WF–5÷vF6†VEö†÷7Bæ6÷VçB‚t7–æ6‡&öæ—¦VBr’Â2“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7EöFöÖ–5öW‡V7FF–öåöÖ—76–ærr¦–b‚w&W7VÖUf–FVô–C¢7G&–æsòÒ&Æö6Ã¦Öö&–ÆR×vF6†VC££“’"ræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢w&W7VÖUF–ÖTöfg6WBÒC%óÂræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢w&W7VÖUF–ÖTöfg6WBÒÂræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B÷ ¢vgVâ&W7VÖU7FFR‚“¢—#Å7G&–æsòÂÆöæsâræ÷B–â7–çF†WF–5÷vF6†VEö†÷7B“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7Eö6÷&U÷&W7VÖUö6öç6WVVæ6UöÖ—76–ærr¦–bç’†æÖRæ÷B–â7–çF†WF–5÷vF6†VEö†÷7E÷FW7Bf÷"æÖR–â°¢w6W&–W47F–öåW6W5&VÆV6VEfÆ–FFVE7F÷'”ÖVÖ&W'6†—rÀ¢w6V6öä7F–öä—4&÷VæFVEFõ&WVW7FVE7–çF†WF–56V6öârÀ¢vÖÆf÷&ÖVD÷%7FÆTF—7F6„æWfW$×WFFW57–çF†WF–57FFRrÀ¢w6ÖTWö6…7FÆTW‡V7FF–öä6ææ÷DÇ”6V6öæD×WFF–öârÀ¢wGd†÷7D&–æF–ætÆ–W4öæÇ”Æö6Å7–çF†WF–56W&–W57FFRrÀ¢vö'6W'fF–öç4æE&VF&6´Æ—7G4&TFWF6†VBrÀ¢wF—FÆUVçvF6†VE&W6W'fW57–çF†WF–5&W7VÖU7FFRrÀ¥Ò“ ¢f–ÂæVæB‚w7–çF†WF–5÷vF6†VEö†÷7E÷&Vw&W76–öç5öÖ—76–ærr§&V6÷fW'“Õ$T4õdU%’ç&VE÷FW‡B‚’–b$T4õdU%’æ—5öf–ÆR‚’VÇ6Rrp§&V6÷fW'•÷FW7CÕ$T4õdU%•õDU5Bç&VE÷FW‡B‚’–b$T4õdU%•õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦6Æ76–f–W#Ô4Ä54”d”U"ç&VE÷FW‡B‚’–b4Ä54”d”U"æ—5öf–ÆR‚’VÇ6Rrp¦6Æ76–f–W%÷FW7CÔ4Ä54”d”U%õDU5Bç&VE÷FW‡B‚’–b4Ä54”d”U%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5ö–çF¶SÔÔTD”5ô”åD´Rç&VE÷FW‡B‚’–bÔTD”5ô”åD´Ræ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5ö–çF¶U÷FW7CÔÔTD”5ô”åD´UõDU5Bç&VE÷FW‡B‚’–bÔTD”5ô”åD´UõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5÷&WG'•ö7GVF÷#ÔÔTD”5õ$UE%•ô5ETDõ"ç&VE÷FW‡B‚’–bÔTD”5õ$UE%•ô5ETDõ"æ—5öf–ÆR‚’VÇ6Rrp¦ÖVF–5÷&WG'•ö7GVF÷%÷FW7CÔÔTD”5õ$UE%•ô5ETDõ%õDU5Bç&VE÷FW‡B‚’–bÔTD”5õ$UE%•ô5ETDõ%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦7GVF÷#Ô5ETDõ"ç&VE÷FW‡B‚’–b5ETDõ"æ—5öf–ÆR‚’VÇ6Rrp¦7GVF÷%÷FW7CÔ5ETDõ%õDU5Bç&VE÷FW‡B‚’–b5ETDõ%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp§÷'G3Õõ%E2ç&VE÷FW‡B‚¦W—6öFSÔU•4ôDRç&VE÷FW‡B‚§F—FÆU÷vF6†VEöÖVçSÕD•DÄUõtD4„TEôÔTåRç&VE÷FW‡B‚’–bD•DÄUõtD4„TEôÔTåRæ—5öf–ÆR‚’VÇ6Rrp§F—FÆU÷vF6†VEöÖVçU÷FW7CÕD•DÄUõtD4„TEôÔTåUõDU5Bç&VE÷FW‡B‚’–bD•DÄUõtD4„TEôÔTåUõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆU÷vF6†VEöÖVçSÔÔô$”ÄUõD•DÄUõtD4„TEôÔTåRç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUõtD4„TEôÔTåRæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆU÷vF6†VEöÖVçU÷FW7CÔÔô$”ÄUõD•DÄUõtD4„TEôÔTåUõDU5Bç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUõtD4„TEôÔTåUõDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆUö†÷7Eö&–æF–æsÔÔô$”ÄUõD•DÄUô„õ5Eô$”äD”ärç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUô„õ5Eô$”äD”äræ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆUö†÷7Eö&–æF–æu÷FW7CÔÔô$”ÄUõD•DÄUô„õ5Eô$”äD”äuõDU5Bç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUô„õ5Eô$”äD”äuõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§Ge÷F—FÆUö†÷7Eö&–æF–æsÕEeõD•DÄUô„õ5Eô$”äD”ärç&VE÷FW‡B‚’–bEeõD•DÄUô„õ5Eô$”äD”äræ—5öf–ÆR‚’VÇ6Rrp§Ge÷F—FÆUö†÷7Eö&–æF–æu÷FW7CÕEeõD•DÄUô„õ5Eô$”äD”äuõDU5Bç&VE÷FW‡B‚’–bEeõD•DÄUô„õ5Eô$”äD”äuõDU5Bæ—5öf–ÆR‚’VÇ6Rrp§Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW#ÕEeõD•DÄUõt”DtUEô4ôåE$ôÄÄU"ç&VE÷FW‡B‚’–bEeõD•DÄUõt”DtUEô4ôåE$ôÄÄU"æ—5öf–ÆR‚’VÇ6Rrp§Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷FW7CÕEeõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5Bç&VE÷FW‡B‚’–bEeõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'CÔäE$ô”EõEeõD•DÄUõt”DtUEõõ%Bç&VE÷FW‡B‚’–bäE$ô”EõEeõD•DÄUõt”DtUEõõ%Bæ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW#ÔÔô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU"ç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU"æ—5öf–ÆR‚’VÇ6Rrp¦Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷FW7CÔÔô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5Bç&VE÷FW‡B‚’–bÔô$”ÄUõD•DÄUõt”DtUEô4ôåE$ôÄÄU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'CÔäE$ô”EôÔô$”ÄUõD•DÄUõt”DtUEõõ%Bç&VE÷FW‡B‚’–bäE$ô”EôÔô$”ÄUõD•DÄUõt”DtUEõõ%Bæ—5öf–ÆR‚’VÇ6Rrp§F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ“ÕD•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ’ç&VE÷FW‡B‚’–bD•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ’æ—5öf–ÆR‚’VÇ6Rrp§F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ•÷FW7CÕD•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ•õDU5Bç&VE÷FW‡B‚’–bD•DÄUõtD4„TEõd”Uuõõ%Eõ$TÄ•õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦æG&ö–E÷F—FÆU÷vF6†VE÷67&VVåö÷væW'3ÔäE$ô”EõD•DÄUõtD4„TEõ45$TTåôõtäU%2ç&VE÷FW‡B‚’–bäE$ô”EõD•DÄUõtD4„TEõ45$TTåôõtäU%2æ—5öf–ÆR‚’VÇ6Rrp¦6æöæ–6Å÷vF6†VEö66÷VçEöFFW#Ô4äôä”4ÅõtD4„TEô44õTåEôDDU"ç&VE÷FW‡B‚’–b4äôä”4ÅõtD4„TEô44õTåEôDDU"æ—5öf–ÆR‚’VÇ6Rrp¦6æöæ–6Å÷vF6†VEö66÷VçEöFFW%÷FW7CÔ4äôä”4ÅõtD4„TEô44õTåEôDDU%õDU5Bç&VE÷FW‡B‚’–b4äôä”4ÅõtD4„TEô44õTåEôDDU%õDU5Bæ—5öf–ÆR‚’VÇ6Rrp¦w&FÆSÔ%T”ÄBç&VE÷FW‡B‚¦–b&Æ–6F–öä–Bv÷&rçF†–¦’ç7G&VÖ–÷Gf6ö×æ–öâr"æ÷B–âw&FÆS¦f–ÂæVæB‚v÷6¶vUö6†ævVBr¦–bæ÷B&Rç6V&6‚‡"$U…DU$äÅõ4õU$4UôTä$ÄTBuÇ2¢ÅÇ2¢vfÇ6Rr"Æw&FÆR“¦f–ÂæVæB‚vW‡FW&æÅ÷6÷W&6UövFUöÖ—76–ærr¦–bæ÷B&Rç6V&6‚‡"%5E$TÔ”õô44õTåEõu$•DU5ôTä$ÄTBuÇ2¢ÅÇ2¢vfÇ6Rr"Æw&FÆR“¦f–ÂæVæB‚v66÷VçEövFUöÖ—76–ærr¦–buGe6¶—6ö÷&F–æF÷"ræ÷B–â¦f÷FW‡B÷"tæ–v‡DVF–ôÖVF–5&ö6W76÷"ræ÷B–â¦f÷FW‡B÷"tW†õÆ–W"ä'V–ÆFW"ræ÷B–â¦f÷FW‡C ¢f–ÂæVæB‚w&VÅöÖVF–5ö'&–FvUö÷%÷6ÕöÖ—76–ærr¦–bwÆ–W"ç6VVµFò†×2’ræ÷B–â¦f÷FW‡B÷"vgVâ6VVµv—F†–å6VÆV7FVEf–FVòræ÷B–â÷'G3 ¢f–ÂæVæB‚w6ÖUöÖVF–÷6VVµö&–æF–æuöÖ—76–ærr¦–btÖ&µf–FVô5vF6†VBræ÷B–âW—6öFR÷"v6æöæ–6Åf–FVôg&öÕ&VG”ÖWFFWF–Ç2ræ÷B–âW—6öFS ¢f–ÂæVæB‚v–æF—f–GVÅöW—6öFUö6÷&Uö7F–öåöæ÷E÷&W6VçBr¦–bv—77VVBæFB‡Æâæf–ævW'&–çB’ræ÷B–âW—6öFR÷"w÷'Bæ7W'&VçE6æ6†÷B‚’ræ÷B–âW—6öFS ¢f–ÂæVæB‚vW—6öFUö66÷VçE÷&Vg&W6…ö÷%ööæU÷6†÷Eöæ÷EöVæf÷&6VBr¦–bæ÷BÆÂ†g&vÖVçB–âW—6öFRf÷"g&vÖVçB–â€¢wf–FVôf–ævW'&–çBrÀ¢w6æ6†÷D6÷&Uf–FVò‡f–FVõ6÷W&6R’rÀ¢w6æ6†÷D6÷&Uf–FVò‡6V6öæE6÷W&6R’rÀ¢tÔ…ô4äôä”4Åõd”DTõôDUD‚rÀ¢tÔ…ô4äôä”4Åõd”DTõôäôDU2rÀ¢tÔ…ô4äôä”4Åõd”DTõô4ôÄÄT5D”ôåôTåE$”U2rÀ¢tÔ…ô4äôä”4Åõd”DTõõ5E$”äuôÄTäuD‚rÀ¢tÔ…ô4äôä”4Åõd”DTõõDõDÅõ5E$”äuôÄTäuD‚rÀ¢t7–6Æ–26÷&Rf–FVòÖWFFFrÀ¢’“ ¢f–ÂæVæB‚v6÷&U÷f–FVõöF÷V&ÆU÷&VEö÷%ö&÷VæFVE÷6æ6†÷EöÖ—76–ærr¦–bæ÷BÆÂ†g&vÖVçB–âW—6öFRf÷"g&vÖVçB–â€¢v—2–çBÓâ&“3#¢GfÇVR"rÀ¢v—2ÆöærÓâ&“cC¢GfÇVR"rÀ¢r&c3#¢G¶¦fæÆærä–çFVvW"çFõVç6–væVE7G&–ær‡fÇVRçFõ&t&—G2‚’Âb—Ò"rÀ¢r&ccC¢G¶¦fæÆæräÆöærçFõVç6–væVE7G&–ær‡fÇVRçFõ&t&—G2‚’Âb—Ò"rÀ¢’“ ¢f–ÂæVæB‚v6÷&U÷f–FVõöçVÖW&–5÷G—Uöf–ævW'&–çEöÖ—76–ærr¦–b‚v6Æ72æF—fUGeF—FÆUvF6†VDÖVçRræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VD7F–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆU÷vF6†VEöÖVçUöÖ—76–ærr¦–b‚wfÂ6æ6†÷BÒ6æ6†÷D÷$çVÆÂ‚’ó¢&WGW&âV×G”Æ—7B‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6ö÷&F–æF÷$f÷"‡vF6†VB’ç&W&R‡6æ6†÷BÂ66÷RÂvF6†VB’ræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VEöÖVçUöæ÷Eö'V–ÇEög&öÕööæUög&W6…ö6÷&U÷6æ6†÷Br¦–b‚wfÂ&V6÷&BÒ—77VVE¶7F–öâæ7F–öä–EÒó¢&WGW&âæF—fUGeF—FÆUvF6†VD÷WF6öÖRå$TeU4TEÆâ—77VVBæ6ÆV"‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w&V6÷&Bæ7F–öâÓÒ7F–öâræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v66÷VçBæ7W'&VçE6æ6†÷B‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VEöÖVçUö—77Væ6Uö÷%ög&W6…÷&VEöÖ—76–ærr¦–b‚vfö7W6VD7F–öä–BÒ7F–öâæ7F–öä–Bræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w&VÖ÷FT¶W’Ò$TåDU""bb&VÖ÷FT¶W’Ò$EEô4TåDU""ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢wVçvF6„6¶æ÷vÆVFvVBÒVçvF6„6¶æ÷vÆVFvVBræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VE÷&VÖ÷FUöfö7W5ö÷%÷VçvF6…ö6öæf—&ÖF–öåöÖ—76–ærr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w&—fFRf"6Æ÷6VBÒfÇ6Rræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6öç7BfÂÔ…õ$U4TåDTEô5D”ôå2ÒBræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VE÷F‡&VEöÆ–fV7–6ÆUö÷%ö&÷VæEöÖ—76–ærr¦–b‚v–çFW&f6R6æöæ–6ÅvF6†VE7FFU÷'B¢7G&VÖ–ô66÷VçE÷'Bræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢tD•5D4„TEõTäD”äuõ$TD$4²ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w&—fFRf"VæF–æu&VF&6³¢VæF–æu&VF&6³òÒçVÆÂræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v–b‚6öæf—&ÕVæF–æu&VF&6²‡6æ6†÷B’’&WGW&âV×G”Æ—7B‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v–b†7W'&VçEÆâÒVæF–ærçÆâ’&WGW&âfÇ6Rræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6ö÷&F–æF÷'5²VæF–ærçÆâçvF6†VEÒÒGevF6†VD6ö÷&F–æF÷"‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6ö÷&F–æF÷$f÷"‡&V6÷&BçÆâçvF6†VB’æ6öæf—&Ò‚ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v–b†7W'&VçEÆâç6VÆV7FVD–G2ÒVæF–ærçÆâç6VÆV7FVD–G2’r–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRæ6÷’‡vF6†VEf–FVô–G2Ò7FFRçvF6†VEf–FVô–G2çFôÆ—7B‚’’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRçvF6†VEf–FVô–G2ç6—¦RÒ7FFRçvF6†VEf–FVô–G2çFõ6WB‚’ç6—¦Rræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VEö6æöæ–6Å÷÷7E÷w&—FU÷&VF&6µövFUöÖ—76–ærr¦–b‚wfÂ6æöæ–6Åf–FVô–G2Ò6æ6†÷Bçf–FV÷2æÖ²—Bæ–BÒçFõ6WB‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v6æöæ–6Åf–FVô–G2æ6öçF–ç4ÆÂ‡7FFRçvF6†VEf–FVô–G2’ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRç&W7VÖUf–FVô–B–â6æöæ–6Åf–FVô–G2ræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VE÷Væ¶æ÷våö6æöæ–6Åö–EövFUöÖ—76–ærr¦–b‚wfÂ&Vf÷&S¢6æöæ–6ÅvF6†VE7FFU&VF&6²ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v&Vf÷&T–G2²6VÆV7FVD–G2ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v&Vf÷&T–G2Ò6VÆV7FVD–G2ræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRç&W7VÖUf–FVô–BÓÒVæF–æræ&Vf÷&Rç&W7VÖUf–FVô–Bræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRç&W7VÖUF–ÖTöfg6WBÓÒÂræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢w7FFRç&W7VÖUF–ÖTöfg6WBÓÒVæF–æræ&Vf÷&Rç&W7VÖUF–ÖTöfg6WBræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VEöW†7EöÖVÖ&W'6†—ö÷%ö6÷&U÷&W7VÖU÷&VF&6µöÖ—76–ærr¦–b‚w&—fFRfÂ66÷VçC¢6æöæ–6ÅvF6†VE7FFU÷'Bræ÷B–âF—FÆU÷vF6†VEöÖVçR÷ ¢v66÷VçC¢6æöæ–6ÅvF6†VE7FFU÷'Bræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢v66÷VçC¢6æöæ–6ÅvF6†VE7FFU÷'Bræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v66÷VçC¢6æöæ–6ÅvF6†VE7FFU÷'Bræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢ç’‚v66÷VçC¢7G&VÖ–ô66÷VçE÷'Br–â6÷W&6Rf÷"6÷W&6R–â°¢F—FÆU÷vF6†VEöÖVçRÀ¢Öö&–ÆU÷F—FÆU÷vF6†VEöÖVçRÀ¢Öö&–ÆU÷F—FÆUö†÷7Eö&–æF–ærÀ¢Ge÷F—FÆUö†÷7Eö&–æF–æp¢Ò’÷ ¢r†66÷VçB3ò6æöæ–6ÅvF6†VE7FFU÷'B’r–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚væG&ö–E÷F—FÆU÷V•ö6æöæ–6Å÷&VF&6µ÷÷'Eöæ÷EöÖæFF÷'’r¦–b‚tæF—fUGeF—FÆUvF6†VDÖVçR‚r–â¦f÷FW‡B÷"tæF—fUGeF—FÆUvF6†VD7F–öâ‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚wF—FÆU÷vF6†VEöÖVçU÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–b‚wfÂ&V6÷&BÒ—77VVE¶7F–öâæ7F–öä–EÒó¢&WGW&âæF—fUGeF—FÆUvF6†VD÷WF6öÖRå$TeU4TEÆâ—77VVBæ6ÆV"‚’ræ÷B–âF—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚wGe÷F—FÆU÷vF6†VEö7F—fF–öåöFöW5öæ÷E÷&Wfö¶UövVæW&F–öâr¦–bç’†æÖRæ÷B–âF—FÆU÷vF6†VEöÖVçU÷FW7Bf÷"æÖR–â°¢w&VG”6÷&U6æ6†÷E&W6VçG4f÷W%F—FÆT7F–öç5v—F†÷WEw&—F–ærrÀ¢vgWGW&TW—6öFU7W&W76W5Vç6fU6V6öä7F–öç2rÀ¢vfö7W4æE&VÖ÷FT6öæf—&ÖF–öäF—7F6„W†7E6W&–W47F–öârÀ¢v7F—fF–ætöæT7F–öå&Wfö¶W4WfW'•6–&Æ–ætg&öÕF†DvVæW&F–öârÀ¢wVçvF6…&WV—&W46¶æ÷vÆVFvVÖVçDæE&W6VçFF–öä—4öæU6†÷BrÀ¢v66÷VçDG&–gE&VgW6W5&W6VçFVD7F–öârÀ¢w7FÆTæDf÷&vVD7F–öç46ææ÷DW†V7WFRrÀ¢v÷væW%F‡&VDæD6Æ÷6Tf–Ä6Æ÷6VBrÀ¢w6æ6†÷DæDF—7F6„W†6WF–öç4f–Ä6Æ÷6VBrÀ¢v6æöæ–6Å&VF&6µ&V&×4öæÇ”÷÷6—FUvF6†VDF—&V7F–öârÀ¢v66WFVDF—7F6„&Æö6·4æWtvVæW&F–öåVçF–Ä6æöæ–6Å&VF&6´ÖF6†W2rÀ¢wVæF–æu&VF&6´6ææ÷D7&÷7466÷VçD÷$Æ–'&'”–FVçF—G’rÀ¢vÖ—6ÖF6†VD÷$GWÆ–6FT6æöæ–6Å&VF&6´æWfW%&V÷Vç4vVæW&F–öârÀ¢wVæ¶æ÷vä6æöæ–6ÅvF6†VD–DæWfW%&V÷Vç4vVæW&F–öârÀ¢wF‡&÷v–æt6æöæ–6ÅvF6†VD6öÆÆV7F–öäf–Ç46Æ÷6VEv—F†÷WDW66–ærrÀ¢w6W&–W5vF6†VE&WV—&W4W†7DÖVÖ&W'6†—æD6ÆV&VE&W7VÖU&VF&6²rÀ¢w6W&–W5VçvF6†VE&W6W'fW5&W7VÖTæE&V¦V7G5Vç6VÆV7FVD×WFF–öâp¥Ò“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆU÷vF6†VEöÖVçU÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VDÖVçRræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VD7F–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçUöÖ—76–ærr¦–b‚w&—fFRfÂFVÆVvFRÒæF—fUGeF—FÆUvF6†VDÖVçR†6ö÷&F–æF÷"Â66÷VçB’ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢wfÂFVÆVvFVBÒFVÆVvFRç&W6VçB‡6V6öäçVÖ&W"’ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçUö'—76W5öwV&FVEö6÷&UöFVÆVvFRr¦–b‚v6öç7BfÂ4TÔåD”5ô5D•dD”ôâÒ$5D•dDR"ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢w6VÖçF–4WfVçBÒ4TÔåD”5ô5D•dD”ôâræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢w6VÆV7FVD7F–öä–BÒ7F–öâæ7F–öä–Bræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚vÖö&–ÆU÷6VÖçF–5ö66W76–&–Æ—G•ö7F—fF–öåövFUöÖ—76–ærr¦–b‚wfÂ&V6÷&BÒ—77VVE¶7F–öâæ7F–öä–EÒó¢&WGW&âæF—fTÖö&–ÆUF—FÆUvF6†VD÷WF6öÖRå$TeU4TEÆâ—77VVBæ6ÆV"‚’ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢Öö&–ÆU÷F—FÆU÷vF6†VEöÖVçRæf–æB‚wfÂ&V6÷&BÒ—77VVE¶7F–öâæ7F–öä–EÒr’âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçRæf–æB‚vFVÆVvFRæ7F—fFR‚r’“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆUö7F–öåöæ÷Eö6öç7VÖVEö&Vf÷&Uö6÷&UöFVÆVvFRr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢w&—fFRf"6Æ÷6VBÒfÇ6Rræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR÷ ¢w&WGW&âFVÆVvFRæ6Æ÷6R‚’ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆU÷F‡&VEö÷%öÆ–fV7–6ÆUöwV&EöÖ—76–ærr¦–b‚tæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçR‚r–â¦f÷FW‡B÷"tæF—fTÖö&–ÆUF—FÆUvF6†VD7F–öâ‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçU÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–b‚wfÂ&V6÷&BÒ—77VVE¶7F–öâæ7F–öä–EÒó¢&WGW&âæF—fTÖö&–ÆUF—FÆUvF6†VD÷WF6öÖRå$TeU4TEÆâ—77VVBæ6ÆV"‚’ræ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçR“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆU÷vF6†VEö7F—fF–öåöFöW5öæ÷E÷&Wfö¶UövVæW&F–öâr¦–bç’†æÖRæ÷B–âÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçU÷FW7Bf÷"æÖR–â°¢vÖö&–ÆU&W6VçFF–öäÖ—'&÷'4f÷W$wV&FVEF—FÆT7F–öç5v—F†÷WEw&—F–ærrÀ¢w6VÖçF–466W76–&–Æ—G”7F—fF–öäF—7F6†W4W†7E6W&–W47F–öârÀ¢vÖö&–ÆT7F—fF–öå&Wfö¶W4WfW'•6–&Æ–ætg&öÕF†DvVæW&F–öârÀ¢w&uö–çFW$æDÆöæu&W74WfVçG4æWfW$–×Ç”6öç6VçBrÀ¢vÖö&–ÆUVçvF6…&WV—&W46¶æ÷vÆVFvVÖVçDæD6öç7VÖW4—77Væ6RrÀ¢vgWGW&TW—6öFU7F–ÆÅ7W&W76W5Vç6fTÖö&–ÆU6V6öä7F–öç2rÀ¢w7FÆU6VÆV7FVDæDf÷&vVDÖö&–ÆT7F–öç4f–Ä6Æ÷6VBrÀ¢v66÷VçDG&–gDæE&V¦V7FVDF—7F6„f–Ä6Æ÷6VDöäÖö&–ÆRrÀ¢vÖö&–ÆT÷væW%F‡&VDæD6Æ÷6U&Wfö¶T÷WG7FæF–æt7F–öç2rÀ¢vÖö&–ÆT66WFVDF—7F6„6ææ÷E&V—77VT&Vf÷&T6æöæ–6Å&VF&6²p¥Ò“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆU÷vF6†VEöÖVçU÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VD†÷7D&–æF–ærræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v–çFW&f6RæF—fTÖö&–ÆUF—FÆUvF6†VEf–Wu÷'Bræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VEf–Wt7F–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–æuöÖ—76–ærr¦–b‚w&—fFRfÂÖVçRÒæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçR†6ö÷&F–æF÷"Â66÷VçB’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vÖVçRæ7F—fFR‚ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7Eö&–æF–æuö'—76W5ö6æöæ–6Åö6÷&UöÖVçRr¦–b‚wf–Wrç&WÆ6UF—FÆT7F–öç2‡f–Wt7F–öç2çFôÆ—7B‚’’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢wf–Wræ6ÆV%F—FÆT7F–öç2‚’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7E÷&VæFW%ö÷%ö6ÆV%÷÷'EöÖ—76–ærr¦–b‚w&V6÷&Bçf–Wt7F–öâÓÓÒ7F–öâræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v7F–öâæÖö&–ÆTf÷"†&–æF–æu6VÂ’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢w6VÆV7FVD7F–öä–BÓÒ7F–öâæ7F–öä–Bræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7EöW†7Eöö&¦V7Eö÷%÷6VÆV7F–öåövFUöÖ—76–ærr¦–b‚v—77VVBç&VÖ÷fR†7F–öâæ7F–öä–B’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢Öö&–ÆU÷F—FÆUö†÷7Eö&–æF–æræf–æB‚v—77VVBç&VÖ÷fR†7F–öâæ7F–öä–B’r’âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–æræf–æB‚vÖVçRæ7F—fFR‚r’“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7Eö7F–öåöæ÷Eö6öç7VÖVEö&Vf÷&Uö6÷&UöÖVçRr¦–b‚w&Wfö¶U&VæFW&VDvVæW&F–öâ‚’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vÖVçRç&W6VçB†Æ7E6V6öäçVÖ&W"’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7EövVæW&F–öå÷&Wfö6F–öåöÖ—76–ærr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢w&—fFRf"6Æ÷6VBÒfÇ6Rræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢wfÂÖVçT6Æ÷6VBÒÖVçRæ6Æ÷6R‚’ræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vgVâ—4÷W&F–öæÂ‚“¢&ööÆVâÒöä÷væW%F‡&VB‚’bb6Æ÷6VBræ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚vÖö&–ÆUö†÷7E÷F‡&VEö÷%öÆ–fV7–6ÆUöwV&EöÖ—76–ærr¦–b‚tæF—fTÖö&–ÆUF—FÆUvF6†VD†÷7D&–æF–ær‚r–â¦f÷FW‡B÷ ¢tæF—fTÖö&–ÆUF—FÆUvF6†VEf–Wt7F–öâ‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚vÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–æu÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–bç’†æÖRæ÷B–âÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–æu÷FW7Bf÷"æÖR–â°¢v†÷7E&VæFW%V&Æ—6†W4f÷W$F—7Æ”ÖöFVÇ5v—F†÷WEw&—F–ærrÀ¢vW†7E6VÖçF–5f–Wt7F–öäF—7F6†W4æD6ÆV'5v†öÆTvVæW&F–öârÀ¢w&uö–çFW$æDÆöæu&W746ÆÆ&6·4æWfW$–×Ç”†÷7D6öç6VçBrÀ¢w7FÆT÷$f÷&vVEf–Wtö&¦V7G5&Wfö¶T7W'&VçE&W6VçFF–öârÀ¢wVçvF6„6¶æ÷vÆVFvVÖVçE76W4öæÇ•F‡&÷Vv„W†7D—77VVEf–Wt7F–öârÀ¢v66÷VçDG&–gDæE&V¦V7FVDF—7F6„6ÆV$†÷7E&W6VçFF–öârÀ¢vgWGW&TW—6öFTf–ÇFW&–æu7W'f—fW5&VÄ†÷7D&÷VæF'’rÀ¢w&V¦V7FVD÷%F‡&÷v–æuf–Wu÷'EW&ÖæVçFÇ•ö—6öç4&–æF–ærrÀ¢v†÷7D÷væW%F‡&VDæD6Æ÷6U&Wfö¶T÷WG7FæF–æt6ÆÆ&6·2rÀ¢vÖö&–ÆT†÷7D6ææ÷E&VæFW$v–åv†–ÆT66WFVEw&—FTÆ6·5&VF&6²rÀ¢vÖö&–ÆT†÷7D÷W&F–öæÅ7FFTF—7F–æwV—6†W4fFÄf–ÇW&Tg&öÕVæF–æu&VF&6²p¥Ò“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆUö†÷7Eö&–æF–æu÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fUGeF—FÆUvF6†VD†÷7D&–æF–ærræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v–çFW&f6RæF—fUGeF—FÆUvF6†VEf–Wu÷'Bræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VEf–Wt7F–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆUö†÷7Eö&–æF–æuöÖ—76–ærr¦–b‚w&—fFRfÂÖVçRÒæF—fUGeF—FÆUvF6†VDÖVçR†6ö÷&F–æF÷"Â66÷VçB’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vÖVçRæ7F—fFR‚ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7Eö&–æF–æuö'—76W5ö6æöæ–6Åö6÷&UöÖVçRr¦–b‚wf–Wrç&WÆ6UF—FÆT7F–öç2‡f–Wt7F–öç2çFôÆ—7B‚’’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢wf–Wræ6ÆV%F—FÆT7F–öç2‚’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7E÷&VæFW%ö÷%ö6ÆV%÷÷'EöÖ—76–ærr¦–b‚w&V6÷&Bçf–Wt7F–öâÓÓÒ7F–öâræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢v7F–öâæÖVçTf÷"†&–æF–æu6VÂ’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vfö7W6VD7F–öä–BÓÒ7F–öâæ7F–öä–Bræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7EöW†7Eöö&¦V7Eö÷%öfö7W5övFUöÖ—76–ærr¦–b‚w&VÖ÷FT¶W’Ò&VÖ÷FT¶W’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vfö7W6VD7F–öä–BÒfö7W6VD7F–öä–Bræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7E÷&VÖ÷FUö6öæf—&ÖF–öåöæ÷EöFVÆVvFVBr¦–b‚v—77VVBç&VÖ÷fR†7F–öâæ7F–öä–B’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢Ge÷F—FÆUö†÷7Eö&–æF–æræf–æB‚v—77VVBç&VÖ÷fR†7F–öâæ7F–öä–B’r’âGe÷F—FÆUö†÷7Eö&–æF–æræf–æB‚vÖVçRæ7F—fFR‚r’“ ¢f–ÂæVæB‚wGeö†÷7Eö7F–öåöæ÷Eö6öç7VÖVEö&Vf÷&Uö6÷&UöÖVçRr¦–b‚w&Wfö¶U&VæFW&VDvVæW&F–öâ‚’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vÖVçRç&W6VçB†Æ7E6V6öäçVÖ&W"’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7EövVæW&F–öå÷&Wfö6F–öåöÖ—76–ærr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢w&—fFRf"6Æ÷6VBÒfÇ6Rræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢wfÂÖVçT6Æ÷6VBÒÖVçRæ6Æ÷6R‚’ræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢vgVâ—4÷W&F–öæÂ‚“¢&ööÆVâÒöä÷væW%F‡&VB‚’bb6Æ÷6VBræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7E÷F‡&VEö÷%öÆ–fV7–6ÆUöwV&EöÖ—76–ærr¦–b‚wfÂfö7W6&ÆS¢&ööÆVâÒG'VRræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær÷ ¢wfÂ&WV—&W46¶æ÷vÆVFvVÖVçC¢&ööÆVâÒvF6†VBræ÷B–âGe÷F—FÆUö†÷7Eö&–æF–ær“ ¢f–ÂæVæB‚wGeö†÷7Eöfö7W5ö÷%öFW7G'V7F—fUöÖWFFFöÖ—76–ærr¦–b‚tæF—fUGeF—FÆUvF6†VD†÷7D&–æF–ær‚r–â¦f÷FW‡B÷ ¢tæF—fUGeF—FÆUvF6†VEf–Wt7F–öâ‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚wGe÷F—FÆUö†÷7Eö&–æF–æu÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–bç’†æÖRæ÷B–âGe÷F—FÆUö†÷7Eö&–æF–æu÷FW7Bf÷"æÖR–â°¢wGd†÷7E&VæFW%V&Æ—6†W4f÷W$fö7W6&ÆTÖöFVÇ5v—F†÷WEw&—F–ærrÀ¢vVçFW$öäW†7Dfö7W6VEGd7F–öäF—7F6†W4æD6ÆV'4vVæW&F–öârÀ¢vGD6VçFW$—5F†TöæÇ”ÇFW&æFT66WFVEGd6öæf—&ÖF–öârÀ¢vfö7W4Ö—6ÖF6„æD÷F†W%&VÖ÷FT¶W—4f–Ä6Æ÷6VDæE&Wfö¶RrÀ¢w7FÆT÷$f÷&vVEGef–Wtö&¦V7G5&Wfö¶T7W'&VçE&W6VçFF–öârÀ¢wGeVçvF6…&WV—&W46¶æ÷vÆVFvVÖVçDöäW†7D—77VVD7F–öârÀ¢wGd66÷VçDG&–gDæE&V¦V7FVDF—7F6„6ÆV%&W6VçFF–öârÀ¢vgWGW&TW—6öFTf–ÇFW&–æu7W'f—fW5Gd†÷7D&÷VæF'’rÀ¢w&V¦V7FVD÷%F‡&÷v–æuGef–Wu÷'EW&ÖæVçFÇ•ö—6öç4&–æF–ærrÀ¢v6ÆV$f–ÇW&TgFW$Æ–VEGd7F–öä6Æ÷6W5v—F†÷WE&WÆ’rÀ¢wGd†÷7D÷væW%F‡&VDæD6Æ÷6U&Wfö¶T÷WG7FæF–æt6ÆÆ&6·2rÀ¢wGd†÷7D6ææ÷E&VæFW$v–åv†–ÆT66WFVEw&—FTÆ6·5&VF&6²rÀ¢wGd†÷7D÷W&F–öæÅ7FFTF—7F–æwV—6†W4fFÄf–ÇW&Tg&öÕVæF–æu&VF&6²p¥Ò“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆUö†÷7Eö&–æF–æu÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fUGeF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VEv–FvWB–çFW&æÂ6öç7G'V7F÷"ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VEv–FvWD–çFVçB–çFW&æÂ6öç7G'V7F÷"ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VD6öæf—&ÖF–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW%öÖ—76–ærr¦–b‚v7F–öç2ç6—¦RâæF—fUGeF—FÆUvF6†VDÖVçRäÔ…õ$U4TåDTEô5D”ôå2ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v7F–öç2æÖ²—Bæ7F–öä–BÒçFõ6WB‚’ç6—¦RÒ7F–öç2ç6—¦Rræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v—Bæ6öæf—&ÖF–öâæ—4&Ææ²‚’ÇÂ—Bæfö7W6&ÆRræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚wGe÷v–FvWEövVæW&F–öå÷fÆ–FF–öåöÖ—76–ærr¦–b‚w&V6÷&Bçv–FvWBÓÒv–FvWBræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢wv–FvWBæ7F–öäf÷"†6öçG&öÆÆW%6VÂ’ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vfö7W6VD7F–öä–BÒv–FvWBæ7F–öä–Bræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚wGe÷v–FvWEöW†7Eöö&¦V7Eö÷%öfö7W5övFUöÖ—76–ærr¦–b‚v–b†¶W”7F–öâÒ´U•ô5D”ôåõU’&WGW&âçVÆÂræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢w&VÖ÷FT¶W’Ò´U•ôTåDU"bb&VÖ÷FT¶W’Ò´U•ôEEô4TåDU"ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚wGe÷v–FvWE÷&VÖ÷FUö¶W—WövFUöÖ—76–ærr¦–b‚wfÂ&V6÷&BÒ—77VVBç&VÖ÷fR‡v–FvWBæ7F–öä–B’ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚v—77VVBæ6ÆV"‚’rÂGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚vgVâ6öç7VÖR‚r’’à¢Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚wv–FvWBæ7F–öäf÷"†6öçG&öÆÆW%6VÂ’r’“ ¢f–ÂæVæB‚wGe÷v–FvWEövVæW&F–öåöæ÷E÷&Wfö¶VEö&Vf÷&U÷fÆ–FF–öâr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ6ÆV"‚“¢&ööÆVâræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ6Æ÷6R‚“¢&ööÆVâræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚wGe÷v–FvWE÷F‡&VEö÷%öÆ–fV7–6ÆUöwV&EöÖ—76–ærr¦–b‚v6öæf—&Ö&ÆT–çFVçBÓÒ–çFVçBræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢wVæF–æt6öæf—&ÖF–öâÓÒ6öæf—&ÖF–öâræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢r6öæf—&ÖF–öâæ—77VVD'’†6öæf—&ÖF–öå6VÂ’ræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ–çfÆ–FFT6öæf—&ÖF–öâ‚“¢&ööÆVâræ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚wGe÷v–FvWEö6öæf—&ÖF–öåöW†7EöÆV6UöÖ—76–ærr¦–b‡Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB‚wVæF–æt6öæf—&ÖF–öâÒçVÆÂr’ÒR÷ ¢Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB‚v6öæf—&Ö&ÆT–çFVçBÒçVÆÂr’ÒR÷ ¢Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB€¢v6öæf—&Ö&ÆT–çFVçBÒçVÆÅÆâVæF–æt6öæf—&ÖF–öâÒçVÆÂp¢’ÒB“ ¢f–ÂæVæB‚wGe÷v–FvWEö6öæf—&ÖF–öåöÆ–fV7–6ÆU÷&Wfö6F–öåöÖ—76–ærr¦–b‚v6Æ72æG&ö–EGeF—FÆUvF6†VEv–FvWE÷'Bræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢s¢æF—fUGeF—FÆUvF6†VEf–Wu÷'Bræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&—fFRfÂ6öçG&öÆÆW"ÒæF—fUGeF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"‚’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚v7GVÅöæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'EöÖ—76–ærr¦–b‚tÆö÷W"æ×”Æö÷W"‚’ÓÓÒÆö÷W"ævWDÖ–äÆö÷W"‚’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢rf–Wræ†4fö7W2‚’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢t¶W”WfVçBä´U”4ôDUôTåDU"ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢t¶W”WfVçBä´U”4ôDUôEEô4TåDU"ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–E÷Ge÷v–FvWEöÖ–å÷F‡&VEöfö7W5ö÷%÷&VÖ÷FUövFUöÖ—76–ærr¦–b‚rç6WE÷6—F—fT'WGFöâ‚$6öæf—&Ò"’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢rç6WDæVvF—fT'WGFöâ‚$6æ6VÂ"’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢rç6WDöä6æ6VÄÆ—7FVæW"²&W6öÇfR†fÇ6R’Òræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–E÷Ge÷VçvF6…ö6öæf—&ÖF–öåö÷%ö6æ6VÅövFUöÖ—76–ærr¦–b‚w&W7VÇBæ–çFVçBæ7F–öâræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&W7VÇBæ–çFVçBæfö7W6VD7F–öä–Bræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&W7VÇBæ–çFVçBç&VÖ÷FT¶W’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢w6WDöä6Æ–6´Æ—7FVæW"r–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–E÷Ge÷v–FvWEöW†7Eö6ÆÆ&6µö÷%÷&VÖ÷FUööæÇ•övFUöÖ—76–ærr¦–b‚v7F—fT6öæf—&ÖF–öäF–Æörræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"æ–çfÆ–FFT6öæf—&ÖF–öâ‚’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"æ&Vv–ä6öæf—&ÖF–öâ†–çFVçB’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"ç&W6öÇfT6öæf—&ÖF–öâ‚ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B÷ ¢vF–ÆöræF—6Ö—72‚’ræ÷B–âæG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–E÷Ge÷7FÆUö6öæf—&ÖF–öåöF–ÆöuövFUöÖ—76–ærr¦–b‚tæG&ö–EGeF—FÆUvF6†VEv–FvWE÷'B‚r–â¦f÷FW‡B÷ ¢tæF—fUGeF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚væG&ö–E÷Ge÷F—FÆU÷v–FvWE÷÷'E÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–bç’†æÖRæ÷B–âGe÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷FW7Bf÷"æÖR–â°¢wv–FvWD6öçG&öÆÆW$'V–ÆG4fö7W6&ÆTÖöFVÇ5v—F†÷WD7F—fF–öârÀ¢v7F–öåWVçFW%&WGW&ç4W†7D–çFVçDæE&Wfö¶W5v–FvWDvVæW&F–öârÀ¢v7F–öåWGD6VçFW%&WGW&ç4W†7D–çFVçBrÀ¢v¶W”F÷väFöW4æ÷D6öç7VÖUv–FvWDvVæW&F–öârÀ¢vfö7W4Ö—6ÖF6„æD÷F†W%&VÖ÷FT¶W•&Wfö¶Uv–FvWDvVæW&F–öârÀ¢w7FÆTæDf÷&vVEv–FvWDö&¦V7G46ææ÷D7F—fFRrÀ¢vÖÆf÷&ÖVD÷$æöäfö7W6&ÆUv–FvWDvVæW&F–öäf–Ç46Æ÷6VBrÀ¢wv–FvWD÷væW%F‡&VD6ÆV$æD6Æ÷6Tf–Ä6Æ÷6VBrÀ¢vFW7G'V7F—fT6öæf—&ÖF–öäÆV6U&WGW&ç4W†7D–çFVçDöæ6RrÀ¢w&WÆ6VÖVçD–çfÆ–FFW57FÆT6öæf—&ÖF–öåv—F†÷WE&Wfö¶–æt7W'&VçDÆV6RrÀ¢vf÷&vVDæDf÷&V–vä6öæf—&ÖF–öä6ÆÆ&6·5&W6W'fT÷væW$ÆV6RrÀ¢v6ÆV$æD6Æ÷6U&Wfö¶UVæF–æt6öæf—&ÖF–öç2p¥Ò“ ¢f–ÂæVæB‚væF—fU÷Ge÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWB–çFW&æÂ6öç7G'V7F÷"ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD–çFVçB–çFW&æÂ6öç7G'V7F÷"ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VD6öæf—&ÖF–öâ–çFW&æÂ6öç7G'V7F÷"ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW%öÖ—76–ærr¦–b‚v7F–öç2ç6—¦RâæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçRäÔ…õ$U4TåDTEô5D”ôå2ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v7F–öç2æÖ²—Bæ7F–öä–BÒçFõ6WB‚’ç6—¦RÒ7F–öç2ç6—¦Rræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢v—Bæ6öæf—&ÖF–öâæ—4&Ææ²‚’ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWEövVæW&F–öå÷fÆ–FF–öåöÖ—76–ærr¦–b‚w&V6÷&Bçv–FvWBÓÒv–FvWBræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢wv–FvWBæ7F–öäf÷"†6öçG&öÆÆW%6VÂ’ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢w6VÆV7FVD7F–öä–BÒv–FvWBæ7F–öä–Bræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWEöW†7Eöö&¦V7Eö÷%÷6VÆV7F–öåövFUöÖ—76–ærr¦–b‚w6VÖçF–4WfVçBÒæF—fTÖö&–ÆUF—FÆUvF6†VDÖVçRå4TÔåD”5ô5D•dD”ôâræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWE÷6VÖçF–5ö7F—fF–öåövFUöÖ—76–ærr¦–b‚wfÂ&V6÷&BÒ—77VVBç&VÖ÷fR‡v–FvWBæ7F–öä–B’ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚v—77VVBæ6ÆV"‚’rÂÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚vgVâ6öç7VÖR‚r’’à¢Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æf–æB‚wv–FvWBæ7F–öäf÷"†6öçG&öÆÆW%6VÂ’r’“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWEövVæW&F–öåöæ÷E÷&Wfö¶VEö&Vf÷&U÷fÆ–FF–öâr¦–b‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ6ÆV"‚“¢&ööÆVâræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ6Æ÷6R‚“¢&ööÆVâræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWE÷F‡&VEö÷%öÆ–fV7–6ÆUöwV&EöÖ—76–ærr¦–b‚v6öæf—&Ö&ÆT–çFVçBÓÒ–çFVçBræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢wVæF–æt6öæf—&ÖF–öâÓÒ6öæf—&ÖF–öâræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢r6öæf—&ÖF–öâæ—77VVD'’†6öæf—&ÖF–öå6VÂ’ræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"÷ ¢vgVâ–çfÆ–FFT6öæf—&ÖF–öâ‚“¢&ööÆVâræ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWEö6öæf—&ÖF–öåöW†7EöÆV6UöÖ—76–ærr¦–b†Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB‚wVæF–æt6öæf—&ÖF–öâÒçVÆÂr’ÒR÷ ¢Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB‚v6öæf—&Ö&ÆT–çFVçBÒçVÆÂr’ÒR÷ ¢Öö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW"æ6÷VçB€¢v6öæf—&Ö&ÆT–çFVçBÒçVÆÅÆâVæF–æt6öæf—&ÖF–öâÒçVÆÂp¢’ÒB“ ¢f–ÂæVæB‚vÖö&–ÆU÷v–FvWEö6öæf—&ÖF–öåöÆ–fV7–6ÆU÷&Wfö6F–öåöÖ—76–ærr¦–b‚v6Æ72æG&ö–DÖö&–ÆUF—FÆUvF6†VEv–FvWE÷'Bræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢s¢æF—fTÖö&–ÆUF—FÆUvF6†VEf–Wu÷'Bræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&—fFRfÂ6öçG&öÆÆW"ÒæF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"‚’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚v7GVÅöæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'EöÖ—76–ærr¦–b‚tÆö÷W"æ×”Æö÷W"‚’ÓÓÒÆö÷W"ævWDÖ–äÆö÷W"‚’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w6WDöä6Æ–6´Æ—7FVæW"ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w6WDöäÆöæt6Æ–6´Æ—7FVæW"²G'VRÒræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–EöÖö&–ÆU÷v–FvWEöÖ–å÷F‡&VEö÷%÷6VÖçF–5ö6Æ–6µövFUöÖ—76–ærr¦–b‚rç6WE÷6—F—fT'WGFöâ‚$6öæf—&Ò"’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢rç6WDæVvF—fT'WGFöâ‚$6æ6VÂ"’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢rç6WDöä6æ6VÄÆ—7FVæW"²&W6öÇfR†fÇ6R’Òræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–EöÖö&–ÆU÷VçvF6…ö6öæf—&ÖF–öåö÷%ö6æ6VÅövFUöÖ—76–ærr¦–b‚w&W7VÇBæ–çFVçBæ7F–öâræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&W7VÇBæ–çFVçBç6VÆV7FVD7F–öä–Bræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w&W7VÇBæ–çFVçBç6VÖçF–4WfVçBræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢w6WDöåF÷V6„Æ—7FVæW"r–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–EöÖö&–ÆU÷v–FvWEöW†7Eö6ÆÆ&6µö÷%÷&u÷F÷V6…övFUöÖ—76–ærr¦–b‚v7F—fT6öæf—&ÖF–öäF–Æörræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"æ–çfÆ–FFT6öæf—&ÖF–öâ‚’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"æ&Vv–ä6öæf—&ÖF–öâ†–çFVçB’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢v6öçG&öÆÆW"ç&W6öÇfT6öæf—&ÖF–öâ‚ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B÷ ¢vF–ÆöræF—6Ö—72‚’ræ÷B–âæG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'B“ ¢f–ÂæVæB‚væG&ö–EöÖö&–ÆU÷7FÆUö6öæf—&ÖF–öåöF–ÆöuövFUöÖ—76–ærr¦–b‚tæG&ö–DÖö&–ÆUF—FÆUvF6†VEv–FvWE÷'B‚r–â¦f÷FW‡B÷ ¢tæF—fTÖö&–ÆUF—FÆUvF6†VEv–FvWD6öçG&öÆÆW"‚r–â¦f÷FW‡B“ ¢f–ÂæVæB‚væG&ö–EöÖö&–ÆU÷F—FÆU÷v–FvWE÷÷'E÷v—&VE÷Fõ÷7–çF†WF–5ö7F—f—G’r¦–bç’†æÖRæ÷B–âÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷FW7Bf÷"æÖR–â°¢vÖö&–ÆUv–FvWD6öçG&öÆÆW$'V–ÆG4F—7Æ”ÖöFVÇ5v—F†÷WD7F—fF–öârÀ¢w6VÖçF–4Öö&–ÆT6Æ–6µ&WGW&ç4W†7D–çFVçDæE&Wfö¶W4vVæW&F–öârÀ¢væöå6VÖçF–4Öö&–ÆTWfVçDæWfW$7F—fFW4æE&Wfö¶W4vVæW&F–öârÀ¢vÖö&–ÆU6VÆV7F–öäÖ—6ÖF6…&Wfö¶W5v–FvWDvVæW&F–öârÀ¢w7FÆTæDf÷&vVDÖö&–ÆUv–FvWDö&¦V7G46ææ÷D7F—fFRrÀ¢vÖÆf÷&ÖVDÖö&–ÆUv–FvWDvVæW&F–öäf–Ç46Æ÷6VBrÀ¢vÖö&–ÆUv–FvWE&W6W'fW4FW7G'V7F—fT6¶æ÷vÆVFvVÖVçDÖWFFFrÀ¢vÖö&–ÆUv–FvWD÷væW%F‡&VD6ÆV$æD6Æ÷6Tf–Ä6Æ÷6VBrÀ¢vFW7G'V7F—fTÖö&–ÆT6öæf—&ÖF–öäÆV6U&WGW&ç4W†7D–çFVçDöæ6RrÀ¢vÖö&–ÆU&WÆ6VÖVçD–çfÆ–FFW57FÆT6öæf—&ÖF–öåv—F†÷WE&Wfö¶–æt7W'&VçDÆV6RrÀ¢vf÷&vVDæDf÷&V–väÖö&–ÆT6öæf—&ÖF–öä6ÆÆ&6·5&W6W'fT÷væW$ÆV6RrÀ¢vÖö&–ÆT6ÆV$æD6Æ÷6U&Wfö¶UVæF–æt6öæf—&ÖF–öç2p¥Ò“ ¢f–ÂæVæB‚væF—fUöÖö&–ÆU÷F—FÆU÷v–FvWEö6öçG&öÆÆW%÷&Vw&W76–öç5öÖ—76–ærr¦–b‚v6Æ72æF—fTÖö&–ÆUF—FÆUvF6†VEf–Wu÷'E&VÆ’¢æF—fTÖö&–ÆUF—FÆUvF6†VEf–Wu÷'Bræ÷B–âF—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’÷ ¢v6Æ72æF—fUGeF—FÆUvF6†VEf–Wu÷'E&VÆ’¢æF—fUGeF—FÆUvF6†VEf–Wu÷'Bræ÷B–âF—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’“ ¢f–ÂæVæB‚vÖö&–ÆUö÷%÷Ge÷F—FÆU÷f–Wu÷÷'E÷&VÆ•öÖ—76–ærr¦–b‡F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚v–b†FVÆVvFRÒçVÆÂÇÂf–WrÓÓÒF†—2’&WGW&âö—6öâ‚’r’Ò"÷ ¢F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚vFVÆVvFRÒf–Wrr’Ò"“ ¢f–ÂæVæB‚wF—FÆU÷f–Wu÷÷'E÷&VÆ•ööæU÷F–ÖUö&–æEöÖ—76–ærr¦–b‡F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚uF‡&VBæ7W'&VçEF‡&VB‚’ÓÓÒ÷væW%F‡&VBr’Ò"÷ ¢F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚vgVâ6Æ÷6R‚“¢&ööÆVâr’Ò"“ ¢f–ÂæVæB‚wF—FÆU÷f–Wu÷÷'E÷&VÆ•÷F‡&VEö÷%ö6Æ÷6UöwV&EöÖ—76–ærr¦–b‡F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚v–b‚66WFVB’&WGW&âö—6öâ‚’r’ÒB÷ ¢F—FÆU÷vF6†VE÷f–Wu÷÷'E÷&VÆ’æ6÷VçB‚v6F6‚…ó¢W†6WF–öâ’r’Ò"÷ ¢Fž;óËh‘éì¶»§q«^u•]…Ñ¡•‘Y¥•ÝA½ÉÑI•±…ä œ°(€€€€€€€€…¹½¹¥…±]…Ñ¡•‘MÑ…Ñ•A½ÉÐœ°(€€€€€€€€…¹½¹¥…±]…Ñ¡•‘½Õ¹Ñ!½ÍÑA½ÉÐœ(€€€t¤è(€€€™…¥°¹…ÁÁ•¹ ÑÙ}…Ñ¥Ù¥Ñå}‰åÁ…ÍÍ•Í}É•Ù¥•Ý•‘}ÍÉ••¹}½Ý¹•Èœ¤)¥˜€ 9…Ñ¥Ù•QÙQ¥Ñ±•]…Ñ¡•‘=ÕÑ½µ”¹AA1%œ¹½Ð¥¸©…Ù…}Ñ•áÐ½È(€€€€%MAQ!}A9%9}I	,œ¹½Ð¥¸©…Ù…}Ñ•áÐ½È(€€€€9…Ñ¥Ù•QÙQ¥Ñ±•]…Ñ¡•‘=ÕÑ½µ”¹IUMœ¹½Ð¥¸©…Ù…}Ñ•áÐ¤è(€€€™…¥°¹…ÁÁ•¹ ÑÙ}Ñ¥Ñ±•}…Ñ¥½¹}½ÕÑ½µ•}¡…¹‘±¥¹}µ¥ÍÍ¥¹œœ¤)¥˜€ ÑÙ!½ÍÑ	¥¹‘¥¹ÁÁ±¥•Í=¹±å1½…±Må¹Ñ¡•Ñ¥M•É¥•ÍMÑ…Ñ”œ¹½Ð¥¸(€€€€€€€Íå¹Ñ¡•Ñ¥}Ý…Ñ¡•‘}¡½ÍÑ}Ñ•ÍÐ½È(€€€€‰¥¹‘¥¹œ¹…Ñ¥Ù…Ñ”¡Í•±•Ñ•°Í•±•Ñ•¹…Ñ¥½¹%°€‰9QHˆ¤œ¹½Ð¥¸(€€€€€€€Íå¹Ñ¡•Ñ¥}Ý…Ñ¡•‘}¡½ÍÑ}Ñ•ÍÐ¤è(€€€™…¥°¹…ÁÁ•¹ ÑÙ}Ñ¥Ñ±•}…Ñ¥½¹}Íå¹Ñ¡•Ñ¥}¡½ÍÑ}½µÁ½Í¥Ñ¥½¹}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸Ñ¥Ñ±•}Ý…Ñ¡•‘}Ù¥•Ý}Á½ÉÑ}É•±…å}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€µ½‰¥±•I•±…åI•™ÕÍ•Í	•™½É•	¥¹‘¥¹¹‘•±•…Ñ•Í™Ñ•É	¥¹‘¥¹œœ°(€€€€µ½‰¥±•I•±…å±½Í•±•…ÉÍ¹‘A•Éµ…¹•¹Ñ±åI•Ù½­•Ìœ°(€€€€µ½‰¥±•I•±…åI•©•Ñ¥¹A½ÉÑA•Éµ…¹•¹Ñ±åA½¥Í½¹Ìœ°(€€€€µ½‰¥±•I•±…åQ¡É½Ý¥¹A½ÉÑA•Éµ…¹•¹Ñ±åA½¥Í½¹Ìœ°(€€€€ÑÙI•±…åI•™ÕÍ•Í	•™½É•	¥¹‘¥¹¹‘•±•…Ñ•Í™Ñ•É	¥¹‘¥¹œœ°(€€€€ÑÙI•±…å±½Í•±•…ÉÍ¹‘A•Éµ…¹•¹Ñ±åI•Ù½­•Ìœ°(€€€€ÑÙI•±…åI•©•Ñ¥¹A½ÉÑA•Éµ…¹•¹Ñ±åA½¥Í½¹Ìœ°(€€€€ÑÙI•±…åQ¡É½Ý¥¹A½ÉÑA•Éµ…¹•¹Ñ±åA½¥Í½¹Ìœ°(€€€€™½É•¥¹Q¡É•…‘…¹¹½ÑQ…­•=Ù•É=É±½Í•¥Ñ¡•ÉI•±…äœ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}Ñ¥Ñ±•}Ù¥•Ý}Á½ÉÑ}É•±…å}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€M¹…ÁÍ¡½Ñ	½Õ¹‘9…Ñ¥Ù•M••­A½ÉÐœ¹½Ð¥¸©…Ù…}Ñ•áÐ½È€M¹…ÁÍ¡½Ñ	½Õ¹‘9…Ñ¥Ù•M••­A½ÉÐœ¹½Ð¥¸Á½ÉÑÌè(€€€™…¥°¹…ÁÁ•¹ …Ñ½µ¥}•¹½Õ¡}µ…¥¹}±½½Á•É}Í••­}Õ…É‘}µ¥ÍÍ¥¹œœ¤)¥˜€ Ý…Ñ¡•‘	ÕÑÑ½¹Ìœ¥¸©…Ù…}Ñ•áÐ½È(€€€€Ý…Ñ¡•€¡Õ¹…Ù…¥±…‰±”¤œ¥¸©…Ù…}Ñ•áÐ¤è(€€€™…¥°¹…ÁÁ•¹ ÍÑ…±•}‘¥Í…‰±•‘}ÑÙ}Ý…Ñ¡•‘}Á±…•¡½±‘•ÉÍ}ÁÉ•Í•¹Ðœ¤)¥˜€MÑ½Éå=É‘•É½¹ÑÉ…Ð¹ÁÉ•Í•¹Ñ…Ñ¥½¸œ¹½Ð¥¸©…Ù…}Ñ•áÐ½È€MÑ½Éå=É‘•É½¹ÑÉ…Ð¹¹•áÐœ¹½Ð¥¸©…Ù…}Ñ•áÐè(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}¹½Ñ}‰½Õ¹‘}Ñ½}™½ÕÍ…‰±•}±½…±}Õ¤œ¤)¥˜€ÍÑ½Éå=É‘•ÉQ½±”€ô‰ÕÑÑ½¸ œ¹½Ð¥¸©…Ù…}Ñ•áÐ½È€¥Í½ÕÍ…‰±”€ôÑÉÕ”œ¹½Ð¥¸©…Ù…}Ñ•áÐè(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}ÑÙ}™½ÕÍ}Á…Ñ¡}µ¥ÍÍ¥¹œœ¤)¥˜€…¹½¹¥…°¹…¹äì¥Ð¹Í•…Í½¸€ø€À€˜˜¥Ð¹¥€…¥¸Í••¸ôœ¹½Ð¥¸ÍÑ½Éäè(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}É•Õ±…É}•Á¥Í½‘•}½µÁ±•Ñ•¹•ÍÍ}Õ…É‘}µ¥ÍÍ¥¹œœ¤)¥˜€9•áÑMÑ½Éå•¥Í¥½¸¹UÍ•á¥ÍÑ¥¹½¹Ñ¥¹Õ…Ñ¥½¸œ¹½Ð¥¸ÍÑ½Éä½È€‰å%‘m¥‘tœ¹½Ð¥¸ÍÑ½Éäè(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}ÍÑ…‰±•}¥‘•¹Ñ¥Ñå}½É}™…¥±}±½Í•‘}½¹Ñ¥¹Õ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€…ÍÍ•ÉÑM…µ”¡¹…ÉÉ…Ñ¥Ù•MÁ•¥…°œ¹½Ð¥¸ÍÑ½Éå}Ñ•ÍÐ½È€µ¥ÍÍ¥¹I•Õ±…ÉÁ¥Í½‘•…¥±Í±½Í•œ¹½Ð¥¸ÍÑ½Éå}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}¥‘•¹Ñ¥Ñå}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€  ÁÉ¥Ù…Ñ”™Õ¸€ñPøÍ¹…ÁÍ¡½Ñ1¥ÍÐ¡Ù…±Õ”è1¥ÍÐñPø°µ…á¥µÕ´è%¹Ð¤œ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ É•Á•…Ð¡•áÁ•Ñ•‘M¥é”¤œ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ ¥˜€¡¥Ñ•É…Ñ½È¹¡…Í9•áÐ ¤¤É•ÑÕÉ¸¹Õ±°œ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ ½±±•Ñ¥½¹Ì¹Õ¹µ½‘¥™¥…‰±•1¥ÍÐ¡‘•Ñ…¡•¤œ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ %9AUQ}M9AM!=Q}%1œ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ Í¹…ÁÍ¡½Ñ!¥¹ÑÌ¡¡¥¹ÑÌ¤€üèÉ•ÑÕÉ¸…¹½¹¥…±M¹…ÁÍ¡½Ðœ¹½Ð¥¸ÍÑ½Éä¤½È(€€€€ …ÍÍ•ÉÑÅÕ…±Ì¡…¹½¹¥…°°™…±±‰…¬¤œ¹½Ð¥¸ÍÑ½Éå}Ñ•ÍÐ¤½È(€€€€ ™…±±‰…¬€„ôô…¹½¹¥…°œ¹½Ð¥¸ÍÑ½Éå}Ñ•ÍÐ¤¤è(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}¡½ÍÑ}½±±•Ñ¥½¹}Í¹…ÁÍ¡½Ñ}Õ…É‘}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸ÍÑ½Éå}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€…±±•É5ÕÑ…Ñ¥½¹…¹¹½Ñ¡…¹••Ñ…¡•‘MÑ½ÉåAÉ•Í•¹Ñ…Ñ¥½¸œ°(€€€€¡…¹¥¹…É‘¥¹…±¥Ñå…¥±Í±½Í•‘]¥Ñ¡½ÕÑÍ…Á¥¹œœ°(€€€€Ñ¡É½Ý¥¹…¹½¹¥…±½±±•Ñ¥½¹…¥±Í±½Í•‘]¥Ñ¡½ÕÑÍ…Á¥¹œœ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÑ½Éå}½É‘•É}¡½ÍÑ}½±±•Ñ¥½¹}Í¹…ÁÍ¡½Ñ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡Ñ½­•¸¹½Ð¥¸µ½‰¥±•}ÍÑ½Éä™½ÈÑ½­•¸¥¸l(€€€€±…ÍÌ5½‰¥±•MÑ½Éå=É‘•É½¹ÑÉ½±±•Èœ°(€€€€MÑ½Éå=É‘•É½¹ÑÉ…Ð¹É•Í½±Ù”¡…¹½¹¥…±M¹…ÁÍ¡½Ð°¡¥¹ÑÌ¤œ°(€€€€Í¹…ÁÍ¡½Ñ]…Ñ¡•‘%‘Ì¡Ý…Ñ¡•‘MÑ…‰±•%‘Ì°…¹½¹¥…±M¹…ÁÍ¡½Ð¤œ°(€€€€Ý…Ñ¡•€ôÝ…Ñ¡•‘M¹…ÁÍ¡½Ð„„¹½¹Ñ…¥¹Ì¡•Á¥Í½‘”¹¥¤œ°(€€€€É•½É¹É½Ü€„ôôÉ½Üœ°(€€€€Í•µ…¹Ñ¥Ù•¹Ð€„ôM59Q%}M1Q%=8œ°(€€€€…Ñ¥Ù•Á¥Í½‘•Ì¹¥¹‘•á=™¥ÉÍÐì¥Ð¹¥€ôôÕÉÉ•¹ÑY¥‘•½%ôœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}½¹ÑÉ½±±•É}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸µ½‰¥±•}ÍÑ½Éå}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€µ½‰¥±•MÑ½Éå5½‘•AÉ•Í•¹ÑÍ9…ÉÉ…Ñ¥Ù•MÁ•¥…±]¥Ñ¡MÑ…‰±•%‘•¹Ñ¥Ñäœ°(€€€€µ…±™½Éµ•‘!¥¹ÑÍ…±±	…­Q½…¹½¹¥…±¹‘¥Í…‰±•MÑ½Éå9•áÐœ°(€€€€Í•µ…¹Ñ¥M•±•Ñ¥½¹I•ÅÕ¥É•Íá…Ñ%ÍÍÕ•‘I½Ý¹‘MÑ…‰±•%œ°(€€€€É…ÝA½¥¹Ñ•É¹‘½É•‘I½ÝÍ9•Ù•ÉÕÑ¡½É¥é•M•±•Ñ¥½¸œ°(€€€€Ý…Ñ¡•‘5…É­•ÉÍMÑ…å	½Õ¹‘Q½MÑ…‰±•%‘ÍÉ½ÍÍAÉ•Í•¹Ñ…Ñ¥½¹=É‘•Èœ°(€€€€µ½‰¥±•9•áÑUÍ•ÍAÉ•Í•¹Ñ•‘MÑ…‰±•%‘•¹Ñ¥Ñå¹‘MÕÉÙ¥Ù•Í…±±•É5ÕÑ…Ñ¥½¸œ°(€€€€½Ý¹•ÉQ¡É•…‘¹‘±½Í•…¥±±½Í•œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡Ñ½­•¸¹½Ð¥¸µ½‰¥±•}ÍÑ½Éå}¡½ÍÐ™½ÈÑ½­•¸¥¸l(€€€€±…ÍÌ5½‰¥±•MÑ½Éå=É‘•ÉY¥•ÝÑ¥½¸¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½Èœ°(€€€€¥¹Ñ•É™…”5½‰¥±•MÑ½Éå=É‘•ÉY¥•ÝA½ÉÐœ°(€€€€±…ÍÌ5½‰¥±•MÑ½Éå=É‘•É!½ÍÑ	¥¹‘¥¹œœ°(€€€€½¹ÍÐÙ…°5a}AIM9Q}I=]L€ô€ÔÀÀœ°(€€€€É•½É¹…Ñ¥½¸€ôôô…Ñ¥½¸œ°(€€€€…Ñ¥½¸¹É½Ý½È¡‰¥¹‘¥¹M•…°¤œ°(€€€€Í•µ…¹Ñ¥Ù•¹Ð€ôô5½‰¥±•MÑ½Éå=É‘•É½¹ÑÉ½±±•È¹M59Q%}M1Q%=8œ°(€€€€Ý…Ñ¡•€ôÉ½Ü¹Ý…Ñ¡•œ°(€€€€Ù¥•Ü¹É•Á±…•MÑ½ÉåI½ÝÌ¡µ½‘”°…Ñ¥½¹Ì¹Ñ½1¥ÍÐ ¤¤œ°(€€€€Ù¥•Ü¹±•…ÉMÑ½ÉåI½ÝÌ ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}¡½ÍÑ}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸µ½‰¥±•}ÍÑ½Éå}¡½ÍÑ}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€¡½ÍÑI•¹‘•ÉÍMÑ½ÉåI½ÝÍ]¥Ñ¡½ÕÑM•±•Ñ¥¹œœ°(€€€€¡½ÍÑAÉ•Í•ÉÙ•Í]…Ñ¡•‘5…É­•ÉÍ	åMÑ…‰±•%‘É½ÍÍY¥•ÝI•Á±…•µ•¹Ðœ°(€€€€•á…ÑM•µ…¹Ñ¥Ñ¥½¹I•ÑÕÉ¹Í=É¥¥¹…±…¹½¹¥…±¹‘I•Ù½­•Í•¹•É…Ñ¥½¸œ°(€€€€…¹½¹¥…±5½‘•¹‘5…±™½Éµ•‘!¥¹ÑÍAÉ•Í•ÉÙ•=É‘¥¹…ÉåI½ÝÌœ°(€€€€É…ÝMÑ…±•¹‘½É•‘Ñ¥½¹Í…¥±±½Í•œ°(€€€€Ù¥•ÝI•Á±…•µ•¹Ñ¹‘±•…É…¥±ÕÉ•ÍA½¥Í½¹!½ÍÐœ°(€€€€¡½ÍÑ9•áÑUÍ•ÍAÉ•Í•¹Ñ•‘MÑ½Éå%‘•¹Ñ¥Ñå=¹±äœ°(€€€€½Ù•ÉÍ¥é•‘5½‰¥±•AÉ•Í•¹Ñ…Ñ¥½¹…¥±Í±½Í•‘	•™½É•Y¥•Üœ°(€€€€¡½ÍÑ=Ý¹•ÉQ¡É•…‘¹‘±½Í•I•Ù½­•=ÕÑÍÑ…¹‘¥¹Ñ¥½¹Ìœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}¡½ÍÑ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡Ñ½­•¸¹½Ð¥¸…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}Ý¥‘•Ñ}Á½ÉÐ™½ÈÑ½­•¸¥¸l(€€€€±…ÍÌ¹‘É½¥‘5½‰¥±•MÑ½Éå=É‘•É]¥‘•ÑA½ÉÐœ°(€€€€1½½Á•È¹µå1½½Á•È ¤€ôôô1½½Á•È¹•Ñ5…¥¹1½½Á•È ¤œ°(€€€€É•…Ñ•5½‘•	ÕÑÑ½¸¡µ½‘”¤œ°(€€€€œ‰M¡½ÜÍ•…Í½¸½É‘•Èˆœ°(€€€€œ‰M¡½ÜÍÑ½Éä½É‘•Èˆœ°(€€€€œˆ€ƒŠˆ]…Ñ¡•ˆœ°(€€€€Í•Ñ=¹1½¹±¥­1¥ÍÑ•¹•ÈìÑÉÕ”ôœ°(€€€€5½‰¥±•MÑ½Éå=É‘•É½¹ÑÉ½±±•È¹M59Q%}M1Q%=8œ°(€€€€½¹Ñ…¥¹•È¹…‘‘Y¥•Ü¡Ù¥•Ü¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}Ý¥‘•Ñ}Á½ÉÑ}µ¥ÍÍ¥¹œœ¤)¥˜€ Í•Ñ=¹Q½Õ¡1¥ÍÑ•¹•Èœ¥¸…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}Ý¥‘•Ñ}Á½ÉÐ½È(€€€€5½Ñ¥½¹Ù•¹Ðœ¥¸…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}Ý¥‘•Ñ}Á½ÉÐ¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}É…Ý}Ñ½Õ¡}…‘µ¥ÍÍ¥½¸œ¤)¥˜…¹ä¡Ñ½­•¸¹½Ð¥¸…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}ÍÉ••¹}½Ý¹•È™½ÈÑ½­•¸¥¸l(€€€€±…ÍÌ¹‘É½¥‘5½‰¥±•MÑ½Éå=É‘•ÉMÉ••¹=Ý¹•ÈÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½Èœ°(€€€€1½½Á•È¹µå1½½Á•È ¤€„ôô1½½Á•È¹•Ñ5…¥¹1½½Á•È ¤œ°(€€€€ÁÉ¥Ù…Ñ”Ù…ÈÁ•¹‘¥¹M•±•Ñ¥½¸è…¹½¹¥…±Á¥Í½‘”ü€ô¹Õ±°œ°(€€€€Ý…Ñ¡•‘MÑ…‰±•%‘ÌèM•ÐñMÑÉ¥¹œøœ°(€€€€ÁÉ¥Ù…Ñ”Ù…°¡½ÍÐ€ô5½‰¥±•MÑ½Éå=É‘•É!½ÍÑ	¥¹‘¥¹œ œ°(€€€€™Õ¸½¹ÍÕµ•M•±•Ñ¥½¸ ¤è…¹½¹¥…±Á¥Í½‘”üœ°(€€€€Á•¹‘¥¹M•±•Ñ¥½¸€„ô¹Õ±°œ°(€€€€É•ÑÕÉ¸¡½ÍÐ¹¹•áÐ¡ÕÉÉ•¹ÑY¥‘•½%¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}ÍÉ••¹}½Ý¹•É}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¥¸©…Ù…}Ñ•áÐ™½È¹…µ”¥¸l(€€€€5½‰¥±•MÑ½Éå=É‘•É!½ÍÑ	¥¹‘¥¹œœ°(€€€€¹‘É½¥‘5½‰¥±•MÑ½Éå=É‘•É]¥‘•ÑA½ÉÐœ°(€€€€¹‘É½¥‘5½‰¥±•MÑ½Éå=É‘•ÉMÉ••¹=Ý¹•Èœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}Ý¥É•‘}Ñ½}Íå¹Ñ¡•Ñ¥}…Ñ¥Ù¥Ñäœ¤)¥˜…¹ä¡Ñ½­•¸¥¸…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}ÍÉ••¹}½Ý¹•È­…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}Ý¥‘•Ñ}Á½ÉÐ™½ÈÑ½­•¸¥¸l(€€€€á½A±…å•Èœ°(€€€€MÑÉ•µ¥½½Õ¹ÑA½ÉÐœ°(€€€€¡ÑÑÀè¼¼œ°(€€€€¡ÑÑÁÌè¼¼œ°(€€€€•ÑÕÑ¡-•äœ°(€€€€MåÍÑ•´¹•Ñ•¹Øœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}½É‘•É}Õ¥}É½ÍÍ•Í}Á±…å•É}…½Õ¹Ñ}½É}¹•ÑÝ½É­}‰½Õ¹‘…Éäœ¤)¥˜€ÁÉ¥Ù…Ñ”Ù…°QI5%90œ¹½Ð¥¸É•½Ù•Éä½È€ÁÉ¥Ù…Ñ”Ù…°IQIe	1œ¹½Ð¥¸É•½Ù•Éäè(€€€™…¥°¹…ÁÁ•¹ ±…ÍÍ¥™¥…Ñ¥½¹}™¥ÉÍÑ}…ÕÑ¡½É¥Ñå}Í•ÑÍ}µ¥ÍÍ¥¹œœ¤)¥˜€Á±…å‰…­}¡•…±Ñ é‘•±•…Ñ•}Ñ½}‰½Õ¹‘•‘}Á±…å‰…­}É•½Ù•Éäœ¹½Ð¥¸É•½Ù•Éäè(€€€™…¥°¹…ÁÁ•¹ •á…Ñ}Á±…å‰…­}‘•±•…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€½‰Í•ÉÙ…Ñ¥½¸ü¹…ÑÑ•µÁÑ•‘I•½Ù•É¥•Ì€ôô¹Õ±°œ¹½Ð¥¸É•½Ù•Éä½È€É•½Ù•Éå½¹Ñ•áÑ%€„ôÙ…±Õ”¹ÕÉÉ•¹Ñ½¹Ñ•áÑ%œ¹½Ð¥¸É•½Ù•Éäè(€€€™…¥°¹…ÁÁ•¹ ‰½Õ¹‘•‘}½¹Ñ•áÑ}±•‘•É}…Ñ•}µ¥ÍÍ¥¹œœ¤)¥˜€  ÁÉ¥Ù…Ñ”™Õ¸Í¹…ÁÍ¡½ÑÑÑ•µÁÑ!¥ÍÑ½Éä¡Ù…±Õ”è1¥ÍÐñMÑÉ¥¹œøü¤œ¹½Ð¥¸É•½Ù•Éä¤½È(€€€€ Ù…°¡¥ÍÑ½Éä€ôÍ¹…ÁÍ¡½ÑÑÑ•µÁÑ!¥ÍÑ½Éä¡Ù…±Õ”¹…ÑÑ•µÁÑ•‘I•½Ù•É¥•Ì¤€üèÉ•ÑÕÉ¸¹Õ±°œ¹½Ð¥¸É•½Ù•Éä¤½È(€€€€ É•Á•…Ð¡•áÁ•Ñ•‘M¥é”¤ì¥¹‘•à€´øœ¹½Ð¥¸É•½Ù•Éä¤½È(€€€€ É•½Ù•Éå!¥ÍÑ½Éå%ÍM¹…ÁÍ¡½ÑÑ•‘=¹•¹‘…¥±ÕÉ•Í…¥±±½Í•œ¹½Ð¥¸É•½Ù•Éå}Ñ•ÍÐ¤¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}É•½Ù•Éå}¡¥ÍÑ½Éå}Í¥¹±•}Í¹…ÁÍ¡½Ñ}µ¥ÍÍ¥¹œœ¤)¥˜€Ñ•Éµ¥¹…±±…ÍÍ¥™¥…Ñ¥½¹Í…¹¹½Ñ	•	åÁ…ÍÍ•‘	åA±…å•É…Á…‰¥±¥Ñ¥•Ìœ¹½Ð¥¸É•½Ù•Éå}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ Ñ•Éµ¥¹…±}½µÁ½Í¥Ñ¥½¹}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€‘½±‰åY¥Í¥½¹AÉ½™¥±•M•Ù•¹I•½Ù•Éå%Í=É‘•É•‘¹‘9•Ù•É1½½ÁÌœ¹½Ð¥¸É•½Ù•Éå}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ‘½±‰å}Ù¥Í¥½¹}É•½Ù•Éå}½É‘•É}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€‘…Ñ„±…ÍÌM…¹¥Ñ¥Í•‘MÑÉ•…µ…¥±ÕÉ•…ÑÌœ¹½Ð¥¸±…ÍÍ¥™¥•È½È€½‰©•Ð9…Ñ¥Ù•MÑÉ•…µ…¥±ÕÉ•±…ÍÍ¥™¥•Èœ¹½Ð¥¸±…ÍÍ¥™¥•Èè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}Í…¹¥Ñ¥Í•‘}ÍÑÉ•…µ}±…ÍÍ¥™¥•É}µ¥ÍÍ¥¹œœ¤)¥˜€½¹ÑÉ…ÑY•ÉÍ¥½¸€ô€Äœ¹½Ð¥¸±…ÍÍ¥™¥•È½È€É…Ý1½áÁ½ÉÑ±±½Ý•€ô™…±Í”œ¹½Ð¥¸±…ÍÍ¥™¥•Èè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}±…ÍÍ¥™¥•É}ÁÉ•Í•ÉÙ…Ñ¥½¹}•¹Ù•±½Á•}µ¥ÍÍ¥¹œœ¤)¥˜±…ÍÍ¥™¥•È¹™¥¹ •Á¥Í½‘•‘Ù…¹•€˜˜€…Ù…±Õ”¹ÕÍ•ÉI•ÅÕ•ÍÑ•‘9•áÑÁ¥Í½‘”œ¤€ø±…ÍÍ¥™¥•È¹™¥¹ ¥˜€¡Ù…±Õ”¹Á±…å‰…­!•…±Ñ¡±¥¥‰±”¤œ¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}±…ÍÍ¥™¥•É}Ñ•Éµ¥¹…±}½É‘•É}Ý•…­•¹•œ¤)¥˜€‘•±•…Ñ•}Ñ½}‰½Õ¹‘•‘}Á±…å‰…­}É•½Ù•Éäœ¹½Ð¥¸±…ÍÍ¥™¥•È½È€Í…µ•Á¥Í½‘•I•ÑÉå½Õ¹Ðœ¹½Ð¥¸±…ÍÍ¥™¥•Èè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}±…ÍÍ¥™¥•É}‘•±•…Ñ¥½¹}½É}É•ÑÉå}‰Õ‘•Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸±…ÍÍ¥™¥•É}Ñ•ÍÐ™½È¹…µ”¥¸l¥¹Ù…±¥‘M…¹¥Ñ¥Í•‘…ÑÍ…¥±±½Í•œ°Ñ•Éµ¥¹…±Á¥Í½‘•I•Í½ÕÉ•½¹Ñ…¥¹•É¹‘•½‘•ÉMÑ½ÁÍ]¥¹	•™½É••±•…Ñ¥½¸œ°ÁÉ½Ù¥‘•ÉM½ÕÉ•¹‘QÉ…¹ÍÁ½ÉÑ=Ý¹á…Ñ±å=¹•M…µ•Á¥Í½‘•I•ÑÉäœ°•á…ÑA±…å‰…­•±•…Ñ¥½¹=ÕÉÍ=¹±å™Ñ•É±…ÍÍ¥™¥…Ñ¥½¹±•…ÉÌt¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}±…ÍÍ¥™¥•É}½¹ÑÉ…Ñ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€±…ÍÍ¥™¥•É=ÕÑÁÕÑ½µÁ½Í•Í]¥Ñ¡9…Ñ¥Ù•	Õ‘•Ñ]¥Ñ¡½ÕÑA…É…±±•±I•ÑÉäœ¹½Ð¥¸±…ÍÍ¥™¥•É}Ñ•ÍÐ½È€9…Ñ¥Ù•A±…å‰…­I•½Ù•ÉåA½±¥ä¹Á±…¸œ¹½Ð¥¸±…ÍÍ¥™¥•É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}±…ÍÍ¥™¥•É}Á½±¥å}½µÁ½Í¥Ñ¥½¹}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€½‰©•Ð9…Ñ¥Ù•5•‘¥„Í…¥±ÕÉ•%¹Ñ…­”œ¹½Ð¥¸µ•‘¥„Í}¥¹Ñ…­”½È€•ÉÉ½É½‘”è%¹Ðœ¹½Ð¥¸µ•‘¥„Í}¥¹Ñ…­”è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}¹Õµ•É¥}™…¥±ÕÉ•}¥¹Ñ…­•}µ¥ÍÍ¥¹œœ¤)¥˜€¡ÑÑÁMÑ…ÑÕÌ€ô¹Õ±°œ¹½Ð¥¸µ•‘¥„Í}¥¹Ñ…­”½È€Á±…å‰…­!•…±Ñ¡±¥¥‰±”€ô™…±Í”œ¹½Ð¥¸µ•‘¥„Í}¥¹Ñ…­”è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}¥¹Ñ…­•}¥¹Ù•¹ÑÍ}¡ÑÑÁ}½É}Á±…å‰…­}É•½Ù•Éäœ¤)¥˜€•ÉÉ½È¹µ•ÍÍ…”œ¥¸©…Ù…}Ñ•áÐ­µ•‘¥„Í}¥¹Ñ…­”½È€•ÉÉ½È¹…ÕÍ”œ¥¸©…Ù…}Ñ•áÐ­µ•‘¥„Í}¥¹Ñ…­”½È€•ÉÉ½ÈèA±…å‰…­á•ÁÑ¥½¸œ¥¸µ•‘¥„Í}¥¹Ñ…­”è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É…Ý}•á•ÁÑ¥½¹}‰½Õ¹‘…Éå}•áÁ½Í•œ¤)¥˜€9…Ñ¥Ù•5•‘¥„Í…¥±ÕÉ•%¹Ñ…­”¹±…ÍÍ¥™ä¡•ÉÉ½È¹•ÉÉ½É½‘”¤œ¹½Ð¥¸©…Ù…}Ñ•áÐè(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}Á±…å•É}•ÉÉ½É}¹½Ñ}‰½Õ¹‘}Ñ½}Í…¹¥Ñ¥Í•‘}¥¹Ñ…­”œ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸µ•‘¥„Í}¥¹Ñ…­•}Ñ•ÍÐ™½È¹…µ”¥¸l¹•ÑÝ½É­M¥¹…±Í5…ÁQ½=¹•	½Õ¹‘•‘QÉ…¹ÍÁ½ÉÑI•ÑÉäœ°•¹•É¥!ÑÑÁÉÉ½É9•Ù•É%¹Ù•¹ÑÍI•ÍÁ½¹Í•MÑ…ÑÕÍ=ÉÉ•‘•¹Ñ¥…±…¥±ÕÉ”œ°Á…ÉÍ•ÉM¥¹…±ÍMÑ½Á]¥Ñ¡½ÕÑ%¹Ù•¹Ñ¥¹5…ÑÉ½Í­…Ù¥‘•¹”œ°‘•½‘•ÉÕ‘¥½¹‘ÉµM¥¹…±ÍI•µ…¥¹Q•Éµ¥¹…°œ°Õ¹É•ÅÕ•ÍÑ•‘Á¥Í½‘•‘Ù…¹•]¥¹Í	•™½É•I•ÑÉå…‰±•QÉ…¹ÍÁ½ÉÐt¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}™…¥±ÕÉ•}¥¹Ñ…­•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€±…ÍÌ9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåÑÕ…Ñ½Èœ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È€¥¹Ñ•É™…”9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåA½ÉÐœ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½É}‰½Õ¹‘…Éå}µ¥ÍÍ¥¹œœ¤)¥˜€ 9…Ñ¥Ù•5•‘¥„Í…¥±ÕÉ•%¹Ñ…­”¹Í…¹¥Ñ¥Í” œ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€€9…Ñ¥Ù•A±…å‰…­I•½Ù•ÉåA½±¥ä¹Á±…¸¡™…ÑÌ€ô™…ÑÌ°½‰Í•ÉÙ…Ñ¥½¸€ô¹Õ±°¤œ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}¹½Ñ}½µÁ½Í•‘}Ñ¡É½Õ¡}ÕÉÉ•¹Ñ}±…ÍÍ¥™¥•É}Á½±¥äœ¤)Í¹…ÁÍ¡½Ñ}±…ÍÌõµ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½Él(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ‘…Ñ„±…ÍÌ9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåM¹…ÁÍ¡½Ðœ¤è(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ¥¹Ñ•É™…”9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåA½ÉÐœ¤)t)¥˜€Í…µ•Á¥Í½‘•I•ÑÉå½Õ¹Ðœ¥¸Í¹…ÁÍ¡½Ñ}±…ÍÌè(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}Í¹…ÁÍ¡½Ñ}•áÁ½Í•Í}…±±•É}½¹ÑÉ½±±•‘}…ÑÑ•µÁÑ}½Õ¹Ðœ¤)¥˜€ ±…ÍÌ9…Ñ¥Ù•Á¥Í½‘•I•½Ù•Éå	Õ‘•ÐÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½Èœ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹½Õ¹Ð ÁÉ¥Ù…Ñ”Ù…°‰Õ‘•Ðè9…Ñ¥Ù•Á¥Í½‘•I•½Ù•Éå	Õ‘•Ðœ¤€ð€Ä¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}•Á¥Í½‘•}Í½Á•‘}É•½Ù•Éå}‰Õ‘•Ñ}µ¥ÍÍ¥¹œœ¤)¥˜€ ¥¹Ñ•É¹…°™Õ¸…ÑÑ•µÁÑ½Õ¹Ð¡Ù…±Õ”è9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåM¹…ÁÍ¡½Ð¤è%¹Ðüœ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€€Ù…°Í…µ•Á¥Í½‘•I•ÑÉå½Õ¹Ð€ô‰Õ‘•Ð¹…ÑÑ•µÁÑ½Õ¹Ð¡±•…Í”¤€üèÉ•ÑÕÉ¸¹Õ±°œ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€€Í…µ•Á¥Í½‘•I•ÑÉå½Õ¹Ð€ôÍ…µ•Á¥Í½‘•I•ÑÉå½Õ¹Ðœ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}…ÑÑ•µÁÑ}½Õ¹Ñ}¹½Ñ}½Ý¹•‘}‰å}Í¡…É•‘}‰Õ‘•Ðœ¤)¥˜€ ¥˜€ …‰Õ‘•Ð¹É•Í•ÉÙ”¡±•…Í”¤¤É•ÑÕÉ¸¹Õ±°œ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€€œ…‰Õ‘•Ð¹½¹Ñ…¥¹Ì¡ÁÉ•Á…É•¹±•…Í”¤œ¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}¹½Ñ}‰½Õ¹‘}Ñ½}Í¡…É•‘}•Á¥Í½‘•}‰Õ‘•Ðœ¤)¥˜€ ¥ÍÍÕ•‘Á¥Í½‘•	Õ‘•ÑÌœ¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È½È(€€€€5a}A%M=}	UQLœ¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½É}±½…±}‰Õ‘•Ñ}É•¥¹ÑÉ½‘Õ•œ¤)‰Õ‘•Ñ}±…ÍÌõµ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½Él(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ±…ÍÌ9…Ñ¥Ù•Á¥Í½‘•I•½Ù•Éå	Õ‘•Ðœ¤è(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ œ¼¨©q¸€¨	¥¹‘ÌÑ¡”¹Õµ•É¥Œµ½¹±ä5•‘¥„Ì¥¹Ñ…­”œ¤)t)¥˜€ ½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ¹½Ð¥¸‰Õ‘•Ñ}±…ÍÌ½È(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ¹½Ð¥¸‰Õ‘•Ñ}±…ÍÌ½È(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ¹½Ð¥¸‰Õ‘•Ñ}±…ÍÌ½È(€€€€™Õ¸É•Í•Ðœ¥¸‰Õ‘•Ñ}±…ÍÌ¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}‰Õ‘•Ñ}Ñ¡É•…‘}±¥™•å±•}½É}É•Í•Ñ}Õ…É‘}µ¥ÍÍ¥¹œœ¤)…ÑÕ…Ñ½É}±½Í”õµ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½Él(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ™Õ¸±½Í” ¤è	½½±•…¸œ°µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ±…ÍÌ9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåÑÕ…Ñ½Èœ¤¤è(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹™¥¹ ÁÉ¥Ù…Ñ”™Õ¸ÑÉÕÍÑ•‘QÉ…¹ÍÁ½ÉÑI•ÑÉåA±…¸œ¤)t)¥˜€‰Õ‘•Ð¹±½Í” ¤œ¥¸…ÑÕ…Ñ½É}±½Í”è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}…ÑÕ…Ñ½É}±½Í•}É•Í•ÑÍ}•Á¥Í½‘•}‰Õ‘•Ðœ¤)¥˜€¡µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹½Õ¹Ð …Ñ €¡|èá•ÁÑ¥½¸¤œ¤€ð€È½È(€€€µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È¹½Õ¹Ð …Ñ €¡|è1¥¹­…•ÉÉ½È¤œ¤€ð€È¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}Á½ÉÑ}•á•ÁÑ¥½¹}‰½Õ¹‘…Éå}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€™¥ÉÍÑQÉ…¹ÍÁ½ÉÑ…¥±ÕÉ•á•ÕÑ•Í=¹•¹‘I•Í•ÉÙ•ÍÁ¥Í½‘•	Õ‘•Ðœ°(€€€€É•Á•…Ñ•‘AÉ•Á…É…Ñ¥½¹…¹¹½Ñ5¥¹Ñ¹½Ñ¡•ÉÑÑ•µÁÑ	•™½É•=É™Ñ•Éá•ÕÑ¥½¸œ°(€€€€É•©•Ñ•‘A½ÉÑá•ÕÑ¥½¹MÑ¥±±½¹ÍÕµ•ÍM…µ•Á¥Í½‘•	Õ‘•Ðœ°(€€€€™¥¹…±M¹…ÁÍ¡½ÑÉ¥™ÑI•™ÕÍ•Í¹‘	Õ‘•ÑMÑ…åÍI•Í•ÉÙ•œ°(€€€€•Á¥Í½‘•	Õ‘•Ñ…¹¹½ÑI•Í•ÑQ¡É½Õ¡•¹•É…Ñ¥½¹=ÉM½ÕÉ•¡…¹”œ°(€€€€Ñ•Éµ¥¹…±¹‘U¹­¹½Ý¹5•‘¥„Í½‘•Í9•Ù•ÉAÉ•Á…É”œ°(€€€€•Á¥Í½‘•‘Ù…¹•¹‘%¹Ù…±¥‘MÑ…Ñ•…¥±±½Í•œ°(€€€€ÁÉ•Á…É•‘1•…Í•…¹¹½ÑÉ½ÍÍÑÕ…Ñ½É%¹ÍÑ…¹”œ°(€€€€½Ý¹•ÉQ¡É•…‘¹‘±½Í•I•Ù½­•=ÕÑÍÑ…¹‘¥¹1•…Í•¹‘ÕÑÕÉ•UÍ”œ°(€€€€Í¹…ÁÍ¡½Ñ¹‘á•ÕÑ¥½¹á•ÁÑ¥½¹Í…¥±±½Í•‘]¥Ñ¡=¹•M¡½Ñ½¹ÍÕµÁÑ¥½¸œ°(€€€€Í¡…É•‘	Õ‘•ÑMÕÉÙ¥Ù•ÍÑÕ…Ñ½É±½Í•¹‘I•Á±…•µ•¹Ðœ°(€€€€É•ÑÉåM¹…ÁÍ¡½ÑáÁ½Í•Í9½…±±•É½¹ÑÉ½±±•‘ÑÑ•µÁÑ½Õ¹Ñ•Èœ°(€€€€‰Õ‘•Ñ%‘•¹Ñ¥ÑåQ¡É•…‘¹‘1¥™•å±•…¥±±½Í•œ)t¤è(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½É}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€9…Ñ¥Ù•5•‘¥„ÍI•ÑÉåÑÕ…Ñ½È œ¥¸©…Ù…}Ñ•áÐè(€€€™…¥°¹…ÁÁ•¹ µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½É}Ý¥É•‘}Ý¥Ñ¡½ÕÑ}±¥Ù•}¡½ÍÑ}É•Ù¥•Üœ¤)¥˜€±…ÍÌ±…ÍÍ¥™¥•‘MÑÉ•…µ…¥±ÕÉ”¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½Èœ¹½Ð¥¸É•½Ù•Éä½È€ÁÉ¥Ù…Ñ”Ù…°ÁÉ½Ù•¹…¹•M•…°è¹äœ¹½Ð¥¸É•½Ù•Éä½È€‘…Ñ„±…ÍÌ±…ÍÍ¥™¥•‘MÑÉ•…µ…¥±ÕÉ”œ¥¸É•½Ù•Éäè(€€€™…¥°¹…ÁÁ•¹ ±…ÍÍ¥™¥•É}É•ÍÕ±Ñ}¹½Ñ}½Á…ÅÕ•}½É}½Áå}Í…™”œ¤)¥˜€9…Ñ¥Ù•MÑÉ•…µ…¥±ÕÉ•±…ÍÍ¥™¥•È¹¥ÍÕÑ¡•¹Ñ¥Œ¡Ù…±Õ”¤œ¹½Ð¥¸É•½Ù•Éä½È€Ù…±Õ”¹Ý…Í%ÍÍÕ•‘	ä¡1MM%%I}M0¤œ¹½Ð¥¸±…ÍÍ¥™¥•Èè(€€€™…¥°¹…ÁÁ•¹ ±…ÍÍ¥™¥•É}…ÕÑ¡•¹Ñ¥¥Ñå}¹½Ñ}•¹™½É•œ¤)¥˜€™…ÑÌèM…¹¥Ñ¥Í•‘MÑÉ•…µ…¥±ÕÉ•…ÑÌüœ¹½Ð¥¸É•½Ù•Éä½È€Ù…°±…ÍÍ¥™¥…Ñ¥½¸€ô9…Ñ¥Ù•MÑÉ•…µ…¥±ÕÉ•±…ÍÍ¥™¥•È¹±…ÍÍ¥™ä¡™…ÑÌ¤œ¹½Ð¥¸É•½Ù•Éäè(€€€™…¥°¹…ÁÁ•¹ Á½±¥å}‘½•Í}¹½Ñ}É•±…ÍÍ¥™å}ÕÉÉ•¹Ñ}™…ÑÌœ¤)¥˜€™…ÑÌèM…¹¥Ñ¥Í•‘MÑÉ•…µ…¥±ÕÉ•…ÑÌüœ¹½Ð¥¸…ÑÕ…Ñ½È½È€9…Ñ¥Ù•A±…å‰…­I•½Ù•ÉåA½±¥ä¹Á±…¸¡™…ÑÌ°½‰Í•ÉÙ…Ñ¥½¸¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È€±…ÍÍ¥™¥…Ñ¥½¸è±…ÍÍ¥™¥•‘MÑÉ•…µ…¥±ÕÉ”üœ¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}…•ÁÑÍ}ÁÉ•±…ÍÍ¥™¥•‘}‘•¥Í¥½¸œ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸±…ÍÍ¥™¥•É}Ñ•ÍÐ­É•½Ù•Éå}Ñ•ÍÐ­…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸l±…ÍÍ¥™¥•ÉÕÑ¡•¹Ñ¥¥Ñå…¹¹½Ñ	•I•É•…Ñ•‘É½µ5…Ñ¡¥¹¥•±‘Ìœ°Á½±¥åáÁ½Í•Í9½AÉ•±…ÍÍ¥™¥•‘•¥Í¥½¹A…É…µ•Ñ•Èœ°…ÑÕ…Ñ½ÉáÁ½Í•Í9½AÉ•±…ÍÍ¥™¥•‘•¥Í¥½¹A…É…µ•Ñ•Èt¤è(€€€™…¥°¹…ÁÁ•¹ ±…ÍÍ¥™¥•É}‰åÁ…ÍÍ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€±…ÍÌ9…Ñ¥Ù•A±…å‰…­I•½Ù•ÉåÑÕ…Ñ½Èœ¹½Ð¥¸…ÑÕ…Ñ½È½È€¥¹Ñ•É™…”9…Ñ¥Ù•A±…å‰…­I•½Ù•ÉåA½ÉÐœ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}É•½Ù•Éå}…ÑÕ…Ñ½É}‰½Õ¹‘…Éå}µ¥ÍÍ¥¹œœ¤)¥˜€Ù…°ÕÉÉ•¹Ð€ôÍ¹…ÁÍ¡½Ñ=É9Õ±° ¤€üèÉ•ÑÕÉ¸9…Ñ¥Ù•I•½Ù•Éåá•ÕÑ¥½¹=ÕÑ½µ”¹IUMœ¹½Ð¥¸…ÑÕ…Ñ½È½È€ÕÉÉ•¹Ð€„ôÁÉ•Á…É•¹±•…Í”œ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ ™¥¹…±}¹…Ñ¥Ù•}É•½Ù•Éå}ÍÑ…Ñ•}±•…Í•}µ¥ÍÍ¥¹œœ¤)¥˜…ÑÕ…Ñ½È¹™¥¹ ½¹ÍÕµ•¹…‘¡ÁÉ•Á…É•¹Ñ½­•¸¤œ¤€ø…ÑÕ…Ñ½È¹™¥¹ •á•ÕÑ•=É…±Í”¡ÁÉ•Á…É•¹Á±…¸¹…Ñ¥½¸¤œ¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}É•½Ù•Éå}±•…Í•}¹½Ñ}½¹ÍÕµ•‘}‰•™½É•}Á½ÉÑ}…±°œ¤)¥˜€Ý…Ñ¡•‘MÑ…Ñ•¥¹•ÉÁÉ¥¹Ðœ¹½Ð¥¸…ÑÕ…Ñ½È½È€É•ÍÕµ•MÑ…Ñ•¥¹•ÉÁÉ¥¹Ðœ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …½Õ¹Ñ}ÍÑ…Ñ•}™¥¹•ÉÁÉ¥¹Ñ}±•…Í•}µ¥ÍÍ¥¹œœ¤)¥˜€¥ÍÍÕ•¹…‘¡Ñ½­•¸¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È€ÁÉ•Á…É•¹Ñ½­•¸€…¥¸¥ÍÍÕ•œ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}¥¹ÍÑ…¹•}‰½Õ¹‘}¥ÍÍÕ…¹•}µ¥ÍÍ¥¹œœ¤)¥˜€ÁÉ•Á…É•‘1•…Í•…¹¹½ÑÉ½ÍÍÑÕ…Ñ½É%¹ÍÑ…¹•=É	•I•¥ÍÍÕ•œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}É½ÍÍ}¥¹ÍÑ…¹•}É•Á±…å}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ ½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤¹¥œ¥¸…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}Á±…å•É}Ñ¡É•…‘}½Ý¹•ÉÍ¡¥Á}µ¥ÍÍ¥¹œœ¤)¥˜€ÁÉ•Á…É…Ñ¥½¹¹‘á•ÕÑ¥½¹MÑ…å=¹½¹ÍÑÉÕÑ¥½¹Q¡É•…œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}É½ÍÍ}Ñ¡É•…‘}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ÍÕÁÁ½ÉÑ•‘I•½Ù•ÉåÑ¥½¹Ìœ¹½Ð¥¸…ÑÕ…Ñ½È½È€Á±…¸¹…Ñ¥½¸€…¥¸±•…Í”¹ÍÕÁÁ½ÉÑ•‘I•½Ù•ÉåÑ¥½¹Ìœ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}¹…Ñ¥Ù•}…Á…‰¥±¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜€ÍÕÁÁ½ÉÑ•‘I•½Ù•ÉåÑ¥½¹Ì¹Í½ÉÑ• ¤¹©½¥¹Q½MÑÉ¥¹œ ˆ°ˆ¤œ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}…Á…‰¥±¥Ñå}Í•Ñ}¹½Ñ}‰½Õ¹‘}Ñ½}±•…Í•}Ñ½­•¸œ¤)¥˜€  Í¹…ÁÍ¡½ÑI•½Ù•ÉåÑ¥½¹Ì¡Ù…±Õ”¹ÍÕÁÁ½ÉÑ•‘I•½Ù•ÉåÑ¥½¹Ì¤œ¹½Ð¥¸…ÑÕ…Ñ½È¤½È(€€€€ ½±±•Ñ¥½¹Ì¹Õ¹µ½‘¥™¥…‰±•M•Ð¡Í¹…ÁÍ¡½Ð¤œ¹½Ð¥¸…ÑÕ…Ñ½È¤½È(€€€€ É•½Ù•Éå…Á…‰¥±¥Ñ¥•ÍÉ•M¹…ÁÍ¡½ÑÑ•‘=¹•¹‘…¥±ÕÉ•Í…¥±±½Í•œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ¤¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}…Á…‰¥±¥Ñå}Í•Ñ}Í¥¹±•}¥µµÕÑ…‰±•}Í¹…ÁÍ¡½Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸lÕ¹…‘Ù•ÉÑ¥Í•‘9…Ñ¥Ù•…Á…‰¥±¥Ñå…¹¹½ÑAÉ•Á…É”œ°…Á…‰¥±¥Ñå¡…¹•	•™½É•á•ÕÑ¥½¹I•™ÕÍ•Ìœ°µ…±™½Éµ•‘…Á…‰¥±¥ÑåM•Ñ…¥±Í±½Í•t¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}…Á…‰¥±¥Ñå}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€ÁÉ¥Ù…Ñ”Ù…È±½Í•€ô™…±Í”œ¹½Ð¥¸…ÑÕ…Ñ½È½È€™Õ¸±½Í” ¤è	½½±•…¸œ¹½Ð¥¸…ÑÕ…Ñ½È½È€¥ÍÍÕ•¹±•…È ¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È€½¹ÍÕµ•¹±•…È ¤œ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}±¥™•å±•}É•Ù½…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸l½Ý¹•ÉQ¡É•…‘±½Í•I•Ù½­•Í=ÕÑÍÑ…¹‘¥¹1•…Í•¹‘ÕÑÕÉ•UÍ”œ°™½É•¥¹Q¡É•…‘…¹¹½Ñ±½Í•=ÉI•Ù½­•=Ý¹•É1•…Í”t¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}±¥™•å±•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€½¹ÍÐÙ…°5a}%MMU}1ML€ô€ÄØœ¹½Ð¥¸…ÑÕ…Ñ½È½È€¥ÍÍÕ•¹Í¥é”€øô5a}%MMU}1MLœ¹½Ð¥¸…ÑÕ…Ñ½Èè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}¥ÍÍÕ•‘}±•…Í•}É•Í½ÕÉ•}…Á}µ¥ÍÍ¥¹œœ¤)¥˜€Í¡…É•‘Á¥Í½‘•	Õ‘•ÑMÕÉÙ¥Ù•ÍÑÕ…Ñ½ÉI•Á±…•µ•¹Ñ¹‘I•©•ÑÍ1•‘•ÉI•Í•Ðœ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}Í¡…É•‘}‰Õ‘•Ñ}É•Á±…å}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ ÁÉ¥Ù…Ñ”™Õ¸Í¹…ÁÍ¡½Ñ=É9Õ±° ¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È€ÁÉ¥Ù…Ñ”™Õ¸•á•ÕÑ•=É…±Í”¡…Ñ¥½¸èMÑÉ¥¹œ¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€€€€…ÑÕ…Ñ½È¹½Õ¹Ð …Ñ €¡|èá•ÁÑ¥½¸¤œ¤€ð€È½È…ÑÕ…Ñ½È¹½Õ¹Ð …Ñ €¡|è1¥¹­…•ÉÉ½È¤œ¤€ð€È¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}Á½ÉÑ}•á•ÁÑ¥½¹}‰½Õ¹‘…Éå}µ¥ÍÍ¥¹œœ¤)¥˜…ÑÕ…Ñ½È¹™¥¹ ½¹ÍÕµ•¹…‘¡ÁÉ•Á…É•¹Ñ½­•¸¤œ¤€ø…ÑÕ…Ñ½È¹™¥¹ •á•ÕÑ•=É…±Í”¡ÁÉ•Á…É•¹Á±…¸¹…Ñ¥½¸¤œ¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}•á•ÁÑ¥½¹}Á…Ñ¡}¹½Ñ}½¹ÍÕµ•‘}‰•™½É•}…±°œ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸lÑ¡É½Ý¥¹M¹…ÁÍ¡½ÑÕÉ¥¹AÉ•Á…É…Ñ¥½¹…¥±Í±½Í•œ°Ñ¡É½Ý¥¹¥¹…±M¹…ÁÍ¡½ÑI•™ÕÍ•Í]¥Ñ¡½ÕÑá•ÕÑ¥½¸œ°Ñ¡É½Ý¥¹A½ÉÑá•ÕÑ¥½¹½¹ÍÕµ•Í1•…Í•¹‘…¥±Í±½Í•t¤è(€€€™…¥°¹…ÁÁ•¹ …ÑÕ…Ñ½É}Á½ÉÑ}•á•ÁÑ¥½¹}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€•á…ÑA±…å‰…­A±…¹á•ÕÑ•Í=¹±å=¹”œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ½È€É•©•Ñ•‘A½ÉÑá•ÕÑ¥½¹MÑ¥±±½¹ÍÕµ•Í1•…Í”œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}É•½Ù•Éå}½¹•}Í¡½Ñ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€™¥¹…±1•…Í•I•©•ÑÍY¥‘•½M½ÕÉ•=É•¹•É…Ñ¥½¹É¥™Ðœ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ½È€™¥¹…±1•…Í•I•©•ÑÍ]…Ñ¡•‘=ÉI•ÍÕµ•¥¹•ÉÁÉ¥¹ÑÉ¥™Ðœ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}É•½Ù•Éå}™¥¹…±}ÍÑ…Ñ•}‘É¥™Ñ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜€Ñ•Éµ¥¹…±¹‘±…ÍÍ¥™¥•ÉA±…¹Í9•Ù•ÉAÉ•Á…É”œ¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐè(€€€™…¥°¹…ÁÁ•¹ ±…ÍÍ¥™¥•É}•á±ÕÍ¥Ù•}…ÑÕ…Ñ½É}É•É•ÍÍ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ ÁÉ¥Ù…Ñ”Ù…°‰Õ‘•Ðè9…Ñ¥Ù•Á¥Í½‘•I•½Ù•Éå	Õ‘•Ðœ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€Ù…°…ÕÑ¡½É¥Ñ…Ñ¥Ù•!¥ÍÑ½Éä€ô‰Õ‘•Ð¹Á±…å‰…­!¥ÍÑ½Éä¡±•…Í”¤€üèÉ•ÑÕÉ¸¹Õ±°œ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€œ…‰Õ‘•Ð¹É•Í•ÉÙ•A±…å‰…¬¡±•…Í”°Á±…¸¹…Ñ¥½¸°½‰Í•ÉÙ…Ñ¥½¸¹…ÑÑ•µÁÑ•‘I•½Ù•É¥•Ì¤œ¹½Ð¥¸…ÑÕ…Ñ½È½È(€€€€œ…‰Õ‘•Ð¹½¹Ñ…¥¹ÍA±…å‰…¬¡ÁÉ•Á…É•¹±•…Í”°ÁÉ•Á…É•¹Á±…¸¹…Ñ¥½¸¤œ¹½Ð¥¸…ÑÕ…Ñ½È¤è(€€€™…¥°¹…ÁÁ•¹ Á±…å‰…­}…ÑÕ…Ñ½É}¹½Ñ}‰½Õ¹‘}Ñ½}Í¡…É•‘}•Á¥Í½‘•}‰Õ‘•Ðœ¤)¥˜…¹ä¡¹…µ”¹½Ð¥¸…ÑÕ…Ñ½É}Ñ•ÍÐ™½È¹…µ”¥¸l(€€€€Í¡…É•‘Á¥Í½‘•	Õ‘•ÑMÕÉÙ¥Ù•ÍÑÕ…Ñ½ÉI•Á±…•µ•¹Ñ¹‘I•©•ÑÍ1•‘•ÉI•Í•Ðœ°(€€€€•Á¥Í½‘•%‘•¹Ñ¥Ñå¹‘M¡…É•‘1¥™•å±•	¥¹‘±…ÍÍ¥™¥•É¹‘A±…å‰…­I½ÕÑ•Ìœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Í¡…É•‘}±…ÍÍ¥™¥•É}Á±…å‰…­}‰Õ‘•Ñ}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤(Œ9…Ñ¥Ù”ÍÕ‰Ñ¥Ñ±”ÁÉ•™•É•¹”ÁÉ½Ù•¹…¹”É•µ…¥¹Ì„ÁÕÉ”ÑÉ…¹Í±…Ñ¥½¸½˜(Œ½Õ¹‘…Ñ¥½¸AH€ŒÜÀ°É•…¡•½¹±äÑ¡É½Õ Ñ¡”‰½Õ¹‘•Íå¹Ñ¡•Ñ¥Œ±…ˆÍÑ…¬¸(ŒQ¡•Í”¡•­ÌÁÉ•Ù•¹Ð•¹…‰±•½…½Õ¹Ð½±…¹Õ…”ÍÑ…Ñ”™É½´‰•½µ¥¹œ¥µÁ±¥¥Ð(Œ½¹Í•¹Ð…¹­••ÀÁÉ¥Ù…Ñ”µ±¥•¹Ð½‘•Ù¥”…•ÁÑ…¹”½Á•¸¸)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€œäå•„ÌÄÜÌÄàÐÀÈå‰‰Ý•”Õ…”Ý‘ŒÌÍÌÅÔÔÍ™ŒÄÌÔœ°(€€€€”ØÍ”å„ÌÕ•Œå”Á‰‘•…ˆÁ‘”ÄÝ‘•‰…˜Õ„Í”äÈåáÐœ°(€€€€½‰©•Ð9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•AÉ½Ù•¹…¹”œ°(€€€€Q¡¥ÌÁÕÉ”‰½Õ¹‘…ÉäÁ•É™½ÉµÌ¹¼ÍÑ½É…”°…½Õ¹Ð°Á±…å•È°¹•ÑÝ½É¬½ÈU$Ý½É¬¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}½¹ÑÉ…Ñ}Á¥¸œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€ylÀ´å„µ™uìØÑôœ°€5a}M}%9QHœ°€¡…Íá…Ñ-•åÌœ°(€€€€œ‰Í…µ”µ¥¹ÍÑ…±±…Ñ¥½¸µÍ•ÑÑ¥¹œˆœ°€œ‰•áÁ±¥¥Ðµ±½…°µ¡½¥”ˆœ°(€€€€œ‰Í¡•µ…Y•ÉÍ¥½¸ˆœ°€œ‰ÁÉ•™•É•¹•I•Ù¥Í¥½¸ˆœ°€œ‰‰¥¹‘¥¹œˆœ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}•á…Ñ}Í¡•µ„œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€±½Ý•É…Í”¡1½…±”¹I==P¤œ°€‰É•Á±…” |œ°€œ´œ¤ˆ°(€€€€¥Ð€ôô€‰•µ‰•‘‘•ˆñð¥Ð€ôô€‰•áÑ•É¹…°ˆœ°€‰¥¹‘¥¹-•åÌ¹…±°œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}‰¥¹‘¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€Í•Ñ=˜ ‰™¥ÉÍÐµÉÕ¸ˆ°€‰ÍÕ‰Ñ¥Ñ±”µÍ•ÑÑ¥¹Ìˆ¤œ°(€€€€•Ù•¹Ñl‰¡½¥”‰t€„ô€‰•¹…‰±•ˆœ°(€€€€Í•ÍÍ¥½¹AÉ•™•É•¹”ü¹•¹…‰±•€„ôÑÉÕ”œ°(€€€€¸•¹…‰±•™±…œ°…½Õ¹Ð¡å‘É…Ñ¥½¸½È„ÁÉ•™•ÉÉ•±…¹Õ…”¥Ì¹•Ù•È½¹Í•¹Ð¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}•áÁ±¥¥Ñ}¡½¥”œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€É•…‘‰…­l‰Í½Á”‰t€„ô€‰¥¹ÍÑ…±±…Ñ¥½¸µ±½…°ˆœ°(€€€€Á½Í¥Ñ¥Ù•I•Ù¥Í¥½¸¡É•…‘‰…­l‰ÁÉ•™•É•¹•I•Ù¥Í¥½¸‰t¤€„ôÉ•Ù¥Í¥½¸œ°(€€€€œ…Í…µ•	¥¹‘¥¹œ¡É•…‘‰…­l‰‰¥¹‘¥¹œ‰t°ÍÑ½É•‘l‰‰¥¹‘¥¹œ‰t¤œ°(€€€€œ‰­¥¹ˆÑ¼€‰Í…µ”µ¥¹ÍÑ…±±…Ñ¥½¸µÍ•ÑÑ¥¹œˆœ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}ÍÑ½É…•}ÁÉ½µ½Ñ¥½¸œ¤)¥˜€ (€€€¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€€€€€½±±•Ñ¥½¹Ì¹Õ¹µ½‘¥™¥…‰±•5…À¡1¥¹­•‘!…Í¡5…À¡Ù…±Õ”¤¤œ°(€€€€€€€€Q¡¥Ì™Õ¹Ñ¥½¸Ù…±¥‘…Ñ•ÌÑ¡…Ð•Ù•¹Ð…¹…¹¹½ÐÉ•…Ñ”¥Ð¸œ°(€€€€€€€€¹½ÐÁÉ½Ù”U$°Í¥¹•Á…­…”°ÁÉ¥Ù…Ñ”µ±¥•¹Ð½È‘•Ù¥”…•ÁÑ…¹”¸œ(€€€t¤½È(€€€€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•AÉ½Ù•¹…¹”œ¥¸©…Ù…}Ñ•áÐ½È(€€€¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Ñ•ÍÐ™½Èà¥¸lÍ¥‘•	åM¥‘•¥ÉÍÑIÕ¹I•ÅÕ¥É•Í1½…±¡½¥••ÍÁ¥Ñ•1…¹Õ…••™…Õ±ÑÌœ°€•áÁ±¥¥Ñ=™™I•µ…¥¹ÍÕÑ¡½É¥Ñ…Ñ¥Ù•]¥Ñ¡½ÕÑ%¹Ù•¹Ñ¥¹½¹Í•¹Ðœ°€Í…µ•%¹ÍÑ…±±…Ñ¥½¹I••¥ÁÑ5ÕÍÑ	¥¹‘á…ÑAÉ•™•É•¹•¹‘%¹ÍÑ…±±…Ñ¥½¸œ°€µ…±™½Éµ•‘¥•ÍÑ¹‘I•Ù¥Í¥½¹…¥±±½Í•œ°€É••¥ÁÑ…¹¹½ÑMÕÉÙ¥Ù•	½Õ¹‘1…¹Õ…•=ÉM½ÕÉ•¡…¹”œ°€‰¥¹‘¥¹%Í9½Éµ…±¥Í•‘•Ñ…¡•‘¹‘±½Í•œ°€•áÁ±¥¥Ñ¡½¥••ÁÑÍ=¹±åI•Ù¥•Ý•‘MÕÉ™…•Í¹‘¹…‰±•‘M•ÍÍ¥½¸œ°€•áÁ±¥¥Ñ¡½¥•Ù•¹ÑUÍ•Íá…Ñ±½Í•‘M¡•µ„œ°€Í…µ•%¹ÍÑ…±±…Ñ¥½¹I••¥ÁÑ…¹¹½Ñ5…ÍÅÕ•É…‘•ÍU¥¡½¥”œ°€•á…Ñ%¹ÍÑ…±±…Ñ¥½¹1½…±I•…‘‰…­AÉ½µ½Ñ•ÍI••¥ÁÐœ°€ÁÉ½µ½Ñ¥½¹I•©•ÑÍM½Á•%¹ÍÑ…±±…Ñ¥½¹I•Ù¥Í¥½¹¹‘	¥¹‘¥¹É¥™Ðœ°€ÁÉ½µ½Ñ¥½¹I•©•ÑÍ%¹©•Ñ•‘MÑ½É…•=ÉI••¥ÁÑ±…¥µÍ]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸t¤(¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Õ¹Ý¥É•‘}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”™Õ¸Í¹…ÁÍ¡½Ñá…Ñ=‰©•Ð œ°(€€€€Ù…°•áÁ•Ñ•‘M¥é”€ôÍ½ÕÉ”¹Í¥é”œ°(€€€€¥˜€¡•áÁ•Ñ•‘M¥é”€…¥¸€Ä¸¹µ…á¹ÑÉ¥•Ì¤É•ÑÕÉ¸¹Õ±°œ°(€€€€¥˜€¡½Õ¹Ð€øô•áÁ•Ñ•‘M¥é”¤É•ÑÕÉ¸¹Õ±°œ°(€€€€¥˜€¡½Õ¹Ð€„ô•áÁ•Ñ•‘M¥é”¤É•ÑÕÉ¸¹Õ±°œ°(€€€€½±±•Ñ¥½¹Ì¹Õ¹µ½‘¥™¥…‰±•5…À¡½Áä¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Í¥¹±•}Í¹…ÁÍ¡½Ðœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€Í¹…ÁÍ¡½Ñá…Ñ=‰©•Ð¡ÁÉ•™•É•¹•AÉ½Ù•¹…¹”°•áÁ±¥¥Ñ¡½¥•-•åÌ¹Í¥é”°ÑÉÕ”¤œ°(€€€€Í¹…ÁÍ¡½Ñá…Ñ=‰©•Ð¡±½…±¡½¥•Ù•¹Ð°¡½¥•Ù•¹Ñ-•åÌ¹Í¥é”°™…±Í”¤œ°(€€€€Í¹…ÁÍ¡½Ñá…Ñ=‰©•Ð¡ÍÑ½É•‘I••¥ÁÐ°•áÁ±¥¥Ñ¡½¥•-•åÌ¹Í¥é”°ÑÉÕ”¤œ°(€€€€Í¹…ÁÍ¡½Ñá…Ñ=‰©•Ð¡ÍÑ½É…•I•…‘‰…¬°ÍÑ½É…•I•…‘‰…­-•åÌ¹Í¥é”°ÑÉÕ”¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Í¹…ÁÍ¡½Ñ}•¹ÑÉåÁ½¥¹ÑÌœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”™½Èà¥¸l(€€€€…Ñ €¡|èIÕ¹Ñ¥µ•á•ÁÑ¥½¸¤œ°(€€€€…Ñ €¡|è1¥¹­…•ÉÉ½È¤œ)t¤½È€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}•á•ÁÑ¥½¹}‰½Õ¹‘…Éäœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Ñ•ÍÐ™½Èà¥¸l…±±•É5…ÁÍÉ•M¹…ÁÍ¡½ÑÑ•‘=¹•	•™½É•Y…±¥‘…Ñ¥½¸œ°Ñ¡É½Ý¥¹Q½Á1•Ù•±¹‘9•ÍÑ•‘5…ÁÍ…¥±±½Í•‘]¥Ñ¡½ÕÑÍ…Á¥¹œœ°¥Ñ•É…Ñ½É…É‘¥¹…±¥ÑåÉ¥™Ñ…¥±Í±½Í•œ°‘•Ñ…¡•‘I••¥ÁÑ…¹¹½Ñ	•¡…¹•‘	å1…Ñ•É…±±•É5ÕÑ…Ñ¥½¸t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}¡½ÍÑ¥±•}µ…Á}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•Œ™½Èà¥¸l(€€€€½‰©•Ð9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•I••¥ÁÑ½‘•Œœ°(€€€€ÁÉ¥Ù…Ñ”½¹ÍÐÙ…°AI%`€ô€‰¹ÍÀÄèˆœ°(€€€€5a}I]}	eQL€ô€àÈÌœ°(€€€€5a}9=}19Q €ô€ÄÄÀÌœ°(€€€€	…Í”ØÐ¹•ÑUÉ±¹½‘•È ¤¹Ý¥Ñ¡½ÕÑA…‘‘¥¹œ ¤œ°(€€€€½‘¥¹ÉÉ½ÉÑ¥½¸¹IA=IPœ°(€€€€É••¥ÁÐ¹Ñ…­•%˜ì•¹½‘”¡¥Ð¤€ôô…¹‘¥‘…Ñ”ôœ°(€€€€½±±•Ñ¥½¹Ì¹Õ¹µ½‘¥™¥…‰±•5…À¡1¥¹­•‘!…Í¡5…À¡Ù…±Õ”¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}É••¥ÁÑ}½‘•}½¹ÑÉ…Ðœ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•Œ½È…¹ä¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•Œ™½Èà¥¸l(€€€€M¡…É•‘AÉ•™•É•¹•Ìœ°€…Ñ…MÑ½É”œ°€…¹‘É½¥¹½¹Ñ•¹Ðœ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}É••¥ÁÑ}½‘•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•}Ñ•ÍÐ™½Èà¥¸l(€€€€…¹½¹¥…±I••¥ÁÑI½Õ¹‘QÉ¥ÁÍá…Ñ±äœ°(€€€€µ…Á=É‘•É…¹¹½Ñ¡…¹•…¹½¹¥…±¹½‘¥¹œœ°(€€€€É•Ù¥•Ý•‘MÕÉ™…•Í!…Ù•¥ÍÑ¥¹Ñ…¹½¹¥…±Y…±Õ•Ìœ°(€€€€µ…±™½Éµ•‘AÉ•™¥á	…Í”ØÑ¹‘QÉ…¥±¥¹	åÑ•Í…¥±±½Í•œ°(€€€€¹½¹…¹½¹¥…±A…‘‘¥¹¹‘Y•ÉÍ¥½¹…¥±±½Í•œ°(€€€€¥¹Ù…±¥‘¥•ÍÑ¹‘I•Ù¥Í¥½¹	½Õ¹‘Í…¹¹½Ñ¹½‘”œ°(€€€€‰¥¹‘¥¹I•ÅÕ¥É•Íá…Ñ±½Í•‘M¡•µ…¹‘¹…‰±•‘¡½¥”œ°(€€€€¹½¹…¹½¹¥…±=É=Ù•ÉÍ¥é•‘Q•áÑ…¥±Í±½Í•œ°(€€€€µ…±™½Éµ•‘UÑ˜á…¥±Í±½Í•œ°(€€€€‘•½‘•‘Q½Á1•Ù•±¹‘	¥¹‘¥¹É•%µµÕÑ…‰±”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}É••¥ÁÑ}½‘•}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”™½Èà¥¸l(€€€€±…ÍÌ9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É” œ°(€€€€¥¹Ñ•É™…”MÑ½É…•A½ÉÐœ°(€€€€™Õ¸½µÁ…É•¹‘M•Ñ%¹ÍÑ…±±…Ñ¥½¹¥•ÍÐ œ°(€€€€™Õ¸½µÁ…É•¹‘M•ÑAÉ•™•É•¹•I••¥ÁÐ œ°(€€€€ÁÉ¥Ù…Ñ”™Õ¸É•…‘MÑ…‰±•QÕÁ±” ¤œ°(€€€€ÁÉ¥Ù…Ñ”™Õ¸É½±±‰…¬¡‰•™½É”èMÑ½É•‘QÕÁ±”°Ñ…É•ÐèMÑ½É•‘QÕÁ±”¤œ°(€€€€ÕÉÉ•¹Ð¹¥¹ÍÑ…±±…Ñ¥½¹¥•ÍÐ€ôô‰•™½É”¹¥¹ÍÑ…±±…Ñ¥½¹¥•ÍÐœ°(€€€€ÕÉÉ•¹Ð¹É••¥ÁÑI…Ü€ôô‰•™½É”¹É••¥ÁÑI…Üœ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}…Ñ½µ¥}½¹ÑÉ…Ðœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”™½Èà¥¸l(€€€€™Õ¸±½…‘MÑ½É•‘AÉ•™•É•¹” œ°(€€€€™Õ¸É•½É‘áÁ±¥¥Ñ1½…±¡½¥” œ°(€€€€™Õ¸±•…ÉMÑ½É•‘I••¥ÁÑ½ÉáÁ±¥¥Ñ=™˜ œ°(€€€€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•AÉ½Ù•¹…¹”¹¥ÍÍÕ•áÁ±¥¥Ñ1½…±¡½¥•I••¥ÁÐ œ°(€€€€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•AÉ½Ù•¹…¹”¹ÁÉ½µ½Ñ•MÑ½É•‘AÉ•™•É•¹•I••¥ÁÐ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}ÁÉ½Ù•¹…¹•}½µÁ½Í¥Ñ¥½¸œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”™½Èà¥¸l(€€€€¥˜€¡É•…‘MÑ…‰±•QÕÁ±” ¤€„ôÑ…É•Ð¤É•ÑÕÉ¸É•©•Ñ•¡É½±±‰…¬¡‰•™½É”°Ñ…É•Ð¤¤œ°(€€€€¥˜€¡É•…‘MÑ…‰±•QÕÁ±” ¤€„ôÑ…É•ÐñðÉ•…‘MÑ…‰±•QÕÁ±” ¤€„ôÑ…É•Ð¤œ°(€€€€¹ä½Ñ¡•ÈÕÉÉ•¹ÐÙ…±Õ”œ°(€€€€¥Ì½¹ÕÉÉ•¹Ð‘É¥™Ð…¹¥ÌÁÉ•Í•ÉÙ•Ý¥Ñ¡½ÕÐ…¸½Ù•ÉÝÉ¥Ñ”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}É•…‘‰…­}…¹‘}‘É¥™Ðœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”Ù…°½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ°(€€€€¥˜€ …½¹=Ý¹•ÉQ¡É•… ¤ñð±½Í•¤œ°(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}±¥™•å±”œ¤)¥˜€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É”œ¥¸©…Ù…}Ñ•áÐ½È€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É”œ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñäè(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”½È…¹ä¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”™½Èà¥¸l(€€€€M¡…É•‘AÉ•™•É•¹•Ìœ°€…Ñ…MÑ½É”œ°€…¹‘É½¥¹½¹Ñ•¹Ðœ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}Ñ•ÍÐ™½Èà¥¸l(€€€€…‰Í•¹ÑMÑ½É…•1½…‘Í9½AÉ•™•É•¹”œ°(€€€€™¥ÉÍÑáÁ±¥¥Ñ¡½¥•A•ÉÍ¥ÍÑÍ¹‘AÉ½µ½Ñ•Ìœ°(€€€€É•Á•…Ñ•‘¡½¥•%¹É•µ•¹ÑÍI•Ù¥Í¥½¸œ°(€€€€•á¥ÍÑ¥¹%¹ÍÑ…±±…Ñ¥½¹¥•ÍÑ%ÍI•ÕÍ•œ°(€€€€¥¹Ù…±¥‘=ÉQ¡É½Ý¥¹¥•ÍÑM½ÕÉ•1•…Ù•ÍMÑ½É…•U¹Ñ½Õ¡•œ°(€€€€É••¥ÁÑ]¥Ñ¡½ÕÑ%¹ÍÑ…±±…Ñ¥½¹¥•ÍÑ…¥±Í]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸œ°(€€€€½ÉÉÕÁÑMÑ½É•‘I••¥ÁÑ…¥±Í]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸œ°(€€€€Õ¹ÍÑ…‰±•AÉ•ÝÉ¥Ñ•QÕÁ±•…¥±Í]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸œ°(€€€€‘¥•ÍÑ½µÁ…É•¹‘M•ÑI•™ÕÍ…±½•Í9½Ñ]É¥Ñ•I••¥ÁÐœ°(€€€€É••¥ÁÑ½µÁ…É•¹‘M•ÑI•™ÕÍ…±I½±±Í	…­•¹•É…Ñ•‘¥•ÍÐœ°(€€€€™…±Í•A½Í¥Ñ¥Ù•I••¥ÁÑ]É¥Ñ•I½±±Í	…­á…ÑQÕÁ±”œ°(€€€€Õ¹­¹½Ý¹½¹ÕÉÉ•¹ÑÉ¥™Ñ%ÍAÉ•Í•ÉÙ•‘]¥Ñ¡½ÕÑI½±±‰…­±…¥´œ°(€€€€•áÁ±¥¥Ñ=™™±•…ÉÍ=¹±åI••¥ÁÑ¹‘-••ÁÍ%¹ÍÑ…±±…Ñ¥½¹¥•ÍÐœ°(€€€€•áÁ±¥¥Ñ=™™I•™ÕÍ…±1•…Ù•ÍI••¥ÁÑU¹Ñ½Õ¡•œ°(€€€€±½…‘¥¹I•ÅÕ¥É•ÍMÑ…‰±•á…ÑI•…‘‰…­¹‘	¥¹‘¥¹œœ°(€€€€™½É•¥¹Q¡É•…‘¹‘±½Í•‘MÑ½É•…¥±±½Í•œ°(€€€€½ÉÉÕÁÑ½¹ÕÉÉ•¹ÑÉ¥™Ñ%ÍAÉ•Í•ÉÙ•‘]¥Ñ¡½ÕÑI½±±‰…­±…¥´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑ…±Í”¡É•ÍÕ±Ð¹É½±±‰…­Y•É¥™¥•¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡™½É•¥¸°Á½ÉÐ¹É••¥ÁÐ¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡‘¥•ÍÐ°Á½ÉÐ¹¥¹ÍÑ…±±…Ñ¥½¹¥•ÍÐ¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì À°Á½ÉÐ¹‘¥•ÍÑ…Í…±±Ì¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì À°Á½ÉÐ¹É••¥ÁÑ…Í…±±Ì¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…”™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•M¡…É•‘AÉ•™•É•¹•ÍA½ÉÐ œ°(€€€€œ¤€è9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É”¹MÑ½É…•A½ÉÐœ°(€€€€Íå¹¡É½¹¥é•¡ÁÉ•™•É•¹•Ì¤œ°(€€€€¥˜€ …ÁÉ•™•É•¹•Ì¹½¹Ñ…¥¹Ì¡­•ä¤¤œ°(€€€€ÁÉ•™•É•¹•Ì¹•ÑMÑÉ¥¹œ¡­•ä°¹Õ±°¤œ°(€€€€¥˜€¡ÕÁ‘…Ñ”€ôô¹Õ±°¤•‘¥Ñ½È¹É•µ½Ù”¡­•ä¤•±Í”•‘¥Ñ½È¹ÁÕÑMÑÉ¥¹œ¡­•ä°ÕÁ‘…Ñ”¤œ°(€€€€¥˜€ …•‘¥Ñ½È¹½µµ¥Ð ¤¤œ°(€€€€É•…‘‰…¬¹½¬€˜˜É•…‘‰…¬¹Ù…±Õ”€ôôÕÁ‘…Ñ”œ°(€€€€•á±ÕÍ¥Ù”Ñ¼Ñ¡¥Ì…‘…ÁÑ•Èœ°(€€€€É½ÍÌµÁÉ½•ÍÌ…Ñ½µ¥¥Ñäœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}½¹ÑÉ…Ðœ¤)¥˜€ ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•M¡…É•‘AÉ•™•É•¹•ÍA½ÉÐœ¥¸©…Ù…}Ñ•áÐ½È(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•M¡…É•‘AÉ•™•É•¹•ÍA½ÉÐœ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…”½È…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…”™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥¹½¹Ñ•¹Ð¹½¹Ñ•áÐœ°€…Ñ…MÑ½É”œ°€½Õ¹Ñ5…¹…•Èœ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€É•¥ÍÑ•É=¹M¡…É•‘AÉ•™•É•¹•¡…¹•1¥ÍÑ•¹•Èœ°€œ¹…ÁÁ±ä ¤œ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…”™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”Ù…°½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ°(€€€€¥˜€ …½¹=Ý¹•ÉQ¡É•… ¤ñð±½Í•¤œ°(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ°(€€€€%9MQ11Q%=9}%MQ}-dœ°(€€€€AII9}I%AQ}-dœ°(€€€€…Ñ €¡|èIÕ¹Ñ¥µ•á•ÁÑ¥½¸¤œ°(€€€€…Ñ €¡|è1¥¹­…•ÉÉ½È¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}±¥™•å±•}½É}•á•ÁÑ¥½¹}‰½Õ¹‘…Éäœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…•}Ñ•ÍÐ™½Èà¥¸l(€€€€…‰Í•¹ÑM±½ÑÍI•…‘ÍMÕ•ÍÍ™Õ±9Õ±±]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸œ°(€€€€•á…Ñ½µµ¥ÑÍUÍ•=¹±åQ¡•QÝ½¥á•‘AÉ¥Ù…Ñ•-•åÌœ°(€€€€½µÁ…É•¹‘M•Ñ5¥Íµ…Ñ¡½•Í9½Ñ]É¥Ñ”œ°(€€€€ÝÉ½¹QåÁ•¹‘Q¡É½Ý¥¹I•…‘Í…¥±±½Í•œ°(€€€€½µµ¥ÑI•™ÕÍ…±…¥±Í±½Í•‘]¥Ñ¡½ÕÑ]É¥Ñ•±…¥´œ°(€€€€¡…¹•‘A½ÍÑ½µµ¥ÑI•…‘‰…­…¥±Í±½Í•‘¹‘AÉ•Í•ÉÙ•ÍÉ¥™Ðœ°(€€€€¹Õ±±UÁ‘…Ñ•I•µ½Ù•Í=¹±åQ¡•á…ÑI••¥ÁÑM±½Ðœ°(€€€€…‘…ÁÑ•É%¹ÍÑ…¹•ÍM¡…É¥¹=¹•=‰©•ÑI•ÍÁ•Ñá…Ñ…Ìœ°(€€€€•‘¥Ñ¹‘½µµ¥Ñá•ÁÑ¥½¹Í…¥±±½Í•œ°(€€€€™½É•¥¹Q¡É•…‘¹‘±½Í•‘A½ÉÑ…¥±±½Í•œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…•}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡Í•Ñ=˜¡%MQ}-d°I%AQ}-d¤°™…­”¹Í¹…ÁÍ¡½Ð ¤¹­•åÌ¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ‰}}‘É¥™Ñ}|ˆ°™…­”¹Ù…±Õ”¡I%AQ}-d¤¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ‰ÁÉ•Í•ÉÙ•ˆ°™…­”¹Ù…±Õ” ‰Õ¹É•±…Ñ•ˆ¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡™½É•¥¹±½Í”¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}Í¡…É•‘}ÁÉ•™•É•¹•Í}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ”™½Èà¥¸l(€€€€±…ÍÌM•ÕÉ•I…¹‘½µMÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¥•ÍÑM½ÕÉ”¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½È œ°(€€€€œ¤€è9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É”¹¥•ÍÑM½ÕÉ”œ°(€€€€½¹ÍÑÉÕÑ½È ¤€èÑ¡¥Ì¡MåÍÑ•µ¹ÑÉ½Áä¤œ°(€€€€M•ÕÉ•I…¹‘½´ ¤¹¹•áÑ	åÑ•Ì¡Ñ…É•Ð¤œ°(€€€€Ù…°‰åÑ•Ì€ô	åÑ•ÉÉ…ä¡%MQ}	eQL¤œ°(€€€€‰åÑ•Ì¹…±°ì¥Ð€ôô€À¹Ñ½	åÑ” ¤ôœ°(€€€€½¹ÍÐÙ…°%MQ}	eQL€ô€ÌÈœ°(€€€€½¹ÍÐÙ…°!`€ô€ˆÀÄÈÌÐÔØÜàå…‰‘•˜ˆœ°(€€€€‰åÑ•Ì¹™¥±° À¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}½¹ÑÉ…Ðœ¤)¥˜€ M•ÕÉ•I…¹‘½µMÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¥•ÍÑM½ÕÉ”œ¥¸©…Ù…}Ñ•áÐ½È(€€€€M•ÕÉ•I…¹‘½µMÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¥•ÍÑM½ÕÉ”œ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ”½È…¹ä¡à¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ”™½Èà¥¸l(€€€€…¹‘É½¥¹½¹Ñ•¹Ðœ°€M¡…É•‘AÉ•™•É•¹•Ìœ°€…Ñ…MÑ½É”œ°€½Õ¹Ñ5…¹…•Èœ°(€€€€M•ÑÑ¥¹Ì¹M•ÕÉ”œ°€	Õ¥±¹MI%0œ°€‘Ù•ÉÑ¥Í¥¹%œ°€UU%¸œ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ”™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”Ù…°½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ°(€€€€¥˜€ …½¹=Ý¹•ÉQ¡É•… ¤ñð±½Í•¤œ°(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ°(€€€€…Ñ €¡|èIÕ¹Ñ¥µ•á•ÁÑ¥½¸¤œ°(€€€€…Ñ €¡|è1¥¹­…•ÉÉ½È¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}±¥™•å±•}½É}•á•ÁÑ¥½¹}‰½Õ¹‘…Éäœ¤)¥˜¹½Ð…±°¡à¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}Ñ•ÍÐ™½Èà¥¸l(€€€€‘•Ñ•Éµ¥¹¥ÍÑ¥¹ÑÉ½ÁåAÉ½‘Õ•Íá…Ñ1½Ý•É…Í•¥•ÍÐœ°(€€€€•…¡I•ÅÕ•ÍÑI•ÅÕ¥É•ÍÉ•Í¡¹ÑÉ½Áäœ°(€€€€•¹ÑÉ½ÁåI•™ÕÍ…±I•ÑÕÉ¹Í9½%‘•¹Ñ¥Ñäœ°(€€€€…±±i•É½¹ÑÉ½Áå…¥±Í±½Í•œ°(€€€€ÉÕ¹Ñ¥µ•¹‘1¥¹­…•…¥±ÕÉ•ÍÉ•½¹Ñ…¥¹•œ°(€€€€•¹ÑÉ½Áå	Õ™™•É%Í±•…É•‘™Ñ•É¥•ÍÑÉ•…Ñ¥½¸œ°(€€€€…±±•É…¹¹½Ñ5ÕÑ…Ñ•I•ÑÕÉ¹•‘¥•ÍÑQ¡É½Õ¡¹ÑÉ½Áå	Õ™™•Èœ°(€€€€™½É•¥¹Q¡É•…‘¹‘±½Í•‘M½ÕÉ•…¥±±½Í•œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑÅÕ…±Ì ÌÈ°É•ÅÕ•ÍÑ•¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ˆÀÈˆ¹É•Á•…Ð ÌÈ¤œ°(€€€€…ÍÍ•ÉÑQÉÕ”¡É•Ñ…¥¹•„„¹…±°ì¥Ð€ôô€À¹Ñ½	åÑ” ¤ô¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡™½É•¥¹±½Í”¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É•=Ý¹•ÈÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½È œ°(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•M¡…É•‘AÉ•™•É•¹•ÍA½ÉÐ¡ÁÉ•™•É•¹•Ì¤œ°(€€€€M•ÕÉ•I…¹‘½µMÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¥•ÍÑM½ÕÉ” ¤œ°(€€€€9…Ñ¥Ù•MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É”¡ÍÑ½É…•A½ÉÐ°‘¥•ÍÑM½ÕÉ”¤œ°(€€€€%‘•¹Ñ¥Ñå!…Í¡5…ÀñM¡…É•‘AÉ•™•É•¹•Ì°¹äø ¤œ°(€€€€¥˜€¡…Ñ¥Ù•=Ý¹•ÉÌ¹½¹Ñ…¥¹Í-•ä¡ÁÉ•™•É•¹•Ì¤¤É•ÑÕÉ¸¹Õ±°œ°(€€€€…Ñ¥Ù•=Ý¹•ÉÍmÁÉ•™•É•¹•Ít€ôÑ½­•¸œ°(€€€€¥˜€¡…Ñ¥Ù•=Ý¹•ÉÍmÁÉ•™•É•¹•Ít€ôôôÑ½­•¸¤œ°(€€€€…Ñ¥Ù•=Ý¹•ÉÌ¹É•µ½Ù”¡ÁÉ•™•É•¹•Ì¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}½µÁ½Í¥Ñ¥½¹}½¹ÑÉ…Ðœ¤)¥˜€ ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É•=Ý¹•Èœ¥¸©…Ù…}Ñ•áÐ½È(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•MÑ½É•=Ý¹•Èœ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È½È…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥¹½¹Ñ•¹Ð¹½¹Ñ•áÐœ°€…Ñ…MÑ½É”œ°€½Õ¹Ñ5…¹…•Èœ°(€€€€M•ÑÑ¥¹Ì¹M•ÕÉ”œ°€	Õ¥±¹MI%0œ°€‘Ù•ÉÑ¥Í¥¹%œ°€UU%¸œ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€É•¥ÍÑ•É=¹M¡…É•‘AÉ•™•É•¹•¡…¹•1¥ÍÑ•¹•Èœ°€œ¹…ÁÁ±ä ¤œ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”Ù…°½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ°(€€€€¥˜€ …½¹=Ý¹•ÉQ¡É•… ¤ñð±½Í•¤É•ÑÕÉ¸™…±Í”œ°(€€€€±½Í•€ôÑÉÕ”œ°(€€€€Ù…°ÍÑ½É•±½Í•€ôÍÑ½É”¹±½Í” ¤œ°(€€€€Ù…°‘¥•ÍÑ±½Í•€ô‘¥•ÍÑM½ÕÉ”¹±½Í” ¤œ°(€€€€Ù…°ÍÑ½É…•±½Í•€ôÍÑ½É…•A½ÉÐ¹±½Í” ¤œ°(€€€€¥˜€¡…±±±½Í•¤É•±•…Í•1•…Í”¡ÁÉ•™•É•¹•Ì°±•…Í•Q½­•¸¤œ°(€€€€…Ñ €¡|èIÕ¹Ñ¥µ•á•ÁÑ¥½¸¤œ°(€€€€…Ñ €¡|è1¥¹­…•ÉÉ½È¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}±¥™•å±•}½É}±•…Í•}‰½Õ¹‘…Éäœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}Ñ•ÍÐ™½Èà¥¸l(€€€€•á…ÑAÉ•™•É•¹•Í=‰©•Ñ!…Í=¹•AÉ½•ÍÍ1½…±=Ý¹•Èœ°(€€€€‘¥ÍÑ¥¹ÑAÉ•™•É•¹•Í=‰©•ÑÍ!…Ù•%¹‘•Á•¹‘•¹Ñ=Ý¹•ÉÌœ°(€€€€±½…‘]¥Ñ¡½ÕÑI••¥ÁÑ½•Í9½Ñ•¹•É…Ñ•=É]É¥Ñ•%‘•¹Ñ¥Ñäœ°(€€€€•áÁ±¥¥Ñ¡½¥•½µÁ½Í•Í¥•ÍÑMÑ½É…•¹‘…¹½¹¥…±MÑ½É”œ°(€€€€•¹ÑÉ½ÁåI•™ÕÍ…±1•…Ù•ÍÙ•ÉåAÉ•™•É•¹•U¹Ñ½Õ¡•œ°(€€€€•áÁ±¥¥Ñ=™™±•…ÉÍ=¹±åI••¥ÁÑ¹‘-••ÁÍ%‘•¹Ñ¥Ñäœ°(€€€€™½É•¥¹Q¡É•…‘…¹¹½ÑUÍ•±½Í•=ÉI•±•…Í•=Ý¹•É1•…Í”œ°(€€€€±½Í•I•Ù½­•Í=Á•É…Ñ¥½¹Í¹‘É•Í¡=Ý¹•É…¹I•…‘I••¥ÁÐœ°(€€€€½ÉÉÕÁÑMÑ½É•‘QåÁ•…¥±Í±½Í•‘]¥Ñ¡½ÕÑ=Ù•ÉÝÉ¥Ñ”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑ9Õ±°¡½Ý¹•È¡ÁÉ•™•É•¹•Ì°€ÁàÈÈ¤¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì À°•¹ÑÉ½Áå…±±Ì¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡Í•Ñ=˜¡%MQ}-d°I%AQ}-d¤°ÁÉ•™•É•¹•Ì¹Í¹…ÁÍ¡½Ð ¤¹­•åÌ¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡µ…Á=˜ ‰Õ¹É•±…Ñ•ˆÑ¼€‰ÁÉ•Í•ÉÙ•ˆ¤°ÁÉ•™•É•¹•Ì¹Í¹…ÁÍ¡½Ð ¤¤œ°(€€€€…ÍÍ•ÉÑ9Õ±°¡½Ý¹•È¡ÁÉ•™•É•¹•Ì°€ÁàÔÈ¤¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì Ü°ÁÉ•™•É•¹•Ì¹Ù…±Õ”¡%MQ}-d¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È™½Èà¥¸l(€€€€¥¹Ñ•É¹…°™Õ¸É•½É‘áÁ±¥¥Ñ1½…±¡½¥” œ°(€€€€¥¹Ñ•É¹…°™Õ¸±•…ÉMÑ½É•‘I••¥ÁÑ½ÉáÁ±¥¥Ñ=™˜ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}µÕÑ…Ñ¥½¹Í}µÕÍÑ}É•µ…¥¹}µ½‘Õ±•}¥¹Ñ•É¹…°œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¸™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•M•ÍÍ¥½¸ÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½È œ°(€€€€•¹Õ´±…ÍÌMÕÉ™…”¡¥¹Ñ•É¹…°Ù…°Ý¥É•Y…±Õ”èMÑÉ¥¹œ¤œ°(€€€€%IMQ}IU8 ‰™¥ÉÍÐµÉÕ¸ˆ¤œ°(€€€€MU	Q%Q1}MQQ%9L ‰ÍÕ‰Ñ¥Ñ±”µÍ•ÑÑ¥¹Ìˆ¤œ°(€€€€•¹Õ´±…ÍÌ¡½¥”œ°(€€€€±…ÍÌ¡½¥•1•…Í”¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½È œ°(€€€€™Õ¸ÁÉ•Á…É•¡½¥” œ°(€€€€™Õ¸½µµ¥Ñ¡½¥” œ°(€€€€¥˜€¡±•…Í”€„ôô…Ñ¥Ù”¹±•…Í”ñð±•…Í”¹¥ÍÍÕ•È€„ôô¥ÍÍÕ•È¤œ°(€€€€Á•¹‘¥¹œ€ô¹Õ±°œ°(€€€€¥˜€¡™¥¹…±M¹…ÁÍ¡½Ð€„ô…Ñ¥Ù”¹Í¹…ÁÍ¡½Ð¤œ°(€€€€ÍÑ½É•=Ý¹•È¹É•½É‘áÁ±¥¥Ñ1½…±¡½¥” œ°(€€€€ÍÑ½É•=Ý¹•È¹±•…ÉMÑ½É•‘I••¥ÁÑ½ÉáÁ±¥¥Ñ=™˜ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}½¹ÑÉ…Ðœ¤)¥˜€…Ñ €¡|èQ¡É½Ý…‰±”¤œ¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¸½È…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¸™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥¹…ÁÀ¸œ°€¥µÁ½ÉÐ…¹‘É½¥¹Ù¥•Ü¸œ°€¥µÁ½ÉÐ…¹‘É½¥¹Ý¥‘•Ð¸œ°(€€€€½Õ¹Ñ5…¹…•Èœ°€…Ñ…MÑ½É”œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¸™½Èà¥¸l(€€€€ÁÉ¥Ù…Ñ”Ù…°½Ý¹•ÉQ¡É•…€ôQ¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤œ°(€€€€ÁÉ¥Ù…Ñ”Ù…ÈÁ•¹‘¥¹œèA•¹‘¥¹¡½¥”ü€ô¹Õ±°œ°(€€€€¥˜€ …ÕÍ…‰±” ¤¤É•ÑÕÉ¸É•©•Ñ• ¤œ°(€€€€Ù…°™¥ÉÍÐ€ôÍ¹…ÁÍ¡½ÑA½ÉÐ¹É•…‘AÉ•™•É•¹•M¹…ÁÍ¡½Ð ¤œ°(€€€€Ù…°Í•½¹€ôÍ¹…ÁÍ¡½ÑA½ÉÐ¹É•…‘AÉ•™•É•¹•M¹…ÁÍ¡½Ð ¤œ°(€€€€™Õ¸…¹•±¡½¥”¡±•…Í”è¡½¥•1•…Í”ü¤è	½½±•…¸œ°(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ°(€€€€ÍÑ½É•=Ý¹•È¹±½Í” ¤œ°(€€€€…Ñ €¡|èIÕ¹Ñ¥µ•á•ÁÑ¥½¸¤œ°(€€€€…Ñ €¡|è1¥¹­…•ÉÉ½È¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}±¥™•å±•}½É}Í¹…ÁÍ¡½Ñ}‰½Õ¹‘…Éäœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}Ñ•ÍÐ™½Èà¥¸l(€€€€•¹…‰±•‘¡½¥•I•ÅÕ¥É•Íá…Ñ%ÍÍÕ•‘1•…Í•¹‘MÑ…‰±•M¹…ÁÍ¡½Ðœ°(€€€€‘ÕÁ±¥…Ñ•AÉ•Á…É…Ñ¥½¹…¹¹½Ñ5¥¹ÑA…É…±±•±½¹Í•¹Ðœ°(€€€€™½É•‘=ÉÉ½ÍÍM•ÍÍ¥½¹1•…Í•I•Ù½­•Í¥ÍÁ±…å•‘•¹•É…Ñ¥½¸œ°(€€€€™¥¹…±M¹…ÁÍ¡½ÑÉ¥™Ñ½¹ÍÕµ•Í1•…Í•	•™½É•MÑ½É…”œ°(€€€€Õ¹ÍÑ…‰±•¹‘Q¡É½Ý¥¹M¹…ÁÍ¡½ÑÍ…¥±±½Í•‘]¥Ñ¡½ÕÑ5ÕÑ…Ñ¥½¸œ°(€€€€•áÁ±¥¥Ñ=™™I•ÅÕ¥É•ÍAÉ•Í•¹Ñ•‘=™™¹‘±•…ÉÍ=¹±åI••¥ÁÐœ°(€€€€…¹•±±…Ñ¥½¹½¹ÍÕµ•Í=¹±åQ¡•á…ÑAÉ•Í•¹Ñ•‘1•…Í”œ°(€€€€™½É•¥¹Q¡É•…‘…¹¹½ÑAÉ•Á…É•½µµ¥Ñ…¹•±=É±½Í”œ°(€€€€±½Í•I•Ù½­•ÍA•¹‘¥¹¡½¥•¹‘I•±•…Í•ÍMÑ½É…•=Ý¹•Èœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑQÉÕ”¡ÁÉ•™•É•¹•Ì¹Í¹…ÁÍ¡½Ð ¤¹¥ÍµÁÑä ¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡Í•½¹¹½µµ¥Ñ¡½¥”¡™¥ÉÍÑ1•…Í”¤¹½¬¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡Í•ÍÍ¥½¸¹½µµ¥Ñ¡½¥”¡±•…Í”¤¹½¬¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ‰ÁÉ•Í•ÉÙ•ˆ°ÁÉ•™•É•¹•Ì¹Ù…±Õ” ‰Õ¹É•±…Ñ•ˆ¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡™½É•¥¹±½Í”¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•QÉ…¹Í…Ñ¥½¸¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½È œ°(€€€€¥¹Ñ•É™…”ÁÁ±¥…Ñ¥½¹A½ÉÐœ°(€€€€™Õ¸…ÁÁ±å¡½¥” œ°(€€€€™Õ¸É½±±‰…­¡½¥”¡ÑÉ…¹Í¥Ñ¥½¸èQÉ…¹Í¥Ñ¥½¸¤è	½½±•…¸œ°(€€€€™Õ¸…ÁÁ±å¹‘½µµ¥Ñ¡½¥” œ°(€€€€Ù…°‰•™½É”€ôÉ•…‘MÑ…‰±•M¹…ÁÍ¡½Ð ¤œ°(€€€€ÑÉ…¹Í¥Ñ¥½¸¹‰•™½É”€ôô‰•™½É”€˜˜•á…ÑI•…‘‰…¬€ôôÑÉ…¹Í¥Ñ¥½¸¹…™Ñ•Èœ°(€€€€Ù…±¥‘M•µ…¹Ñ¥QÉ…¹Í¥Ñ¥½¸¡ÑÉ…¹Í¥Ñ¥½¸¤œ°(€€€€Í•ÍÍ¥½¸¹ÁÉ•Á…É•¡½¥”¡ÍÕÉ™…”°¡½¥”¤œ°(€€€€Í•ÍÍ¥½¸¹½µµ¥Ñ¡½¥”¡±•…Í”¤œ°(€€€€Í•ÍÍ¥½¸¹±½…‘MÑ½É•‘AÉ•™•É•¹” ¤œ°(€€€€™Õ¸±½…‘MÑ½É•‘AÉ•™•É•¹” ¤è5…ÀñMÑÉ¥¹œ°¹äüøüœ°(€€€€¥˜€¡ÕÉÉ•¹Ð€„ôÑÉ…¹Í¥Ñ¥½¸¹…™Ñ•È¤É•ÑÕÉ¸™…±Í”œ°(€€€€…ÁÁ±¥…Ñ¥½¹A½ÉÐ¹É½±±‰…­¡½¥”¡ÑÉ…¹Í¥Ñ¥½¸¤œ°(€€€€É•ÑÕÉ¸…­¹½Ý±•‘•€˜˜É•…‘MÑ…‰±•M¹…ÁÍ¡½Ð ¤€ôôÑÉ…¹Í¥Ñ¥½¸¹‰•™½É”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}½¹ÑÉ…Ðœ¤)¥˜€ ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•QÉ…¹Í…Ñ¥½¸œ¥¸©…Ù…}Ñ•áÐ½È(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•QÉ…¹Í…Ñ¥½¸œ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¸™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥¸œ°€M¡…É•‘AÉ•™•É•¹•Ìœ°€½Õ¹Ñ5…¹…•Èœ°€…Ñ…MÑ½É”œ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°(€€€€…Ñ €¡|èQ¡É½Ý…‰±”¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}Ñ•ÍÐ™½Èà¥¸l(€€€€•¹…‰±•‘ÁÁ±¥…Ñ¥½¹½µµ¥ÑÍ=¹±å™Ñ•Éá…ÑAÉ•™•É•¹•I•…‘‰…¬œ°(€€€€•áÁ±¥¥Ñ=™™ÁÁ±¥•ÍAÉ•™•É•¹•Q¡•¹±•…ÉÍ=¹±åI••¥ÁÐœ°(€€€€…±É•…‘åM•±•Ñ•‘AÉ•™•É•¹•5…åI•½É‘=¹±åQ¡•áÁ±¥¥Ñ±¥¬œ°(€€€€‰¥¹‘¥¹5ÕÑ…Ñ¥½¹%ÍI•©•Ñ•‘¹‘á…ÑAÉ•™•É•¹•I½±±‰…­MÕ••‘Ìœ°(€€€€É••¥ÁÑ½µµ¥Ñ…¥±ÕÉ•I½±±Í	…­ÁÁ±¥•‘AÉ•™•É•¹”œ°(€€€€½¹ÕÉÉ•¹ÑAÉ•™•É•¹•É¥™Ñ%ÍAÉ•Í•ÉÙ•‘]¥Ñ¡½ÕÑI½±±‰…­±…¥´œ°(€€€€Ñ¡É½Ý¥¹ÁÁ±¥…Ñ¥½¹A½ÉÑ…¥±Í±½Í•‘	•™½É•I••¥ÁÐœ°(€€€€É½±±‰…­I•™ÕÍ…±%ÍI•Á½ÉÑ•‘]¥Ñ¡½ÕÑ=Ù•ÉÝÉ¥Ñ¥¹ÁÁ±¥•‘MÑ…Ñ”œ°(€€€€µ¥Íµ…Ñ¡•‘QÉ…¹Í¥Ñ¥½¹…¹¹½Ñ%¹Ù•¹Ñ¡½¥•ÕÑ¡½É¥Ñäœ°(€€€€ÍÑ½É•‘AÉ•™•É•¹•‘µ¥ÍÍ¥½¹%Í=Ý¹•ÉQ¡É•…‘¹‘1¥™•å±•	½Õ¹œ°(€€€€•¹…‰±•‘M¹…ÁÍ¡½Ñ]¥Ñ¡½ÕÑI••¥ÁÑ%Í9•Ù•É‘µ¥ÑÑ•œ°(€€€€½Ý¹•ÉQ¡É•…‘¹‘±½Í•I•Ù½­•QÉ…¹Í…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑÅÕ…±Ì Ä°™¥áÑÕÉ”¹¡½ÍÐ¹…ÁÁ±å…±±Ì¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì Ä°™¥áÑÕÉ”¹¡½ÍÐ¹É½±±‰…­…±±Ì¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡É•ÍÕ±Ð¹É½±±‰…­Y•É¥™¥•¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ‰É•¹ ˆ°™¥áÑÕÉ”¹¡½ÍÐ¹ÕÉÉ•¹Ð¹±½‰…±1…¹Õ…”¤œ°(€€€€…ÍÍ•ÉÑQÉÕ”¡™¥áÑÕÉ”¹ÁÉ•™•É•¹•Ì¹Í¹…ÁÍ¡½Ð ¤¹¥ÍµÁÑä ¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡™½É•¥¹±½Í”¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•È™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•Ð¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½È œ°(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•Ñ%¹Ñ•¹Ð¥¹Ñ•É¹…°½¹ÍÑÉÕÑ½È œ°(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•Ñ½¹ÑÉ½±±•Èœ°(€€€€™Õ¸É•Á±…” œ°(€€€€™Õ¸½¹ÍÕµ” œ°(€€€€Ù…°•á…Ð€ô¥ÍÍÕ•¹É•µ½Ù”¡Ý¥‘•Ð¹¡½¥”¤œ°(€€€€¥ÍÍÕ•¹±•…È ¤œ°(€€€€Á•¹‘¥¹%¹Ñ•¹Ð€ô¹Õ±°œ°(€€€€•á…Ð€„ôôÝ¥‘•Ðœ°(€€€€Í•±•Ñ•‘¡½¥”€„ôÝ¥‘•Ð¹¡½¥”œ°(€€€€Í•µ…¹Ñ¥Ù•¹Ð€„ôM59Q%}Q%YQ%=8œ°(€€€€Ù…°•á…Ð€ôÁ•¹‘¥¹%¹Ñ•¹Ðœ°(€€€€É•ÑÕÉ¸•á…Ð€ôôô¥¹Ñ•¹Ðœ°(€€€€½¹ÍÐÙ…°M59Q%}Q%YQ%=8€ô€‰Q%YQˆœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}½¹ÑÉ…Ðœ¤)¥˜…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•È™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥¸œ°€M¡…É•‘AÉ•™•É•¹•Ìœ°€½Õ¹Ñ5…¹…•Èœ°€…Ñ…MÑ½É”œ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°(€€€€…Ñ €¡|èQ¡É½Ý…‰±”¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÐ™½Èà¥¸l(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•ÑA½ÉÐÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½È œ°(€€€€	ÕÑÑ½¸¡½¹Ñ…¥¹•È¹½¹Ñ•áÐ¤œ°(€€€€½¹Ñ•¹Ñ•ÍÉ¥ÁÑ¥½¸€ôÝ¥‘•Ð¹±…‰•°œ°(€€€€¥Í½ÕÍ…‰±”€ôÑÉÕ”œ°(€€€€¥Í±¥­…‰±”€ôÑÉÕ”œ°(€€€€Í•Ñ=¹1½¹±¥­1¥ÍÑ•¹•ÈìÑÉÕ”ôœ°(€€€€Í•Ñ=¹±¥­1¥ÍÑ•¹•Èœ°(€€€€½¹ÑÉ½±±•È¹½¹ÍÕµ” œ°(€€€€É•µ½Ù•=Ý¹•‘Y¥•ÝÌ ¤œ°(€€€€ÑÉ…¹Í…Ñ¥½¸¹…ÁÁ±å¹‘½µµ¥Ñ¡½¥”¡¥¹Ñ•¹Ð¹ÍÕÉ™…”°¥¹Ñ•¹Ð¹¡½¥”¤œ°(€€€€½Ù•ÉÉ¥‘”™Õ¸±½…‘MÑ½É•‘AÉ•™•É•¹” ¤è5…ÀñMÑÉ¥¹œ°¹äüøüœ°(€€€€ÑÉ…¹Í…Ñ¥½¸¹±½…‘MÑ½É•‘AÉ•™•É•¹” ¤œ°(€€€€1½½Á•È¹µå1½½Á•È ¤€ôôô1½½Á•È¹•Ñ5…¥¹1½½Á•È ¤œ°(€€€€ÑÉ…¹Í…Ñ¥½¸¹±½Í” ¤œ°(€€€€…ÁÁ±¥…Ñ¥½¹A½ÉÐè¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•QÉ…¹Í…Ñ¥½¸¹ÁÁ±¥…Ñ¥½¹A½ÉÐœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÑ}½¹ÑÉ…Ðœ¤)¥˜€ ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•ÑA½ÉÐœ¥¸©…Ù…}Ñ•áÐ½È(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•ÑA½ÉÐœ¥¸µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÑ}µÕÍÑ}É•µ…¥¹}Õ¹Ý¥É•œ¤)¥˜…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÐ™½Èà¥¸l(€€€€Í•Ñ=¹Q½Õ¡1¥ÍÑ•¹•Èœ°€5½Ñ¥½¹Ù•¹Ðœ°€½Õ¹Ñ5…¹…•Èœ°€…Ñ…MÑ½É”œ°(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°(€€€€…Ñ €¡|èQ¡É½Ý…‰±”¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÑ}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}Ñ•ÍÐ™½Èà¥¸l(€€€€Ý¥‘•Ñ½¹ÑÉ½±±•É	Õ¥±‘ÍQÝ½M•µ…¹Ñ¥¡½¥•Í]¥Ñ¡½ÕÑ½¹Í•¹Ðœ°(€€€€Í•µ…¹Ñ¥±¥­I•ÑÕÉ¹Íá…Ñ%¹Ñ•¹Ñ¹‘I•Ù½­•Í•¹•É…Ñ¥½¸œ°(€€€€É…ÝA½¥¹Ñ•É=É1½¹AÉ•ÍÍ9•Ù•ÉÕÑ¡½É¥é•Í¹‘I•Ù½­•Í•¹•É…Ñ¥½¸œ°(€€€€Í•±•Ñ•‘¡½¥•5¥Íµ…Ñ¡9•Ù•ÉÕÑ¡½É¥é•Í¹‘I•Ù½­•Í•¹•É…Ñ¥½¸œ°(€€€€™½É•‘=ÉÉ½ÍÍ½¹ÑÉ½±±•É]¥‘•Ñ…¹¹½ÑÕÑ¡½É¥é”œ°(€€€€É•Á±…•µ•¹Ñ5…­•Í…É±¥•É]¥‘•ÑMÑ…±”œ°(€€€€¹Õ±±MÕÉ™…•±•…É¹‘±½Í•…¥±±½Í•œ°(€€€€™½É•¥¹Q¡É•…‘…¹¹½ÑI•¹‘•É½¹ÍÕµ•±•…É=É±½Í”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑÅÕ…±Ì È°Ý¥‘•ÑÌ¹Í¥é”¤œ°(€€€€…ÍÍ•ÉÑ9Õ±°¡½¹ÑÉ½±±•È¹½¹ÍÕµ”¡Ý¥‘•Ð°Ý¥‘•Ð¹¡½¥”°•Ù•¹Ð¤¤œ°(€€€€…ÍÍ•ÉÑ9Õ±°¡™¥ÉÍÐ¹½¹ÍÕµ” œ°(€€€€…ÍÍ•ÉÑ9Õ±°¡Í•½¹¹½¹ÍÕµ” œ°(€€€€…ÍÍ•ÉÑ…±Í”¡±½Í•¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•È™½Èà¥¸l(€€€€¥¹Ñ•É™…”¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•MÉ••¹A½ÉÐœ°(€€€€±…ÍÌ¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•MÉ••¹=Ý¹•ÈÁÉ¥Ù…Ñ”½¹ÍÑÉÕÑ½È ¤œ°(€€€€ÁÉ¥Ù…Ñ”Ù…ÈÁ•¹‘¥¹=ÕÑ½µ”è¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•=ÕÑ½µ”ü€ô¹Õ±°œ°(€€€€¥˜€ …ÕÍ…‰±” ¤ñðÁ•¹‘¥¹=ÕÑ½µ”€„ô¹Õ±°¤É•ÑÕÉ¸™…±Í”œ°(€€€€™Õ¸½¹ÍÕµ•=ÕÑ½µ” ¤è¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•=ÕÑ½µ”üœ°(€€€€™Õ¸±½…‘MÑ½É•‘AÉ•™•É•¹” ¤è5…ÀñMÑÉ¥¹œ°¹äüøüœ°(€€€€Á½ÉÐü¹±½…‘MÑ½É•‘AÉ•™•É•¹” ¤œ°(€€€€Á•¹‘¥¹=ÕÑ½µ”€ô¹Õ±°œ°(€€€€™Õ¸±½Í” ¤è	½½±•…¸œ°(€€€€…Ñ¥Ù”ü¹±½Í” ¤€ôôÑÉÕ”œ°(€€€€ÁÉ¥Ù…Ñ”™Õ¸É••¥Ù•=ÕÑ½µ”¡½ÕÑ½µ”è¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•=ÕÑ½µ”¤œ°(€€€€¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•]¥‘•ÑA½ÉÐ¹½Á•¸ œ°(€€€€¥¹Ñ•É¹…°™Õ¸½Á•¹½ÉQ•ÍÐ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}½¹ÑÉ…Ðœ¤)¥˜…¹ä¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•È™½Èà¥¸l(€€€€½Õ¹Ñ5…¹…•Èœ°€…Ñ…MÑ½É”œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°€…Ñ €¡|èQ¡É½Ý…‰±”¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜€œè¹‘É½¥‘MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•¡½¥•MÉ••¹A½ÉÐœ¹½Ð¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÐè(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÑ}¹½Ñ}ÍÉ••¹}½Ý¹•œ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}Ñ•ÍÐ™½Èà¥¸l(€€€€ÍÉ••¹!½±‘Í=¹•=ÕÑ½µ•U¹Ñ¥±áÁ±¥¥Ñ½¹ÍÕµÁÑ¥½¸œ°(€€€€É•™ÕÍ•‘=ÕÑ½µ•%Í!•±‘]¥Ñ¡½ÕÑAÉ½µ½Ñ¥½¹=ÉI•É•¹‘•Èœ°(€€€€ÍÑ½É•‘AÉ•™•É•¹•‘µ¥ÍÍ¥½¹%Í1¥™•å±•	½Õ¹œ°(€€€€‘ÕÁ±¥…Ñ•=ÕÑ½µ•A•Éµ…¹•¹Ñ±åA½¥Í½¹Í¹‘±½Í•ÍA½ÉÐœ°(€€€€É•¹‘•É=É±•…ÉI•™ÕÍ…±A•Éµ…¹•¹Ñ±åA½¥Í½¹Ìœ°(€€€€Ñ¡É½Ý¥¹A½ÉÑ=Á•É…Ñ¥½¹ÍÉ•½¹Ñ…¥¹•‘¹‘I•Ù½­•ÕÑ¡½É¥Ñäœ°(€€€€¹Õ±±=ÉQ¡É½Ý¥¹…Ñ½Éå…¥±Í±½Í•œ°(€€€€½Ý¹•ÉQ¡É•…‘¹‘±½Í•I•Ù½­•A•¹‘¥¹=ÕÑ½µ•¹‘A½ÉÐœ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}É•É•ÍÍ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}Ñ•ÍÐ™½Èà¥¸l(€€€€…ÍÍ•ÉÑ…±Í”¡½Ý¹•È¹É•¹‘•È œ°(€€€€…ÍÍ•ÉÑ…±Í”¡½Ý¹•È¹±•…È ¤¤œ°(€€€€…ÍÍ•ÉÑM…µ”¡½ÕÑ½µ”°½Ý¹•È¹½¹ÍÕµ•=ÕÑ½µ” ¤¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì¡…‘µ¥ÑÑ•°½Ý¹•È¹±½…‘MÑ½É•‘AÉ•™•É•¹” ¤¤œ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì Ä°™¥áÑÕÉ”¹Á½ÉÐ„„¹±½Í•…±±Ì¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡™½É•¥¹±½Í”¹•Ð ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ …¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}…‘Ù•ÉÍ…É¥…±}…ÍÍ•ÉÑ¥½¹Ìœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}™¥áÑÕÉ•Ì™½Èà¥¸l(€€€€½‰©•ÐMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•¥áÑÕÉ”œ°(€€€€]	YQPœ°(€€€€œÀÀèÀÀ¸ÔÀÀ€´´ø€ÀÀèÀÈ¸ÔÀÀœ°(€€€€œÀÀèÀÐ¸ÀÀÀ€´´ø€ÀÀèÀØ¸ÀÀÀœ°(€€€€œÀÀèÀà¸ÀÀÀ€´´ø€ÀÀèÄÀ¸ÀÀÀœ°(€€€€Ñ…É•Ð¹É•…‘Q•áÐ¡¡…ÉÍ•ÑÌ¹UQ|à¤€ôô=9Q9Pœ°(€€€€1½…°ÍÕ‰Ñ¥Ñ±”™¥áÑÕÉ”É•…‘‰…¬™…¥±•œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ý•‰ÙÑÑ}™¥áÑÕÉ•}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}™¥áÑÕÉ•Ì™½Èà¥¸l(€€€€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°(€€€€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ý•‰ÙÑÑ}™¥áÑÕÉ•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}™¥áÑÕÉ•Í}Ñ•ÍÐ™½Èà¥¸l(€€€€±½…±]•‰YÑÑ!…Í•Ñ•Éµ¥¹¥ÍÑ¥Õ•Í¹‘%Í%‘•µÁ½Ñ•¹Ðœ°(€€€€½ÉÉÕÁÑ1½…±]•‰YÑÑ%ÍI•Á±…•‘]¥Ñ¡½ÕÑQ½Õ¡¥¹U¹É•±…Ñ•‘¥±•Ìœ°(€€€€…ÍÍ•ÉÑÅÕ…±Ì ‰ÁÉ•Í•ÉÙ•ˆ°Õ¹É•±…Ñ•¹É•…‘Q•áÐ ¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ý•‰ÙÑÑ}™¥áÑÕÉ•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€Må¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•¥áÑÕÉ”¹É•…Ñ•%™5¥ÍÍ¥¹œ¡…¡•¥È¤œ°(€€€€5•‘¥…%Ñ•´¹MÕ‰Ñ¥Ñ±•½¹™¥ÕÉ…Ñ¥½¸¹	Õ¥±‘•È œ°(€€€€œ¹Í•Ñ5¥µ•QåÁ”¡5¥µ•QåÁ•Ì¹QaQ}YQP¤œ°(€€€€œ¹Í•Ñ1…¹Õ…” ‰•¸ˆ¤œ°(€€€€œ¹Í•ÑM•±•Ñ¥½¹±…Ì¡¹M1Q%=9}1}U1P¤œ°(€€€€œ¹Í•ÑMÕ‰Ñ¥Ñ±•½¹™¥ÕÉ…Ñ¥½¹Ì¡±¥ÍÑ=˜¡ÍÕ‰Ñ¥Ñ±•½¹™¥ÕÉ…Ñ¥½¸¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ý•‰ÙÑÑ}µ•‘¥„Í}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Õ•}½‰Í•ÉÙ•È™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•Õ••±¥Ù•Éå=‰Í•ÉÙ•Èœ°(€€€€½¹Ñ•áÐ¹±½…‘•¹•É…Ñ¥½¸€ðô¡¥¡•ÍÑ1½…‘•¹•É…Ñ¥½¸œ°(€€€€Õ•Q•áÑÌ¹…¹äì¥Ð¹¥Í	±…¹¬ ¤ñð¥Ð€…¥¸aAQ}ULôœ°(€€€€Á½¥Í½¹Ñ¥Ù••¹•É…Ñ¥½¸ ¤œ°(€€€€…±±áÁ•Ñ•‘Õ•Í=‰Í•ÉÙ•€ô‘•±¥Ù•É•¹½¹Ñ…¥¹Í±°¡aAQ}UL¤œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Õ•}½‰Í•ÉÙ•É}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}Õ•}½‰Í•ÉÙ•È™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Õ•}½‰Í•ÉÙ•É}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Õ•}½‰Í•ÉÙ•É}Ñ•ÍÐ™½Èà¥¸l(€€€€•á…Ñ¥áÑÕÉ•Õ•Í½µÁ±•Ñ•=¹±åQ¡•Ñ¥Ù••¹•É…Ñ¥½¸œ°(€€€€•µÁÑå¹‘ÕÁ±¥…Ñ•…±±‰…­ÍÉ•	½Õ¹‘•‘¹‘%‘•µÁ½Ñ•¹Ðœ°(€€€€¡…¹•‘A±…å•É%‘•¹Ñ¥Ñå…¹¹½Ñ™™•ÑÑ¥Ù•=‰Í•ÉÙ…Ñ¥½¸œ°(€€€€Õ¹­¹½Ý¹=É=Ù•ÉÍ¥é•‘Õ•%¹ÁÕÑA½¥Í½¹Í=¹±åQ¡…Ñ•¹•É…Ñ¥½¸œ°(€€€€±½…‘•¹•É…Ñ¥½¹5ÕÍÑ%¹É•…Í•¹‘9•Ý•¹•É…Ñ¥½¹MÑ…ÉÑÍµÁÑäœ°(€€€€…‰…¹‘½¹Q¡É•…‘=Ý¹•ÉÍ¡¥Á¹‘±½Í•…¥±±½Í•œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑ9•Ù•ÉMÑ…ÉÑÍ=‰Í•ÉÙ…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Õ•}½‰Í•ÉÙ•É}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€½Ù•ÉÉ¥‘”™Õ¸½¹Õ•Ì¡Õ•É½ÕÀèÕ•É½ÕÀ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•Õ•=‰Í•ÉÙ•È¹½‰Í•ÉÙ”¡Õ•½¹Ñ•áÐ°Õ•Q•áÑÌ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•Õ•=‰Í•ÉÙ•È¹‰•¥¸¡Õ•½¹Ñ•áÐ¤œ°(€€€€Ù¥Í¥‰±”½ÕÑÁÕÐ9=P…•ÁÑ•œ°(€€€€ÍÕ‰Ñ¥Ñ±•Õ•=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Õ•}½‰Í•ÉÙ•É}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}ÑÉ…­}½‰Í•ÉÙ•È™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•QÉ…­MÑ…Ñ•=‰Í•ÉÙ•Èœ°(€€€€½¹Ñ•áÐ¹±½…‘•¹•É…Ñ¥½¸€ðô¡¥¡•ÍÑ1½…‘•¹•É…Ñ¥½¸œ°(€€€€¥˜€¡Ñ•áÑQÉ…­Ì¹Í¥é”€ø5a}QaQ}QI-L¤œ°(€€€€MÑ…Ñ”¹AIM9Q}U9M1Qœ°(€€€€MÑ…Ñ”¹AIM9Q}M1Qœ°(€€€€…ÁÁ±¥…Ñ¥½¸½àµµ•‘¥„ÌµÕ•Ìœ°(€€€€ÑÉ…¬¹½‘•Ì€ôô]	YQQ}5%5}QeAœ°(€€€€ÑÉ…¬¹±…¹Õ…”€ôôaAQ}19Uœ°(€€€€ÑÉ…¬¹±…‰•°€ôôaAQ}1	0œ°(€€€€Á½¥Í½¹Ñ¥Ù••¹•É…Ñ¥½¸ ¤œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÑÉ…­}½‰Í•ÉÙ•É}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}ÑÉ…­}½‰Í•ÉÙ•È™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÑÉ…­}½‰Í•ÉÙ•É}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}ÑÉ…­}½‰Í•ÉÙ•É}Ñ•ÍÐ™½Èà¥¸l(€€€€•á…Ñ1½…±QÉ…­I•Á½ÉÑÍM•±•Ñ•‘¹‘U¹Í•±•Ñ•‘]¥Ñ¡½ÕÑY¥ÍÕ…±±…¥´œ°(€€€€µ•‘¥„ÍáÑÉ…Ñ•‘Õ•½Éµ…ÑI•Ñ…¥¹Íá…Ñ]•‰YÑÑ%‘•¹Ñ¥Ñäœ°(€€€€µ•‘¥„ÍÕ•½Éµ…Ñ]¥Ñ¡½ÕÑá…Ñ]•‰YÑÑ½‘•…¥±Í±½Í•œ°(€€€€•µÁÑåQÉ…­I•Á½ÉÑ%Í‰Í•¹ÑI…Ñ¡•ÉQ¡…¹•ÁÑ•‘M•±•Ñ¥½¸œ°(€€€€Õ¹•áÁ•Ñ•‘=ÉÕÁ±¥…Ñ•Q•áÑQÉ…­A½¥Í½¹Í=¹±åQ¡…Ñ•¹•É…Ñ¥½¸œ°(€€€€½Ù•ÉÍ¥é•‘Q•áÑQÉ…­%¹ÁÕÑ%ÍI•™ÕÍ•‘]¥Ñ¡½ÕÑMÑ…Ñ•AÉ½µ½Ñ¥½¸œ°(€€€€¡…¹•‘%‘•¹Ñ¥Ñå…¹¹½ÑI•…‘=É5ÕÑ…Ñ•Ñ¥Ù•MÑ…Ñ”œ°(€€€€±½…‘•¹•É…Ñ¥½¹5ÕÍÑ%¹É•…Í•¹‘MÑ…ÉÑÍ9½ÑI•Á½ÉÑ•œ°(€€€€½Ý¹•ÉQ¡É•…‘‰…¹‘½¹¹‘±½Í•I•Ù½­•=‰Í•ÉÙ…Ñ¥½¸œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑ9•Ù•ÉMÑ…ÉÑÍQÉ…­=‰Í•ÉÙ…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÑÉ…­}½‰Í•ÉÙ•É}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€½Ù•ÉÉ¥‘”™Õ¸½¹QÉ…­Í¡…¹•¡ÑÉ…­ÌèQÉ…­Ì¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•QÉ…­=‰Í•ÉÙ•È¹½‰Í•ÉÙ” œ°(€€€€É½ÕÀ¹ÑåÁ”€„ô¹QI-}QeA}QaPœ°(€€€€Í…µÁ±•5¥µ•QåÁ”€ô™½Éµ…Ð¹Í…µÁ±•5¥µ•QåÁ”œ°(€€€€½‘•Ì€ô™½Éµ…Ð¹½‘•Ìœ°(€€€€Í•±•Ñ•€ôÉ½ÕÀ¹¥ÍQÉ…­M•±•Ñ•¡¥¹‘•à¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•QÉ…­=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÑÉ…­}½‰Í•ÉÙ•É}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Á±…å‰…­}•Ù¥‘•¹”™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•Èœ°(€€€€½¹Ñ•áÐ¹±½…‘•¹•É…Ñ¥½¸€ðô¡¥¡•ÍÑ1½…‘•¹•É…Ñ¥½¸œ°(€€€€MÑ…ÑÕÌ¹UM}]%Q!=UQ}QI-}IA=IPœ°(€€€€MÑ…ÑÕÌ¹M1Q}11}ULœ°(€€€€Í•±•Ñ•‘QÉ…­¹‘±±Õ•Í=‰Í•ÉÙ•€ôÍÑ…ÑÕÌ€ôôMÑ…ÑÕÌ¹M1Q}11}ULœ°(€€€€‘•±¥Ù•É•€ð‘•±¥Ù•É•‘Õ•½Õ¹Ðœ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}•Ù¥‘•¹•}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}Á±…å‰…­}•Ù¥‘•¹”™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}•Ù¥‘•¹•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Á±…å‰…­}•Ù¥‘•¹•}Ñ•ÍÐ™½Èà¥¸l(€€€€Í•±•Ñ•‘QÉ…­¹‘±±Õ•Í½ÉÉ•±…Ñ•]¥Ñ¡½ÕÑY¥ÍÕ…±±…¥´œ°(€€€€Õ•Í5…åÉÉ¥Ù•	•™½É•QÉ…­M•±•Ñ¥½¹¹‘I•µ…¥¹	½Õ¹‘•œ°(€€€€…‰Í•¹Ñ=ÉU¹Í•±•Ñ•‘QÉ…­9•Ù•ÉAÉ½‘Õ•Í½ÉÉ•±…Ñ•‘•ÁÑ…¹”œ°(€€€€µ…±™½Éµ•‘Õ•Ù¥‘•¹•A½¥Í½¹Í=¹±å%ÑÍ•¹•É…Ñ¥½¸œ°(€€€€Õ•½Õ¹ÑI•É•ÍÍ¥½¹A½¥Í½¹ÍÑ¥Ù••¹•É…Ñ¥½¸œ°(€€€€¹½ÑI•Á½ÉÑ•‘QÉ…­¹‘áÁ±¥¥Ñ%¹Ù…±¥‘…Ñ¥½¹…¥±±½Í•œ°(€€€€•¹•É…Ñ¥½¹Q¡É•…‘‰…¹‘½¹¹‘±½Í•É•¹™½É•œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑ9•Ù•ÉMÑ…ÉÑÍA±…å‰…­Ù¥‘•¹”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}•Ù¥‘•¹•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•È¹½‰Í•ÉÙ•Õ•Ì œ°(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•È¹½‰Í•ÉÙ•QÉ…¬¡•Ù¥‘•¹•½¹Ñ•áÐ°½‰Í•ÉÙ•¹ÍÑ…Ñ”¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•È¹¥¹Ù…±¥‘…Ñ”¡•Ù¥‘•¹•½¹Ñ•áÐ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•È¹‰•¥¸¡•Ù¥‘•¹•½¹Ñ•áÐ¤œ°(€€€€5•‘¥„ÌÍÕ‰Ñ¥Ñ±”…±±‰…¬½ÉÉ•±…Ñ¥½¸œ°(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…­Ù¥‘•¹•=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}•Ù¥‘•¹•}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}ÁÉ•™•É•¹•}•Ù¥‘•¹”™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•Ù¥‘•¹•=‰Í•ÉÙ•Èœ°(€€€€MÑ…ÑÕÌ¹U95%QQ}9	1}!1œ°(€€€€MÑ…ÑÕÌ¹59U1}M1Q%=9}!1œ°(€€€€MÑ…ÑÕÌ¹9	1}11	-M}=5A1Qœ°(€€€€MÑ…ÑÕÌ¹=}11	-M}=5A1Qœ°(€€€€Ù¥Í¥‰±•I•¹‘•É¥¹•ÁÑ•è	½½±•…¸€ô™…±Í”œ°(€€€€…Ñ¥Ù•AÉ•™•É•¹”€„ôÁÉ•™•É•¹”œ°(€€€€•Ù¥‘•¹”¹½¹Ñ•áÐ€„ô½¹Ñ•áÐ¹Ñ½A±…å‰…­½¹Ñ•áÐ ¤œ°(€€€€Á±…å‰…­¹‘•€˜˜€…•¹‘•œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÁÉ•™•É•¹•}•Ù¥‘•¹•}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}ÁÉ•™•É•¹•}•Ù¥‘•¹”™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÁÉ•™•É•¹•}•Ù¥‘•¹•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}ÁÉ•™•É•¹•}•Ù¥‘•¹•}Ñ•ÍÐ™½Èà¥¸l(€€€€…‘µ¥ÑÑ•‘¹…‰±•‘½µÁ±•Ñ•Í=¹±å]¥Ñ¡ÕÑ½µ…Ñ¥M•±•Ñ•‘QÉ…­¹‘±±Õ•Ìœ°(€€€€•¹…‰±•‘]¥Ñ¡½ÕÑM…µ•%¹ÍÑ…±±…Ñ¥½¹I••¥ÁÑ%ÍA•Éµ…¹•¹Ñ±å!•±œ°(€€€€µ…¹Õ…±M•±•Ñ¥½¹…¹9•Ù•É	•½µ•ÕÑ½µ…Ñ¥AÉ•™•É•¹•Ù¥‘•¹”œ°(€€€€•áÁ±¥¥Ñ=™™I•ÅÕ¥É•ÍU¹Í•±•Ñ•‘i•É½Õ•Ù¥‘•¹•ÑA±…å‰…­¹œ°(€€€€•áÁ±¥¥Ñ=™™9•Ù•É½µÁ±•Ñ•Í]¡¥±•ÕÑ½µ…Ñ¥M•±•Ñ¥½¹=ÉÕ•ÍI•µ…¥¸œ°(€€€€ÁÉ•™•É•¹•=É½¹Ñ•áÑÉ¥™ÑA½¥Í½¹Í=¹±åQ¡•Ñ¥Ù••¹•É…Ñ¥½¸œ°(€€€€µ…±™½Éµ•‘Ù¥‘•¹•¹‘A±…å‰…­¹‘I•É•ÍÍ¥½¹…¥±±½Í•œ°(€€€€•¹•É…Ñ¥½¹Q¡É•…‘‰…¹‘½¹¹‘±½Í•É•¹™½É•œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑ¹‘%µÁ½ÍÍ¥‰±•=™™I••¥ÁÑ9•Ù•ÉMÑ…ÉÐœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÁÉ•™•É•¹•}•Ù¥‘•¹•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€ÍÕ‰Ñ¥Ñ±•AÉ•™•É•¹•Ù¥‘•¹•=‰Í•ÉÙ•È¹‰•¥¸ œ°(€€€€É•™É•Í¡MÕ‰Ñ¥Ñ±•AÉ•™•É•¹•Ù¥‘•¹” ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•A±…å‰…¬ü¹ÕÉÉ•¹ÑM•±•Ñ¥½¹=É¥¥¸ ¤œ°(€€€€Á±…å•È¹Á±…å‰…­MÑ…Ñ”€ôôA±…å•È¹MQQ}9œ°(€€€€AÉ•™•É•¹”µ‰½Õ¹ÍÕ‰Ñ¥Ñ±”…±±‰…¬•Ù¥‘•¹”œ°(€€€€ÍÕ‰Ñ¥Ñ±•AÉ•™•É•¹•Ù¥‘•¹•=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÁÉ•™•É•¹•}•Ù¥‘•¹•}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}É•¹‘•É}Á¥Á•±¥¹”™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•I•¹‘•ÉA¥Á•±¥¹•=‰Í•ÉÙ•Èœ°(€€€€MÑ…ÑÕÌ¹9	1}I]}A%A1%9}=	MIYœ°(€€€€MÑ…ÑÕÌ¹=}5AQe}I]}A%A1%9}=	MIYœ°(€€€€Ù¥Í¥‰±•I•¹‘•É¥¹•ÁÑ•è	½½±•…¸€ô™…±Í”œ°(€€€€Á¥á•±=ÕÑÁÕÑ•ÁÑ•è	½½±•…¸€ô™…±Í”œ°(€€€€‘•Ù¥••ÁÑ…¹”è	½½±•…¸€ô™…±Í”œ°(€€€€•Ù¥‘•¹”¹½¹Ñ•áÐ€„ô½¹Ñ•áÐ¹Ñ½AÉ•™•É•¹•½¹Ñ•áÐ ¤œ°(€€€€É•Ù¥Í¥½¸€„ôÕ•I•Ù¥Í¥½¸œ°(€€€€ÍÑ…Ñ”¹…ÑÑ…¡•€˜˜ÍÑ…Ñ”¹Í¡½Ý¸œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}É•¹‘•É}Á¥Á•±¥¹•}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}É•¹‘•É}Á¥Á•±¥¹”™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°€A¥á•±½Áäœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}É•¹‘•É}Á¥Á•±¥¹•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}É•¹‘•É}Á¥Á•±¥¹•}Ñ•ÍÐ™½Èà¥¸l(€€€€…‘µ¥ÑÑ•‘¹…‰±•‘I•ÅÕ¥É•ÍI•…‘åY¥•Ý¹‘á…ÑÉ…Ý™Ñ•ÉÑ¥Ù•Õ”œ°(€€€€‘É…Ý	•™½É•AÉ•™•É•¹•…±±‰…­Í…¹¹½Ñ½µÁ±•Ñ”œ°(€€€€¡¥‘‘•¹•Ñ…¡•‘QÉ…¹ÍÁ…É•¹Ñ=Éi•É½M¥é•‘Y¥•Ý9•Ù•É½µÁ±•Ñ•Ìœ°(€€€€Õ¹…‘µ¥ÑÑ•‘¹‘5…¹Õ…±AÉ•™•É•¹•Ù¥‘•¹•I•µ…¥¹!•±œ°(€€€€•áÁ±¥¥Ñ=™™I•ÅÕ¥É•Í½µÁ±•Ñ•‘…±±‰…­Í¹‘µÁÑåÕ•É…Üœ°(€€€€•¹…‰±•‘µÁÑåÕ•¹‘=™™Ñ¥Ù•Õ•MÑ…å]…¥Ñ¥¹œœ°(€€€€ÍÑ…±•É…Ý%Í%¹½É•‘]¥Ñ¡½ÕÑAÉ½µ½Ñ¥¹=ÉA½¥Í½¹¥¹œœ°(€€€€½¹Ñ•áÑAÉ•™•É•¹•Ù¥‘•¹•¹‘I•Ù¥Í¥½¹É¥™Ñ…¥±±½Í•œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑY¥•Ý¹‘Õ•%¹ÁÕÑ9•Ù•ÉAÉ½µ½Ñ”œ°(€€€€½Ý¹•ÉQ¡É•…‘‰…¹‘½¹¹‘±½Í•I•Ù½­•=‰Í•ÉÙ…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}É•¹‘•É}Á¥Á•±¥¹•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€ÍÕ‰Ñ¥Ñ±•I•¹‘•ÉY¥•Ü€ôÙ¥‘•¼¹ÍÕ‰Ñ¥Ñ±•Y¥•Üœ°(€€€€…‘‘=¹É…Ý1¥ÍÑ•¹•È¡ÍÕ‰Ñ¥Ñ±•É…Ý1¥ÍÑ•¹•È¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•I•¹‘•ÉA¥Á•±¥¹•=‰Í•ÉÙ•È¹½‰Í•ÉÙ•Õ•É½ÕÀ œ°(€€€€ÍÕ‰Ñ¥Ñ±•I•¹‘•ÉA¥Á•±¥¹•=‰Í•ÉÙ•È¹½‰Í•ÉÙ•AÉ•™•É•¹•Ù¥‘•¹” œ°(€€€€ÍÕ‰Ñ¥Ñ±•I•¹‘•ÉA¥Á•±¥¹•=‰Í•ÉÙ•È¹½‰Í•ÉÙ•É…Ü œ°(€€€€Ù¥Í¥‰±”Á¥á•±Ì…¹‘•Ù¥”½ÕÑÁÕÐ9=P…•ÁÑ•¸œ°(€€€€É•µ½Ù•=¹É…Ý1¥ÍÑ•¹•È¡ÍÕ‰Ñ¥Ñ±•É…Ý1¥ÍÑ•¹•È¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•I•¹‘•ÉA¥Á•±¥¹•=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}É•¹‘•É}Á¥Á•±¥¹•}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±Ì™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±=‰Í•ÉÙ•Èœ°(€€€€MÑ…ÑÕÌ¹9	1}]%9=]}A%a1M}=	MIYœ°(€€€€MÑ…ÑÕÌ¹=}I-}]%9=]}=	MIYœ°(€€€€Ý¥¹‘½ÝA¥á•±Ù¥‘•¹•½µÁ±•Ñ”è	½½±•…¸œ°(€€€€Ù¥Í¥‰±•I•¹‘•É¥¹•ÁÑ•è	½½±•…¸€ô™…±Í”œ°(€€€€Á¡åÍ¥…±¥ÍÁ±…å•ÁÑ•è	½½±•…¸€ô™…±Í”œ°(€€€€‘•Ù¥••ÁÑ…¹”è	½½±•…¸€ô™…±Í”œ°(€€€€…É‰A¥á•±Ìè%¹ÑÉÉ…äœ°(€€€€Á¥á•±Ì¹™½É…¡%¹‘•á•œ°(€€€€•Ù¥‘•¹”¹‘É…ÝI•Ù¥Í¥½¸€ôôÉ•Ù¥Í¥½¸œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}½¹ÑÉ…Ñ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±Ì™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°€A¥á•±½Áäœ°€	¥Ñµ…Àœ°(€€€€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ°€½µÁÉ•ÍÌ œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±Í}Ñ•ÍÐ™½Èà¥¸l(€€€€…‘µ¥ÑÑ•‘¹…‰±•‘•ÁÑÍ=¹±å	½Õ¹‘•‘1½Ý•É	…¹‘]¥¹‘½ÝA¥á•±Ìœ°(€€€€•áÁ±¥¥Ñ=™™•ÁÑÍ=¹±å=Á…ÅÕ•…É­]¥¹‘½ÝÉ…µ”œ°(€€€€•¹…‰±•‘É…µ•]¥Ñ¡½ÕÑ¹½Õ¡1½Ý•ÉA¥á•±Í…¥±Í±½Í•œ°(€€€€•¹…‰±•‘É…µ•½µ¥¹…Ñ•‘	åUÁÁ•ÉA¥á•±Í…¥±Í±½Í•œ°(€€€€ÑÉ…¹ÍÁ…É•¹Ñ=É	É¥¡Ñ=™™É…µ•…¥±Í±½Í•œ°(€€€€µ…±™½Éµ•‘¥µ•¹Í¥½¹Í¹‘A¥á•±½Õ¹Ñ9•Ù•ÉAÉ½µ½Ñ”œ°(€€€€¥¹½µÁ±•Ñ•=ÉY¥ÍÕ…±±åAÉ½µ½Ñ•‘I•¹‘•ÉÙ¥‘•¹•%ÍI•©•Ñ•œ°(€€€€É•Ù¥Í¥½¹½¹Ñ•áÑ¹‘AÉ•™•É•¹•É¥™Ñ…¥±±½Í•œ°(€€€€•¹•É…Ñ¥½¹Q¡É•…‘‰…¹‘½¹¹‘±½Í•I•Ù½­•A¥á•±=‰Í•ÉÙ…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}±•…Í”™½Èà¥¸l(€€€€±…ÍÌMå¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±…ÁÑÕÉ•1•…Í”œ°(€€€€‘…Ñ„±…ÍÌ1•…Í”œ°(€€€€•¹Õ´±…ÍÌI•Í½±ÕÑ¥½¸œ°(€€€€I•Í½±ÕÑ¥½¸¹UII9Q}MUMLœ°(€€€€I•Í½±ÕÑ¥½¸¹UII9Q}%1UIœ°(€€€€I•Í½±ÕÑ¥½¸¹MQ1}%9=Iœ°(€€€€½¹Ñ•áÐ¹±½…‘•¹•É…Ñ¥½¸€ðôÕÉÉ•¹Ð¹½¹Ñ•áÐ¹±½…‘•¹•É…Ñ¥½¸œ°(€€€€…Ñ¥Ù”€„ôô±•…Í”œ°(€€€€™Õ¸Á•¹‘¥¹œ¡±•…Í”è1•…Í”°ÕÉÉ•¹Ñ½¹Ñ•áÐè½¹Ñ•áÐü¤œ°(€€€€Q¡É•…¹ÕÉÉ•¹ÑQ¡É•… ¤€ôôô½Ý¹•ÉQ¡É•…œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}…ÁÑÕÉ•}±•…Í•}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}±•…Í”™½Èà¥¸l(€€€€…¹‘É½¥¸œ°€…¹‘É½¥‘à¸œ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°€½¹Ñ•¹ÑI•Í½±Ù•Èœ°(€€€€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°€1½œ¹ œ°€A¥á•±½Áäœ°€	¥Ñµ…Àœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}…ÁÑÕÉ•}±•…Í•}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}±•…Í•}Ñ•ÍÐ™½Èà¥¸l(€€€€•á…ÑÕÉÉ•¹Ñ1•…Í•½µÁ±•Ñ•Í=¹”œ°(€€€€ÕÉÉ•¹Ñ½Áå…¥±ÕÉ•±½Í•Í=¹±åQ¡…ÑÑÑ•µÁÐœ°(€€€€Í½ÕÉ•9½…Ñ…I•ÑÉåI•ÅÕ¥É•Íá…ÑÑ¥Ù•1•…Í•¹‘½¹Ñ•áÐœ°(€€€€‘ÕÁ±¥…Ñ•…ÁÑÕÉ•½ÉM…µ•Õ•I•Ù¥Í¥½¹%Í•¹¥•œ°(€€€€¹•Ý•É1½…‘MÕÁ•ÉÍ•‘•Í]¥Ñ¡½ÕÑ1…Ñ•…±±‰…­±•…É¥¹%Ðœ°(€€€€½±‘•É1½…‘…¹¹½ÑI•Á±…•9•Ý•ÉA•¹‘¥¹…ÁÑÕÉ”œ°(€€€€±…Ñ•ÉÕ•I•Ù¥Í¥½¹5…åMÑ…ÉÑ™Ñ•ÉI•Í½±Ù•‘ÑÑ•µÁÐœ°(€€€€ÕÉÉ•¹Ñ%‘•¹Ñ¥Ñå=ÉI•Ù¥Í¥½¹É¥™Ñ…¥±ÍÕÉÉ•¹Ñ1•…Í”œ°(€€€€µ…±™½Éµ•‘½¹Ñ•áÑ9•Ù•ÉÉ•…Ñ•Í1•…Í”œ°(€€€€™½É•¥¹Q¡É•…‘…¹¹½ÑI•Í½±Ù•=É±•…ÉÕÉÉ•¹Ñ1•…Í”œ°(€€€€•á…Ñ‰…¹‘½¹¹‘±½Í•I•Ù½­•A•¹‘¥¹…ÁÑÕÉ”œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}…ÁÑÕÉ•}±•…Í•}É•É•ÍÍ¥½¹Í}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±=‰Í•ÉÙ•È¹‰•¥¸ œ°(€€€€Må¹Ñ¡•Ñ¥MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±=‰Í•ÉÙ•È¹MÑ…ÑÕÌ¹I9I}A%A1%9}A9%9œ°(€€€€‰½Õ¹‘•‘MÕ‰Ñ¥Ñ±•IÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±…ÁÑÕÉ•1•…Í”¹‰•¥¸¡…ÁÑÕÉ•½¹Ñ•áÐ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±…ÁÑÕÉ•1•…Í”¹É•Í½±Ù” œ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±…ÁÑÕÉ•1•…Í”¹…‰…¹‘½¸¡¥Ð¤œ°(€€€€I•Í½±ÕÑ¥½¸¹MQ1}%9=Iœ°(€€€€A¥á•±½Áä¹É•ÅÕ•ÍÐ¡Ý¥¹‘½Ü°É•Ð°‰¥Ñµ…Àœ°(€€€€A¥á•±½Áä¹II=I}M=UI}9=}Qœ°(€€€€Ý¥¹‘½Ü¹‘•½ÉY¥•Ü¹Á½ÍÑ=¹¹¥µ…Ñ¥½¸œ°(€€€€Í½ÕÉ•9½…Ñ…I•ÑÉåÙ…¥±…‰±”œ°(€€€€Á•¹‘¥¹œ¡±•…Í”°…±±‰…­½¹Ñ•áÐ¤œ°(€€€€•¹Õ´±…ÍÌMÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±¥…¹½ÍÑ¥Œœ°(€€€€MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±¥…¹½ÍÑ¥Œ¹=UQM%}]%9=\œ°(€€€€MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±¥…¹½ÍÑ¥Œ¹=Ae}M=UI}9=}Qœ°(€€€€MÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±¥…¹½ÍÑ¥Œ¹A%a1}A=1%e}IUMœ°(€€€€‘¥…¹½ÍÑ¥Œ€‘íÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±¥…¹½ÍÑ¥Œ¹¹…µ•ôœ°(€€€€‰¥Ñµ…À¹•ÑA¥á•±Ì¡…ÁÑÕÉ•‘A¥á•±Ìœ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±=‰Í•ÉÙ•È¹½‰Í•ÉÙ” œ°(€€€€Á¥á•±Ìü¹™¥±° À¤œ°(€€€€‰¥Ñµ…À¹•É…Í•½±½È¡½±½È¹QI9MAI9P¤œ°(€€€€‰¥Ñµ…À¹É•å±” ¤œ°(€€€€Á¡åÍ¥…°‘¥ÍÁ±…ä…¹‘•Ù¥”½ÕÑÁÕÐ9=P…•ÁÑ•¸œ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±…ÁÑÕÉ•1•…Í”¹±½Í” ¤œ°(€€€€ÍÕ‰Ñ¥Ñ±•]¥¹‘½ÝA¥á•±=‰Í•ÉÙ•È¹±½Í” ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}…Ñ¥Ù¥Ñå}‰¥¹‘¥¹}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ½µÁ…¹¥½¹QÙA¥á•±½Áå%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹Q•ÍÐœ°(€€€€IÕ¹]¥Ñ ¡¹‘É½¥‘)U¹¥ÐÐèé±…ÍÌ¤œ°(€€€€Ñ¥Ù¥ÑåM•¹…É¥¼¹±…Õ¹ ¡½µÁ…¹¥½¹QÙÑ¥Ù¥Ñäèé±…ÍÌ¹©…Ù„¤œ°(€€€€%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹I•¥ÍÑÉä¹•Ñ%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€Í•¹…É¥¼¹½¹Ñ¥Ù¥Ñäœ°(€€€€™¥±Ñ•É%Í%¹ÍÑ…¹”ñMÉ½±±Y¥•Üø ¤œ°(€€€€™¥±Ñ•É%Í%¹ÍÑ…¹”ñA±…å•ÉY¥•Üø ¤œ°(€€€€‰ÕÑÑ½¸ü¹±•…É½ÕÌ ¤œ°(€€€€ÍÉ½±°¹ÍÉ½±±Q¼ À°Á±…å•ÉY¥•Ü¹Ñ½À¤œ°(€€€€‰½Õ¹‘•‘MÕ‰Ñ¥Ñ±•IÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€MU	Q%Q1}IU9Q%5}MQQUM}U9Y%1	1œ°(€€€€Q•ÍÐœ°(€€€€Ñ•ÍÑáÁ±¥¥Ñ=™™á•ÕÑ•Í5•‘¥„ÍÉ…Ý¹‘]¥¹‘½ÝA¥á•±½Áå=¹Á¤ÌÀœ°(€€€€Ñ•ÍÑ‘µ¥ÑÑ•‘¹…‰±•‘á•ÕÑ•Í5•‘¥„ÍÕ•ÍÉ…Ý¹‘]¥¹‘½ÝA¥á•±½Áå=¹Á¤ÌÀœ°(€€€€=}I-}]%9=]}=	MIYœ°(€€€€9	1}]%9=]}A%a1M}=	MIYœ°(€€€€Á¡åÍ¥…°‘¥ÍÁ±…ä…¹‘•Ù¥”½ÕÑÁÕÐ9=P…•ÁÑ•œ°(€€€€•ÑM¡…É•‘AÉ•™•É•¹•Ì¡QY}MQQ°€À¤¹•‘¥Ð ¤¹±•…È ¤¹½µµ¥Ð ¤œ°(€€€€•ÑM¡…É•‘AÉ•™•É•¹•Ì¡QY}I%AP°€À¤¹•‘¥Ð ¤¹±•…È ¤¹½µµ¥Ð ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…¹‘É½¥¹Á•Éµ¥ÍÍ¥½¸¹%9QI9Pœ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€1½œ¹ œ°€Ñ…­•MÉ••¹Í¡½Ðœ°€U¥ÕÑ½µ…Ñ¥½¸œ°€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}Ý¥¹‘½Ý}Á¥á•±}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€‰½Õ¹‘•‘Q¥Ñ±•]…Ñ¡•‘IÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€Ý…Ñ¡•‘MÑ…ÑÕÌ¹Á…É•¹Ð€„ôô½¹ÑÉ½±Ìœ°(€€€€¥Ð¹±•¹Ñ €ðô€É|ÀÐàœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ñ¥Ñ±•}Ý…Ñ¡•‘}‰½Õ¹‘•‘}ÍÑ…ÑÕÍ}ÍÕÉ™…•}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ½µÁ…¹¥½¹QÙQ¥Ñ±•]…Ñ¡•‘%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹Q•ÍÐœ°(€€€€IÕ¹]¥Ñ ¡¹‘É½¥‘)U¹¥ÐÐèé±…ÍÌ¤œ°(€€€€Ñ¥Ù¥ÑåM•¹…É¥¼¹±…Õ¹ ¡½µÁ…¹¥½¹QÙÑ¥Ù¥Ñäèé±…ÍÌ¹©…Ù„¤œ°(€€€€Í•¹‘-•å½Ý¹UÁMå¹Œ¡-•åÙ•¹Ð¹-e=}A}=]8¤œ°(€€€€…¹‘¥‘…Ñ”¹¡…Í½ÕÌ ¤œ°(€€€€Í•¹‘-•å½Ý¹UÁMå¹Œ¡-•åÙ•¹Ð¹-e=}A}9QH¤œ°(€€€€‰½Õ¹‘•‘Q¥Ñ±•]…Ñ¡•‘IÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€Ñ•ÍÑÁ…‘•¹Ñ•ÉÁÁ±¥•Í¹‘±•…ÉÍMå¹Ñ¡•Ñ¥M•É¥•Í]…Ñ¡•‘]¥Ñ¡…¹½¹¥…±I•…‘‰…­=¹Á¤ÌÀœ°(€€€€5…É¬…±°É•±•…Í••Á¥Í½‘•ÌÝ…Ñ¡•œ°(€€€€5…É¬…±°É•±•…Í••Á¥Í½‘•ÌÕ¹Ý…Ñ¡•œ°(€€€€ÁÁ±¥•Ñ¼±½…°Íå¹Ñ¡•Ñ¥ŒÝ…Ñ¡•ÍÑ…Ñ”¸œ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÄœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÈœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÀèÈœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÌœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÀèääœ°(€€€€…ÍÍ•ÉÑQÉÕ”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡9IIQ%Y}MA%0¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡UQUI}A%M=¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡9%11Ie}MA%0¤¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ñ¥Ñ±•}Ý…Ñ¡•‘}…Á¤ÌÁ}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…¹‘É½¥¹Á•Éµ¥ÍÍ¥½¸¹%9QI9Pœ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€1½œ¹ œ°€Ñ…­•MÉ••¹Í¡½Ðœ°€U¥ÕÑ½µ…Ñ¥½¸œ°€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…Ý…¥ÑY¥Í¥‰±•]¥¹‘½Ý½ÕÌ Õ|ÀÀÁ0¤œ°(€€€€É½½Ð¹¥ÍM¡½Ý¸€˜˜É½½Ð¹¡…Í]¥¹‘½Ý½ÕÌ ¤œ°(€€€€MåÍÑ•µ±½¬¹Í±••À ÄÀÁ0¤œ°(€€€€…Ý…¥ÑI•µ½Ñ•½ÕÌ¡5I-}MI%M}]Q!°€ØÐ¤œ°(€€€€…Ý…¥ÑI•µ½Ñ•½ÕÌ¡5I-}MI%M}U9]Q!°€ØÐ¤œ°(€€€€…Ý…¥ÑI•µ½Ñ•¥…±½½ÕÌ¡=9%I4°€à¤œ°(€€€€Í•¹‘-•å½Ý¹UÁMå¹Œ¡-•åÙ•¹Ð¹-e=}A}I%!P¤œ°(€€€€Ù¥•Üü¹±•Ðì¥Ð¹¥ÍM¡½Ý¸€˜˜¥Ð¹¡…Í]¥¹‘½Ý½ÕÌ ¤€˜˜¥Ð¹¡…Í½ÕÌ ¤ôœ°(€€€€Må¹Ñ¡•Ñ¥ŒÝ…Ñ¡•%Ìè¹½¹”œ°(€€€€…¹½¹¥…°Õ¹Ý…Ñ¡•É•…‘‰…¬‘¥¹½ÐÉ”µ…É´„É•µ½Ñ•±ä™½ÕÍ…‰±”Ý…Ñ¡•…Ñ¥½¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}Ñ¥Ñ±•}Ý…Ñ¡•‘}Ù¥Í¥‰±•}Ý¥¹‘½Ý}™½ÕÍ}…Ñ•}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ5½‰¥±•Q¥Ñ±•]…Ñ¡•‘%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹Q•ÍÐœ°(€€€€IÕ¹]¥Ñ ¡¹‘É½¥‘)U¹¥ÐÐèé±…ÍÌ¤œ°(€€€€Ñ¥Ù¥ÑåM•¹…É¥¼¹±…Õ¹ ¡5½‰¥±•MÑ½Éå=É‘•É1…‰Ñ¥Ù¥Ñäèé±…ÍÌ¹©…Ù„¤œ°(€€€€Ñ•ÍÑÉ…µ•Ý½É­±¥­ÍÁÁ±å¹‘±•…É5½‰¥±•M•É¥•Í]…Ñ¡•‘]¥Ñ¡…¹½¹¥…±I•…‘‰…­=¹Á¤ÌÀœ°(€€€€•á…Ñ	ÕÑÑ½¸¹Á•É™½Éµ±¥¬ ¤œ°(€€€€5…É¬…±°É•±•…Í••Á¥Í½‘•ÌÝ…Ñ¡•œ°(€€€€5…É¬…±°É•±•…Í••Á¥Í½‘•ÌÕ¹Ý…Ñ¡•œ°(€€€€ÁÁ±¥•Ñ¼±½…°Íå¹Ñ¡•Ñ¥ŒÝ…Ñ¡•ÍÑ…Ñ”¸œ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÄœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÈœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÀèÈœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÄèÌœ°(€€€€±½…°éµ½‰¥±”µÝ…Ñ¡•èÀèääœ°(€€€€…ÍÍ•ÉÑQÉÕ”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡9IIQ%Y}MA%0¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡UQUI}A%M=¤¤œ°(€€€€…ÍÍ•ÉÑ…±Í”¡ÍÑ…ÑÕÌ°ÍÑ…ÑÕÌ¹½¹Ñ…¥¹Ì¡9%11Ie}MA%0¤¤œ°(€€€€™¥±Ñ•Èì¥Ð¹±•¹Ñ €ðô€É|ÀÐàôœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}…Á¤ÌÁ}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ ±¥­U¹¥ÅÕ•	ÕÑÑ½¸¡5I-}MI%M}U9]Q!¤œ¹½Ð¥¸(€€€€€€€µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸½È(€€€€Må¹Ñ¡•Ñ¥ŒÝ…Ñ¡•%Ìè¹½¹”œ¹½Ð¥¸µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Õ¹Ý…Ñ¡•‘}…Á¤ÌÁ}É•…‘‰…­}µ¥ÍÍ¥¹œœ¤)¥˜€ˆ…¹‘É½¥‘à¹Ñ•ÍÐ¹•ÍÁÉ•ÍÍ¼é•ÍÁÉ•ÍÍ¼µ½É”èÌ¸Ü¸Àœˆ¹½Ð¥¸É…‘±”è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Õ¹Ý…Ñ¡•‘}•ÍÁÉ•ÍÍ½}‘•Á•¹‘•¹å}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€¥µÁ½ÉÐ…¹‘É½¥‘à¹Ñ•ÍÐ¹•ÍÁÉ•ÍÍ¼¹ÍÁÉ•ÍÍ¼¹½¹Y¥•Üœ°(€€€€¥µÁ½ÉÐ…¹‘É½¥‘à¹Ñ•ÍÐ¹•ÍÁÉ•ÍÍ¼¹…Ñ¥½¸¹Y¥•ÝÑ¥½¹Ì¹±¥¬œ°(€€€€¥µÁ½ÉÐ…¹‘É½¥‘à¹Ñ•ÍÐ¹•ÍÁÉ•ÍÍ¼¹µ…Ñ¡•È¹Y¥•Ý5…Ñ¡•ÉÌ¹Ý¥Ñ¡Q•áÐœ°(€€€€½¹Y¥•Ü¡Ý¥Ñ¡Q•áÐ¡=9%I4¤¤¹Á•É™½É´¡±¥¬ ¤¤œ°(€€€€½¹ÍÐÙ…°=9%I4€ô€‰½¹™¥É´ˆœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Õ¹Ý…Ñ¡•‘}½¹™¥Éµ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜€ …¹½¹¥…°µ½‰¥±”Õ¹Ý…Ñ¡•É•…‘‰…¬‘¥¹½ÐÉ”µ…É´Ñ¡”Ý…Ñ¡•…Ñ¥½¸œ¹½Ð¥¸(€€€€€€€µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸½È(€€€€¥Ð¹Ñ•áÐ¹Ñ½MÑÉ¥¹œ ¤€ôô5I-}MI%M}]Q!œ¹½Ð¥¸(€€€€€€€µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Õ¹Ý…Ñ¡•‘}½ÁÁ½Í¥Ñ•}É•…Éµ}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…¹‘É½¥¹Á•Éµ¥ÍÍ¥½¸¹%9QI9Pœ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€1½œ¹ œ°€Ñ…­•MÉ••¹Í¡½Ðœ°€U¥ÕÑ½µ…Ñ¥½¸œ°€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸©…Ù…}Ñ•áÐ™½Èà¥¸l(€€€€‰½Õ¹‘•‘MÑ½Éå=É‘•ÉIÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€ÍÑ½Éå=É‘•ÉQ½±”¹Á…É•¹Ð€„ôô½¹ÑÉ½±Ìœ°(€€€€ÍÑ½Éå=É‘•ÉMÕµµ…Éä¹Á…É•¹Ð€„ôô½¹ÑÉ½±Ìœ°(€€€€MQ=Ie}]Q!}%L¹½¹Ñ…¥¹Ì¡¥Ð¹¥¤œ°(€€€€9¼Á±…å•È°…½Õ¹Ð½ÈµÕÑ…‰±”Ý…Ñ¡•µÍÑ…Ñ”‰¥¹‘¥¹œ¸œ°(€€€€¥Ð¹±•¹Ñ €ðô€Ñ|ÀäØœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÑ½Éå}½É‘•É}‰½Õ¹‘•‘}ÍÑ…ÑÕÍ}ÍÕÉ™…•}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ½µÁ…¹¥½¹QÙMÑ½Éå=É‘•É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹Q•ÍÐœ°(€€€€IÕ¹]¥Ñ ¡¹‘É½¥‘)U¹¥ÐÐèé±…ÍÌ¤œ°(€€€€Ñ¥Ù¥ÑåM•¹…É¥¼¹±…Õ¹ ¡½µÁ…¹¥½¹QÙÑ¥Ù¥Ñäèé±…ÍÌ¹©…Ù„¤œ°(€€€€Í•¹‘-•å½Ý¹UÁMå¹Œ¡-•åÙ•¹Ð¹-e=}A}=]8¤œ°(€€€€…¹‘¥‘…Ñ”¹¡…Í½ÕÌ ¤œ°(€€€€Í•¹‘-•å½Ý¹UÁMå¹Œ¡-•åÙ•¹Ð¹-e=}A}9QH¤œ°(€€€€‰½Õ¹‘•‘MÑ½Éå=É‘•ÉIÕ¹Ñ¥µ•MÑ…ÑÕÍ½É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸ ¤œ°(€€€€Ñ•ÍÑÁ…‘•¹Ñ•ÉM•±•ÑÍMÑ½Éå=É‘•É¹‘‘Ù…¹•Í	åMÑ…‰±•%‘=¹Á¤ÌÀœ°(€€€€AÉ•Í•¹Ñ…Ñ¥½¸è…¹½¹¥…°œ°(€€€€AÉ•Í•¹Ñ…Ñ¥½¸èMÑ½Éä=É‘•Èœ°(€€€€9•áÐMÑ½Éä¥Ñ•´€¡±½…°µ•Ñ…‘…Ñ„½¹±ä¤œ°(€€€€±½…°éÍÑ½ÉäèÄèÄœ°(€€€€±½…°éÍÑ½ÉäèÀèÈœ°(€€€€±½…°éÍÑ½ÉäèÄèÈœ°(€€€€±½…°éÍÑ½ÉäèÀèääœ°(€€€€…ÍÍ•ÉÑMÑ…‰±•]…Ñ¡•‘5…É­•ÉÌ¡…¹½¹¥…°°Í¡½Õ±‘½¹Ñ…¥¹¹¥±±…Éä€ôÑÉÕ”¤œ°(€€€€…ÍÍ•ÉÑMÑ…‰±•]…Ñ¡•‘5…É­•ÉÌ¡Í•±•Ñ•°Í¡½Õ±‘½¹Ñ…¥¹¹¥±±…Éä€ô™…±Í”¤œ°(€€€€…ÍÍ•ÉÑMÑ…‰±•]…Ñ¡•‘5…É­•ÉÌ¡…‘Ù…¹•°Í¡½Õ±‘½¹Ñ…¥¹¹¥±±…Éä€ô™…±Í”¤œ°(€€€€±½…°éÍÑ½ÉäèÀèÈmLÀÉtƒŠˆ]…Ñ¡•œ°(€€€€±½…°éÍÑ½ÉäèÄèÈmLÄÉtƒŠˆ]…Ñ¡•œ°(€€€€I•Í½±Ù•Ñ¡”½É¥¥¹…°…¹½¹¥…°½‰©•Ð‰äÍÑ…‰±”%¸œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÑ½Éå}½É‘•É}…Á¤ÌÁ}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…¹‘É½¥¹Á•Éµ¥ÍÍ¥½¸¹%9QI9Pœ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€1½œ¹ œ°€Ñ…­•MÉ••¹Í¡½Ðœ°€U¥ÕÑ½µ…Ñ¥½¸œ°€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜¹½Ð…±°¡à¥¸ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…Ý…¥ÑY¥Í¥‰±•]¥¹‘½Ý½ÕÌ Õ|ÀÀÁ0¤œ°(€€€€É½½Ð¹¥ÍM¡½Ý¸€˜˜É½½Ð¹¡…Í]¥¹‘½Ý½ÕÌ ¤œ°(€€€€MåÍÑ•µ±½¬¹Í±••À ÄÀÁ0¤œ°(€€€€…Ý…¥ÑI•µ½Ñ•½ÕÌ¡9=9%1}1	0°€ØÐ¤œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}ÍÑ½Éå}½É‘•É}Ù¥Í¥‰±•}Ý¥¹‘½Ý}™½ÕÍ}…Ñ•}µ¥ÍÍ¥¹œœ¤)¥˜¹½Ð…±°¡à¥¸µ½‰¥±•}ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€±…ÍÌ5½‰¥±•MÑ½Éå=É‘•É%¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹Q•ÍÐœ°(€€€€IÕ¹]¥Ñ ¡¹‘É½¥‘)U¹¥ÐÐèé±…ÍÌ¤œ°(€€€€Ñ¥Ù¥ÑåM•¹…É¥¼¹±…Õ¹ ¡5½‰¥±•MÑ½Éå=É‘•É1…‰Ñ¥Ù¥Ñäèé±…ÍÌ¹©…Ù„¤œ°(€€€€Ñ•ÍÑÉ…µ•Ý½É­±¥­MÝ¥Ñ¡•Í5½‰¥±•MÑ½Éå=É‘•É¹‘M•±•ÑÍ=É¥¥¹…±MÑ…‰±•%‘=¹Á¤ÌÀœ°(€€€€•á…Ñ	ÕÑÑ½¸¹Á•É™½Éµ±¥¬ ¤œ°(€€€€M¡½ÜÍ•…Í½¸½É‘•Èœ°(€€€€M¡½ÜÍÑ½Éä½É‘•Èœ°(€€€€LÀÈ€9…ÉÉ…Ñ¥Ù”ÍÁ•¥…°œ°(€€€€±½…°éµ½‰¥±”µÍÑ½ÉäèÀèÈœ°(€€€€±½…°éµ½‰¥±”µÍÑ½ÉäèÀèääœ°(€€€€M•±•Ñ¥½¸É•Í½±Ù•Ñ¡”½É¥¥¹…°Íå¹Ñ¡•Ñ¥Œ…¹½¹¥…°½‰©•Ð‰äÍÑ…‰±”%¸œ°(€€€€ŸŠˆ]…Ñ¡•œ°(€€€€™¥±Ñ•Èì¥Ð¹±•¹Ñ €ðô€É|ÀÐàôœ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}ÍÑ½Éå}½É‘•É}…Á¤ÌÁ}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}µ¥ÍÍ¥¹œœ¤)¥˜…¹ä¡à¥¸µ½‰¥±•}ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸™½Èà¥¸l(€€€€…¹‘É½¥¹Á•Éµ¥ÍÍ¥½¸¹%9QI9Pœ°€©…Ù„¹¹•Ð¸œ°€¡ÑÑÀè¼¼œ°€¡ÑÑÁÌè¼¼œ°(€€€€½¹Ñ•¹ÑI•Í½±Ù•Èœ°€½Õ¹Ñ5…¹…•Èœ°€•ÑÕÑ¡-•äœ°€MåÍÑ•´¹•Ñ•¹Øœ°(€€€€1½œ¹ œ°€Ñ…­•MÉ••¹Í¡½Ðœ°€U¥ÕÑ½µ…Ñ¥½¸œ°€ÝÉ¥Ñ•	åÑ•Ìœ°€½ÕÑÁÕÑMÑÉ•…´œ)t¤è(€€€™…¥°¹…ÁÁ•¹ Íå¹Ñ¡•Ñ¥}µ½‰¥±•}ÍÑ½Éå}½É‘•É}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¹}™½É‰¥‘‘•¹}ÍÕÉ™…”œ¤)¥˜…¹ä¡à¥¸©…Ù…}Ñ•áÐ­Íå¹Ñ¡•Ñ¥}™¥áÑÕÉ•Ì­Íå¹Ñ¡•Ñ¥}™¥áÑÕÉ•Í}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}Õ•}½‰Í•ÉÙ•È­Íå¹Ñ¡•Ñ¥}Õ•}½‰Í•ÉÙ•É}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}ÑÉ…­}½‰Í•ÉÙ•È­Íå¹Ñ¡•Ñ¥}ÑÉ…­}½‰Í•ÉÙ•É}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}Á±…å‰…­}•Ù¥‘•¹”­Íå¹Ñ¡•Ñ¥}Á±…å‰…­}•Ù¥‘•¹•}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}ÁÉ•™•É•¹•}•Ù¥‘•¹”­Íå¹Ñ¡•Ñ¥}ÁÉ•™•É•¹•}•Ù¥‘•¹•}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}É•¹‘•É}Á¥Á•±¥¹”­Íå¹Ñ¡•Ñ¥}É•¹‘•É}Á¥Á•±¥¹•}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±Ì­Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±Í}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}±•…Í”­Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}±•…Í•}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}Ý¥¹‘½Ý}Á¥á•±}¥¹ÍÑÉÕµ•¹Ñ…Ñ¥½¸­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹”­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÁÉ½Ù•¹…¹•}Ñ•ÍÐ­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É”­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}Ñ•ÍÐ­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•Œ­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}½‘•}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…”­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É…•}Ñ•ÍÐ­ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ”­ÍÕ‰Ñ¥Ñ±•}‘¥•ÍÑ}Í½ÕÉ•}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•È­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}ÍÑ½É•}½Ý¹•É}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¸­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Í•ÍÍ¥½¹}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¸­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÑÉ…¹Í…Ñ¥½¹}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•È­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}½¹ÑÉ½±±•É}Ñ•ÍÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}Ý¥‘•Ñ}Á½ÉÐ­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•È­…¹‘É½¥‘}ÍÕ‰Ñ¥Ñ±•}¡½¥•}ÍÉ••¹}½Ý¹•É}Ñ•ÍÐ­Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}¡½ÍÐ­Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}¡½ÍÑ}Ñ•ÍÐ­Á•ÉÍ¥ÍÑ•¹Ñ}Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}¡½ÍÐ­Á•ÉÍ¥ÍÑ•¹Ñ}Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}¡½ÍÑ}Ñ•ÍÐ­Á•ÉÍ¥ÍÑ•¹Ñ}Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÍÉ••¹}½Ý¹•È­Á•ÉÍ¥ÍÑ•¹Ñ}Íå¹Ñ¡•Ñ¥}ÍÕ‰Ñ¥Ñ±•}ÍÉ••¹}½Ý¹•É}Ñ•ÍÐ­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}…ÑÕ…Ñ½È­¹…Ñ¥Ù•}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}…ÑÕ…Ñ½É}Ñ•ÍÐ­µ•‘¥„Í}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}…‘…ÁÑ•È­µ•‘¥„Í}ÍÕ‰Ñ¥Ñ±•}Á±…å‰…­}…‘…ÁÑ•É}Ñ•ÍÐ­ÍÑ½Éä­µ½‰¥±•}ÍÑ½Éä­µ½‰¥±•}ÍÑ½Éå}¡½ÍÐ­…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}Ý¥‘•Ñ}Á½ÉÐ­…¹‘É½¥‘}µ½‰¥±•}ÍÑ½Éå}ÍÉ••¹}½Ý¹•È­µ½‰¥±•}ÍÑ½Éå}…Ñ¥Ù¥Ñä­±…ÍÍ¥™¥•È­µ•‘¥„Í}¥¹Ñ…­”­µ•‘¥„Í}É•ÑÉå}…ÑÕ…Ñ½È­É•½Ù•Éä­…ÑÕ…Ñ½È­Á½ÉÑÌ­•Á¥Í½‘”­Ñ¥Ñ±•}Ý…Ñ¡•‘}µ•¹Ô­µ½‰¥±•}Ñ¥Ñ±•}Ý…Ñ¡•‘}µ•¹Ô­µ½‰¥±•}Ñ¥Ñ±•}¡½ÍÑ}‰¥¹‘¥¹œ­ÑÙ}Ñ¥Ñ±•}¡½ÍÑ}‰¥¹‘¥¹œ­ÑÙ}Ñ¥Ñ±•}Ý¥‘•Ñ}½¹ÑÉ½±±•È­…¹‘É½¥‘}ÑÙ}Ñ¥Ñ±•}Ý¥‘•Ñ}Á½ÉÐ­µ½‰¥±•}Ñ¥Ñ±•}Ý¥‘•Ñ}½¹ÑÉ½±±•È­…¹‘É½¥‘}µ½‰¥±•}Ñ¥Ñ±•}Ý¥‘•Ñ}Á½ÉÐ­Ñ¥Ñ±•}Ý…Ñ¡•‘}Ù¥•Ý}Á½ÉÑ}É•±…ä­…¹‘É½¥‘}Ñ¥Ñ±•}Ý…Ñ¡•‘}ÍÉ••¹}½Ý¹•ÉÌ­…¹½¹¥…±}Ý…Ñ¡•‘}…½Õ¹Ñ}…‘…ÁÑ•È­Íå¹Ñ¡•Ñ¥}Ý…Ñ¡•‘}¡½ÍÐ­Íå¹Ñ¡•Ñ¥}Ý…Ñ¡•‘}¡½ÍÑ}Ñ•ÍÐ™½Èà¥¸l‘…Ñ…ÍÑ½É•AÕÐœ°‘…Ñ…ÍÑ½É••±•Ñ”œ°¡ÑÑÀè¼¼œ°¡ÑÑÁÌè¼¼œ°•ÑÕÑ¡-•äœ°MåÍÑ•´¹•Ñ•¹Øœ°1½œ¹ t¤è(€€€™…¥°¹…ÁÁ•¹ …½Õ¹Ñ}¹•ÑÝ½É­}½É}É•‘•¹Ñ¥…±}ÍÕÉ™…”œ¤)ÁÉ¥¹Ð¡©Í½¸¹‘ÕµÁÌ¡ì½¬œé¹½Ð™…¥°°¡•­ÌœèÔÄÄ°¥ÍÍÕ•Ìœé™…¥°°Ñ•ÍÑ•‘}‰É¥‘•}Í¡„ÈÔØœé!-MU4°(€€€€€€€€€€€€€€€€€€ÁÉ½‘ÕÑ¥½¹}Á…­…”œè½´¹ÍÑÉ•µ¥¼¹½¹”œ°…¹‘¥‘…Ñ•}Á…­…”œè½Éœ¹Ñ¡¥…©…ä¹ÍÑÉ•µ¥½ÑÙ½µÁ…¹¥½¸ô±¥¹‘•¹ÐôÈ¤¤)ÍåÌ¹•á¥Ð Ä¥˜™…¥°•±Í”€À¤((

@@ -28,6 +28,7 @@ class NativePlaybackRecoveryActuatorTest {
     }
 
     private fun snapshot(
+        episodeSessionId: String = "episode-session-1",
         context: String = "video-1:source-1:generation-1",
         videoId: String = "video-1",
         sourceId: String = "source-1",
@@ -36,9 +37,11 @@ class NativePlaybackRecoveryActuatorTest {
         resume: String = "b".repeat(64),
         capabilities: Set<String> = setOf(
             "transcodeAudio",
+            "switchPlaybackEngine",
             "convertDolbyVisionProfile7To8_1"
         )
     ) = NativeRecoverySnapshot(
+        episodeSessionId = episodeSessionId,
         recoveryContextId = context,
         videoId = videoId,
         sourceId = sourceId,
@@ -48,6 +51,14 @@ class NativePlaybackRecoveryActuatorTest {
         supportedRecoveryActions = capabilities,
         loaded = true
     )
+
+    private fun budget(value: NativeRecoverySnapshot = snapshot()) =
+        NativeEpisodeRecoveryBudget.open(value.episodeSessionId, value.videoId)!!
+
+    private fun actuator(
+        port: FakePort,
+        budget: NativeEpisodeRecoveryBudget = budget(port.snapshot)
+    ) = NativePlaybackRecoveryActuator(port, budget)
 
     private fun classification(
         category: String = "playback_health",
@@ -92,7 +103,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun exactPlaybackPlanExecutesOnlyOnce() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())
         assertNotNull(prepared)
         assertEquals(NativeRecoveryExecutionOutcome.APPLIED, actuator.execute(prepared!!))
@@ -101,7 +112,7 @@ class NativePlaybackRecoveryActuatorTest {
     }
 
     @Test fun terminalAndClassifierPlansNeverPrepare() {
-        val actuator = NativePlaybackRecoveryActuator(FakePort(snapshot()))
+        val actuator = actuator(FakePort(snapshot()))
         assertNull(actuator.prepare(
             classification("matroska_parser", "stop_with_actionable_container_error"),
             observation()
@@ -114,7 +125,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun finalLeaseRejectsVideoSourceOrGenerationDrift() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         for (drifted in listOf(
             snapshot(videoId = "video-2"),
@@ -129,7 +140,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun finalLeaseRejectsWatchedOrResumeFingerprintDrift() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         port.snapshot = snapshot(watched = "c".repeat(64))
         assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
@@ -147,7 +158,7 @@ class NativePlaybackRecoveryActuatorTest {
         )
         for (state in states) {
             val port = FakePort(snapshot())
-            val actuator = NativePlaybackRecoveryActuator(port)
+            val actuator = actuator(port)
             val prepared = actuator.prepare(classification(), observation())!!
             port.snapshot = state
             assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
@@ -157,7 +168,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun rejectedPortExecutionStillConsumesLease() {
         val port = FakePort(snapshot(), accept = false)
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         assertEquals(
             NativeRecoveryExecutionOutcome.EXECUTION_REJECTED,
@@ -174,14 +185,14 @@ class NativePlaybackRecoveryActuatorTest {
     @Test fun throwingSnapshotDuringPreparationFailsClosed() {
         val port = FakePort(snapshot())
         port.snapshotFailure = IllegalStateException("released host")
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         assertNull(actuator.prepare(classification(), observation()))
         assertEquals(emptyList<String>(), port.actions)
     }
 
     @Test fun throwingFinalSnapshotRefusesWithoutExecution() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         port.snapshotFailure = LinkageError("incompatible host adapter")
         assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
@@ -190,7 +201,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun throwingPortExecutionConsumesLeaseAndFailsClosed() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         port.executionFailure = IllegalStateException("released host")
         assertEquals(
@@ -214,7 +225,7 @@ class NativePlaybackRecoveryActuatorTest {
             snapshot(context = "video-2:source-1:generation-1")
         )
         for (state in invalid) {
-            val actuator = NativePlaybackRecoveryActuator(FakePort(state))
+            val actuator = actuator(FakePort(state))
             assertNull(actuator.prepare(classification(), observation()))
         }
     }
@@ -235,7 +246,7 @@ class NativePlaybackRecoveryActuatorTest {
             }
         }
         val port = FakePort(snapshot(capabilities = changing))
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         assertEquals(1, iterations)
 
@@ -262,13 +273,13 @@ class NativePlaybackRecoveryActuatorTest {
             }
         }
         assertNull(
-            NativePlaybackRecoveryActuator(FakePort(snapshot(capabilities = throwing)))
+            actuator(FakePort(snapshot(capabilities = throwing)))
                 .prepare(classification(), observation())
         )
     }
 
     @Test fun unadvertisedNativeCapabilityCannotPrepare() {
-        val actuator = NativePlaybackRecoveryActuator(FakePort(
+        val actuator = actuator(FakePort(
             snapshot(capabilities = setOf("switchPlaybackEngine"))
         ))
         assertNull(actuator.prepare(classification(), observation()))
@@ -276,7 +287,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun capabilityChangeBeforeExecutionRefuses() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         port.snapshot = snapshot(capabilities = setOf("transcodeAudio"))
         assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
@@ -289,7 +300,7 @@ class NativePlaybackRecoveryActuatorTest {
             setOf("unreviewedRecoveryAction"),
             setOf("transcodeAudio", "unreviewedRecoveryAction")
         )) {
-            val actuator = NativePlaybackRecoveryActuator(FakePort(
+            val actuator = actuator(FakePort(
                 snapshot(capabilities = capabilities)
             ))
             assertNull(actuator.prepare(classification(), observation()))
@@ -298,7 +309,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun forgedOrWeakenedPlanCannotExecute() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val forged = PreparedNativeRecovery(
             plan = NativeRecoveryPlan(
                 authority = "playback_health",
@@ -315,12 +326,13 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun preparedLeaseCannotCrossActuatorInstanceOrBeReissued() {
         val firstPort = FakePort(snapshot())
-        val first = NativePlaybackRecoveryActuator(firstPort)
+        val shared = budget(firstPort.snapshot)
+        val first = actuator(firstPort, shared)
         val prepared = first.prepare(classification(), observation())!!
         assertNull(first.prepare(classification(), observation()))
 
         val secondPort = FakePort(snapshot())
-        val second = NativePlaybackRecoveryActuator(secondPort)
+        val second = actuator(secondPort, shared)
         assertEquals(NativeRecoveryExecutionOutcome.REFUSED, second.execute(prepared))
         assertEquals(emptyList<String>(), secondPort.actions)
 
@@ -328,24 +340,65 @@ class NativePlaybackRecoveryActuatorTest {
         assertEquals(listOf("transcodeAudio"), firstPort.actions)
     }
 
-    @Test fun issuedLeaseSetIsBoundedWithoutReplayEviction() {
-        val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
-        repeat(256) { index ->
-            val context = "video-1:source-1:generation-$index"
-            port.snapshot = snapshot(context = context, generation = index.toLong())
-            assertNotNull(actuator.prepare(classification(), observation(context = context)))
-        }
+    @Test fun sharedEpisodeBudgetSurvivesActuatorReplacementAndRejectsLedgerReset() {
+        val firstPort = FakePort(snapshot())
+        val shared = budget(firstPort.snapshot)
+        val first = actuator(firstPort, shared)
+        val firstPrepared = first.prepare(classification(), observation())!!
+        assertEquals("transcodeAudio", firstPrepared.plan.action)
 
-        val overflowContext = "video-1:source-1:generation-256"
-        port.snapshot = snapshot(context = overflowContext, generation = 256)
-        assertNull(actuator.prepare(classification(), observation(context = overflowContext)))
-        assertEquals(emptyList<String>(), port.actions)
+        val replacementPort = FakePort(snapshot())
+        val replacement = actuator(replacementPort, shared)
+        assertNull(replacement.prepare(classification(), observation()))
+
+        val exactHistory = observation(history = listOf("transcodeAudio"))
+        val secondPrepared = replacement.prepare(classification(), exactHistory)!!
+        assertEquals("switchPlaybackEngine", secondPrepared.plan.action)
+        assertEquals(
+            NativeRecoveryExecutionOutcome.APPLIED,
+            replacement.execute(secondPrepared)
+        )
+        assertEquals(listOf("switchPlaybackEngine"), replacementPort.actions)
+
+        assertEquals(
+            NativeRecoveryExecutionOutcome.APPLIED,
+            first.execute(firstPrepared)
+        )
+        assertEquals(listOf("transcodeAudio"), firstPort.actions)
+        assertNull(replacement.prepare(classification(), exactHistory))
+    }
+
+    @Test fun episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes() {
+        val recoveryPort = FakePort(snapshot())
+        val shared = budget(recoveryPort.snapshot)
+        val retrySnapshot = NativeMedia3RetrySnapshot(
+            episodeSessionId = recoveryPort.snapshot.episodeSessionId,
+            videoId = recoveryPort.snapshot.videoId,
+            sourceId = recoveryPort.snapshot.sourceId,
+            loadGeneration = recoveryPort.snapshot.loadGeneration,
+            loaded = true
+        )
+        val retryPort = object : NativeMedia3RetryPort {
+            override fun currentRetrySnapshot() = retrySnapshot
+            override fun executeRetry(action: String) = true
+        }
+        val retry = NativeMedia3RetryActuator(retryPort, shared)
+        assertNotNull(retry.prepare(androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+
+        val playback = actuator(recoveryPort, shared)
+        assertNotNull(playback.prepare(classification(), observation()))
+
+        val wrongEpisodePort = FakePort(snapshot(episodeSessionId = "episode-session-2"))
+        assertNull(actuator(wrongEpisodePort, shared).prepare(classification(), observation()))
+
+        assertEquals(true, shared.close())
+        assertNull(playback.prepare(classification(), observation()))
+        assertNull(retry.prepare(androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
     }
 
     @Test fun preparationAndExecutionStayOnConstructionThread() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val foreignPreparation = AtomicReference<PreparedNativeRecovery?>()
         Thread {
             foreignPreparation.set(actuator.prepare(classification(), observation()))
@@ -372,7 +425,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun ownerThreadCloseRevokesOutstandingLeaseAndFutureUse() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         assertEquals(true, actuator.close())
         assertEquals(NativeRecoveryExecutionOutcome.REFUSED, actuator.execute(prepared))
@@ -383,7 +436,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun foreignThreadCannotCloseOrRevokeOwnerLease() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val prepared = actuator.prepare(classification(), observation())!!
         val foreignClose = AtomicReference<Boolean?>()
         Thread {
@@ -400,7 +453,7 @@ class NativePlaybackRecoveryActuatorTest {
 
     @Test fun profileSevenConversionUsesSameOneShotLease() {
         val port = FakePort(snapshot())
-        val actuator = NativePlaybackRecoveryActuator(port)
+        val actuator = actuator(port)
         val profileSeven = PlaybackHealthObservation(
             audioExpected = true,
             audioPresent = true,
@@ -422,7 +475,7 @@ class NativePlaybackRecoveryActuatorTest {
     }
 
     @Test fun prepareRequiresExactDelegationAndExplicitLedger() {
-        val actuator = NativePlaybackRecoveryActuator(FakePort(snapshot()))
+        val actuator = actuator(FakePort(snapshot()))
         assertNull(actuator.prepare(classification(), observation(history = null)))
         assertNull(actuator.prepare(
             classification(action = "delegate_to_unbounded_recovery"),
