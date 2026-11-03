@@ -88,6 +88,7 @@ ACTUATOR=ROOT/'src/main/java/org/pss/stremio/tv/NativePlaybackRecoveryActuator.k
 ACTUATOR_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativePlaybackRecoveryActuatorTest.kt'
 BRIDGE=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvBridge.kt'
 PORTS=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvPorts.kt'
+PORTS_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvPortsTest.kt'
 EPISODE=ROOT/'src/main/java/org/pss/stremio/tv/NativeEpisodeWatchedAction.kt'
 TITLE_WATCHED_MENU=ROOT/'src/main/java/org/pss/stremio/tv/NativeTvTitleWatchedMenu.kt'
 TITLE_WATCHED_MENU_TEST=ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedMenuTest.kt'
@@ -642,6 +643,7 @@ media3_retry_actuator_test=MEDIA3_RETRY_ACTUATOR_TEST.read_text() if MEDIA3_RETR
 actuator=ACTUATOR.read_text() if ACTUATOR.is_file() else ''
 actuator_test=ACTUATOR_TEST.read_text() if ACTUATOR_TEST.is_file() else ''
 ports=PORTS.read_text()
+ports_test=PORTS_TEST.read_text()
 episode=EPISODE.read_text()
 title_watched_menu=TITLE_WATCHED_MENU.read_text() if TITLE_WATCHED_MENU.is_file() else ''
 title_watched_menu_test=TITLE_WATCHED_MENU_TEST.read_text() if TITLE_WATCHED_MENU_TEST.is_file() else ''
@@ -670,6 +672,23 @@ if 'TvSkipCoordinator' not in java_text or 'NightAudioMedia3Processor' not in ja
     fail.append('real_media3_bridge_or_pcm_missing')
 if 'player.seekTo(ms)' not in java_text or 'fun seekWithinSelectedVideo' not in ports:
     fail.append('same_media_seek_binding_missing')
+if (not all(fragment in ports for fragment in (
+        'private const val MAX_ISSUED_PLANS = 16',
+        'private val ownerThread = Thread.currentThread()',
+        'prepared[plan.fingerprint] = plan',
+        'val exact = prepared[plan.fingerprint] ?: return false',
+        'if (exact !== plan) return false',
+        'failClosedPortCall { account.currentSnapshot() }',
+        'failClosedPortCall { account.dispatch(command.coreAction) } ?: false',
+        'fun close(): Boolean',
+    )) or ports.find('prepared.remove(plan.fingerprint)') > ports.find('val fresh = failClosedPortCall') or
+    not all(name in ports_test for name in (
+        'copiedOrForeignTitlePlanCannotDispatch',
+        'duplicateTitlePreparationAndFailedRefreshAreConsumed',
+        'titleAccountPortFailuresFailClosedAndDispatchAttemptIsOneShot',
+        'titleActuatorOwnerThreadAndCloseRevokeAccess',
+    ))):
+    fail.append('title_watched_actuator_instance_lifecycle_or_exception_gate_missing')
 if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' not in episode:
     fail.append('individual_episode_core_action_not_present')
 episode_test=(ROOT/'src/test/java/org/pss/stremio/tv/NativeEpisodeWatchedActionTest.kt').read_text()
@@ -2675,7 +2694,7 @@ if any(x in mobile_story_order_instrumentation for x in [
     fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
 if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':516,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':517,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

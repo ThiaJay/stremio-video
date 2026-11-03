@@ -22,6 +22,24 @@ class NativeTvPortsTest {
         var changed: (() -> Unit)?=null
         override fun dispatch(message:Map<String,Any>):Boolean {calls++;changed?.invoke();return accepts}
     }
+    private class Account(var state:SeriesAccountSnapshot?):StremioAccountPort {
+        var sent=0
+        var snapshotFailure:Throwable?=null
+        var dispatchFailure:Throwable?=null
+        override fun currentSnapshot():SeriesAccountSnapshot? {
+            snapshotFailure?.let { throw it }
+            return state
+        }
+        override fun dispatch(message:Map<String,Any>):Boolean {
+            sent++
+            dispatchFailure?.let { throw it }
+            return true
+        }
+    }
+    private fun accountState()=SeriesAccountSnapshot(
+        "a".repeat(64),"b".repeat(64),"series","series",true,true,
+        listOf(CanonicalEpisode("s1e1",1,1,"2025-01-01T00:00:00Z")),
+        null,null,Instant.parse("2026-10-12T16:00:00Z"))
     @Test fun sameMediaCoreFirstThenSeek() {
         val player=Player(state); val core=Core()
         val coord=TvSkipCoordinator();val actuator=NativeTvSkipActuator(coord,core,player)
@@ -71,10 +89,87 @@ class NativeTvPortsTest {
         assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
         assertEquals(0,account.sent)
         account.s=base
-        assertTrue(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        val freshActuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val freshPlan=freshActuator.prepare(WatchedScope.Series,true)!!
+        assertTrue(freshActuator.confirm(freshPlan,
+            TvWatchedConfirmation(true,"ENTER",freshPlan.fingerprint)))
         assertEquals(1,account.sent)
         assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
         assertEquals(1,account.sent)
+    }
+
+    @Test fun copiedOrForeignTitlePlanCannotDispatch() {
+        val account=Account(accountState())
+        val owner=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val foreign=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=owner.prepare(WatchedScope.Series,true)!!
+        val input=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+
+        assertFalse(owner.confirm(plan.copy(),input))
+        assertFalse(foreign.confirm(plan,input))
+        assertEquals(0,account.sent)
+        assertTrue(owner.confirm(plan,input))
+        assertEquals(1,account.sent)
+    }
+
+    @Test fun duplicateTitlePreparationAndFailedRefreshAreConsumed() {
+        val account=Account(accountState())
+        val actuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=actuator.prepare(WatchedScope.Series,true)!!
+        val input=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+
+        assertNull(actuator.prepare(WatchedScope.Series,true))
+        account.snapshotFailure=IllegalStateException("account unavailable")
+        assertFalse(actuator.confirm(plan,input))
+        account.snapshotFailure=null
+        assertFalse(actuator.confirm(plan,input))
+        assertNull(actuator.prepare(WatchedScope.Series,true))
+        assertEquals(0,account.sent)
+    }
+
+    @Test fun titleAccountPortFailuresFailClosedAndDispatchAttemptIsOneShot() {
+        val unavailable=Account(accountState()).apply {
+            snapshotFailure=LinkageError("account bridge unavailable")
+        }
+        assertNull(NativeTvWatchedActuator(TvWatchedCoordinator(),unavailable)
+            .prepare(WatchedScope.Series,true))
+
+        val account=Account(accountState()).apply {
+            dispatchFailure=IllegalStateException("dispatch unavailable")
+        }
+        val actuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=actuator.prepare(WatchedScope.Series,true)!!
+        val input=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+        assertFalse(actuator.confirm(plan,input))
+        assertFalse(actuator.confirm(plan,input))
+        assertEquals(1,account.sent)
+    }
+
+    @Test fun titleActuatorOwnerThreadAndCloseRevokeAccess() {
+        val account=Account(accountState())
+        val actuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=actuator.prepare(WatchedScope.Series,true)!!
+        val input=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+        var foreignPlan:WatchedPlan?=plan
+        var foreignConfirm=true
+        var foreignClose=true
+
+        Thread {
+            foreignPlan=actuator.prepare(WatchedScope.Series,false)
+            foreignConfirm=actuator.confirm(plan,input)
+            foreignClose=actuator.close()
+        }.apply { start();join() }
+
+        assertNull(foreignPlan)
+        assertFalse(foreignConfirm)
+        assertFalse(foreignClose)
+        assertEquals(0,account.sent)
+        assertTrue(actuator.close())
+        assertFalse(actuator.confirm(plan,input))
+        assertNull(actuator.prepare(WatchedScope.Series,true))
+        assertFalse(actuator.close())
+        assertEquals(0,account.sent)
     }
 
     @Test fun finalSeekLeaseRejectsMediaSwitchAfterCoreAcknowledgement() {

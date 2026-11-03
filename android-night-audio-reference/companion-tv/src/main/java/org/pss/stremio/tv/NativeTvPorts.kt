@@ -98,12 +98,53 @@ class NativeTvWatchedActuator(
     private val coordinator: TvWatchedCoordinator,
     private val account: StremioAccountPort
 ) {
-    fun prepare(scope: WatchedScope, watched: Boolean): WatchedPlan? =
-        account.currentSnapshot()?.let { coordinator.prepare(it, scope, watched) }
+    companion object {
+        private const val MAX_ISSUED_PLANS = 16
+    }
+
+    private val ownerThread = Thread.currentThread()
+    private val prepared = LinkedHashMap<String, WatchedPlan>()
+    private val consumed = HashSet<String>()
+    private var closed = false
+
+    private inline fun <T> failClosedPortCall(block: () -> T): T? = try {
+        block()
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
+    fun prepare(scope: WatchedScope, watched: Boolean): WatchedPlan? {
+        if (!onOwnerThread() || closed || prepared.size + consumed.size >= MAX_ISSUED_PLANS) return null
+        val state = failClosedPortCall { account.currentSnapshot() } ?: return null
+        val plan = failClosedPortCall { coordinator.prepare(state, scope, watched) } ?: return null
+        if (plan.fingerprint in prepared || plan.fingerprint in consumed) return null
+        prepared[plan.fingerprint] = plan
+        return plan
+    }
 
     fun confirm(plan: WatchedPlan, input: TvWatchedConfirmation): Boolean {
-        val fresh = account.currentSnapshot() ?: return false
-        val command = coordinator.confirm(plan, fresh, input) ?: return false
-        return account.dispatch(command.coreAction)
+        if (!onOwnerThread() || closed || !input.focusOnConfirmation ||
+            (input.remoteKey != "ENTER" && input.remoteKey != "DPAD_CENTER") ||
+            input.fingerprint != plan.fingerprint ||
+            (!plan.watched && !input.unwatchAcknowledged)) return false
+        val exact = prepared[plan.fingerprint] ?: return false
+        if (exact !== plan) return false
+        prepared.remove(plan.fingerprint)
+        consumed.add(plan.fingerprint)
+        val fresh = failClosedPortCall { account.currentSnapshot() } ?: return false
+        val command = failClosedPortCall { coordinator.confirm(plan, fresh, input) } ?: return false
+        return failClosedPortCall { account.dispatch(command.coreAction) } ?: false
     }
+
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        prepared.clear()
+        consumed.clear()
+        return true
+    }
+
+    private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 }
