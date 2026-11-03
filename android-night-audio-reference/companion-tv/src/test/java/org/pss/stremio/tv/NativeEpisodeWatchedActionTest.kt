@@ -18,9 +18,16 @@ class NativeEpisodeWatchedActionTest {
         var videoReadCount=0
         var beforeVideoRead: ((Int) -> Unit)?=null
         var duringDispatch: (() -> Unit)?=null
-        override fun currentSnapshot()=state
+        var snapshotFailure:Throwable?=null
+        var videoFailureOnRead:Int?=null
+        var dispatchFailure:Throwable?=null
+        override fun currentSnapshot():SeriesAccountSnapshot {
+            snapshotFailure?.let { throw it }
+            return state
+        }
         override fun canonicalVideoFromReadyMetaDetails(id:String):Map<String,Any?>? {
             videoReadCount++
+            if(videoFailureOnRead==videoReadCount) throw LinkageError("canonical video unavailable")
             beforeVideoRead?.invoke(videoReadCount)
             return video.takeIf { it["id"]==id }
         }
@@ -28,6 +35,7 @@ class NativeEpisodeWatchedActionTest {
             writes++
             lastAction=message
             duringDispatch?.invoke()
+            dispatchFailure?.let { throw it }
             return true
         }
     }
@@ -73,6 +81,43 @@ class NativeEpisodeWatchedActionTest {
         assertNull(a.prepare(futureId,true))
         assertNull(a.prepare(futureId,false))
         assertEquals(0,p.writes)
+    }
+    @Test fun hostSnapshotAndInitialVideoFailuresFailClosedWithoutEscaping() {
+        val snapshotFailure=FakeAccount(base)
+        snapshotFailure.snapshotFailure=IllegalStateException("account session unavailable")
+        assertNull(NativeTvEpisodeWatchedActuator(snapshotFailure).prepare("tt18:1:1",true))
+
+        val videoFailure=FakeAccount(base)
+        videoFailure.videoFailureOnRead=1
+        assertNull(NativeTvEpisodeWatchedActuator(videoFailure).prepare("tt18:1:1",true))
+        assertEquals(0,snapshotFailure.writes+videoFailure.writes)
+    }
+    @Test fun refreshedAndFinalVideoFailuresFailClosedWithoutDispatch() {
+        val refreshFailure=FakeAccount(base)
+        val refreshActuator=NativeTvEpisodeWatchedActuator(refreshFailure)
+        val refreshPlan=refreshActuator.prepare("tt18:1:1",true)!!
+        refreshFailure.videoFailureOnRead=2
+        assertFalse(refreshActuator.confirm(refreshPlan,
+            TvWatchedConfirmation(true,"ENTER",refreshPlan.fingerprint)))
+
+        val finalFailure=FakeAccount(base)
+        val finalActuator=NativeTvEpisodeWatchedActuator(finalFailure)
+        val finalPlan=finalActuator.prepare("tt18:1:1",true)!!
+        finalFailure.videoFailureOnRead=3
+        assertFalse(finalActuator.confirm(finalPlan,
+            TvWatchedConfirmation(true,"ENTER",finalPlan.fingerprint)))
+        assertEquals(0,refreshFailure.writes+finalFailure.writes)
+    }
+    @Test fun dispatchFailureFailsClosedAndConsumesThePlan() {
+        val p=FakeAccount(base)
+        p.dispatchFailure=IllegalStateException("Core dispatch unavailable")
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+        val request=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+
+        assertFalse(a.confirm(plan,request))
+        assertFalse(a.confirm(plan,request))
+        assertEquals(1,p.writes)
     }
     @Test fun accountOrMetadataDriftIsNotDispatched() {
         val p=FakeAccount(base)

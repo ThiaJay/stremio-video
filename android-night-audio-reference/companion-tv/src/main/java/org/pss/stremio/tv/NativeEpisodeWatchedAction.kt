@@ -35,6 +35,14 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     private fun hash(parts: String): String = MessageDigest.getInstance("SHA-256")
         .digest(parts.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    private inline fun <T> failClosedPortCall(block: () -> T): T? = try {
+        block()
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
     /**
      * Detach nested metadata from a potentially mutable Core data wrapper before checking or
      * dispatching it. A shared map reference is never used as a watched-action payload.
@@ -162,8 +170,10 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     }
 
     fun prepare(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
-        val state = port.currentSnapshot() ?: return null
-        val videoSource = port.canonicalVideoFromReadyMetaDetails(stableVideoId) ?: return null
+        val state = failClosedPortCall { port.currentSnapshot() } ?: return null
+        val videoSource = failClosedPortCall {
+            port.canonicalVideoFromReadyMetaDetails(stableVideoId)
+        } ?: return null
         val video = snapshotCoreVideo(videoSource) ?: return null
         if (!state.metaReady || !state.libraryReady || state.mediaType != "series" ||
             state.seriesId.isBlank() || state.seriesId != state.readyMetaId ||
@@ -200,7 +210,9 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         if (fresh != plan) return false
         // The first refreshed metadata read can pass and then change again before dispatch.
         // Freeze and verify a SECOND canonical object, including nested fields, not just its ID.
-        val secondSource = port.canonicalVideoFromReadyMetaDetails(plan.stableVideoId) ?: return false
+        val secondSource = failClosedPortCall {
+            port.canonicalVideoFromReadyMetaDetails(plan.stableVideoId)
+        } ?: return false
         val unchangedCoreVideo = snapshotCoreVideo(secondSource) ?: return false
         if (unchangedCoreVideo["id"] != plan.stableVideoId ||
             hash(canonical(unchangedCoreVideo) ?: return false) != plan.videoFingerprint) return false
@@ -212,6 +224,6 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
             )
         )
         issued.add(plan.fingerprint)
-        return port.dispatch(command)
+        return failClosedPortCall { port.dispatch(command) } ?: false
     }
 }
