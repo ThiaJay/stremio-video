@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=522 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=524 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -240,6 +240,10 @@ jobs:
               'refreshedAndFinalVideoFailuresFailClosedWithoutDispatch',
               'dispatchFailureFailsClosedAndConsumesThePlan'):
               assert required in names, 'Individual episode fail-closed host-port regression not executed: '+required
+          for required in (
+              'crossThreadAccessFailsClosedWithoutConsumingOwnerPlan',
+              'closeRevokesPreparedPlanAndAllFutureAccess'):
+              assert required in names, 'Individual episode lifecycle regression not executed: '+required
           assert 'secondVideoReadMustNotChangeEvenWhenIdentityIsStable' in names, 'Episode metadata race regression not executed'
           assert 'dispatchedPayloadIsDeepDetachedFromMutableCoreObject' in names, 'Deep snapshot regression not executed'
           assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'

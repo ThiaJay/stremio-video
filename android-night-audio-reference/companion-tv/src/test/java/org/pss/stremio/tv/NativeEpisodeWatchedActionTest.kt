@@ -119,6 +119,39 @@ class NativeEpisodeWatchedActionTest {
         assertFalse(a.confirm(plan,request))
         assertEquals(1,p.writes)
     }
+    @Test fun crossThreadAccessFailsClosedWithoutConsumingOwnerPlan() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+        val request=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+        var foreignPlan:TvEpisodeWatchedPlan?=plan
+        var foreignConfirm=true
+        var foreignClose=true
+
+        Thread {
+            foreignPlan=a.prepare("tt18:1:1",true)
+            foreignConfirm=a.confirm(plan,request)
+            foreignClose=a.close()
+        }.apply { start();join() }
+
+        assertNull(foreignPlan)
+        assertFalse(foreignConfirm)
+        assertFalse(foreignClose)
+        assertEquals(0,p.writes)
+        assertTrue(a.confirm(plan,request))
+        assertEquals(1,p.writes)
+    }
+    @Test fun closeRevokesPreparedPlanAndAllFutureAccess() {
+        val p=FakeAccount(base)
+        val a=NativeTvEpisodeWatchedActuator(p)
+        val plan=a.prepare("tt18:1:1",true)!!
+
+        assertTrue(a.close())
+        assertFalse(a.confirm(plan,TvWatchedConfirmation(true,"ENTER",plan.fingerprint)))
+        assertNull(a.prepare("tt18:1:1",true))
+        assertFalse(a.close())
+        assertEquals(0,p.writes)
+    }
     @Test fun accountOrMetadataDriftIsNotDispatched() {
         val p=FakeAccount(base)
         val a=NativeTvEpisodeWatchedActuator(p)

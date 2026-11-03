@@ -29,7 +29,9 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         private const val MAX_CANONICAL_VIDEO_TOTAL_STRING_LENGTH = 1_000_000
     }
 
+    private val ownerThread = Thread.currentThread()
     private val issued = HashSet<String>()
+    private var closed = false
     private val sha = Regex("^[0-9a-f]{64}$")
 
     private fun hash(parts: String): String = MessageDigest.getInstance("SHA-256")
@@ -170,6 +172,7 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     }
 
     fun prepare(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
+        if (!onOwnerThread() || closed) return null
         val state = failClosedPortCall { port.currentSnapshot() } ?: return null
         val videoSource = failClosedPortCall {
             port.canonicalVideoFromReadyMetaDetails(stableVideoId)
@@ -203,7 +206,8 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     }
 
     fun confirm(plan: TvEpisodeWatchedPlan, request: TvWatchedConfirmation): Boolean {
-        if (!request.focusOnConfirmation || request.fingerprint != plan.fingerprint ||
+        if (!onOwnerThread() || closed || !request.focusOnConfirmation ||
+            request.fingerprint != plan.fingerprint ||
             (request.remoteKey != "DPAD_CENTER" && request.remoteKey != "ENTER") ||
             (!plan.markWatched && !request.unwatchAcknowledged) || issued.contains(plan.fingerprint)) return false
         val fresh = prepare(plan.stableVideoId, plan.markWatched) ?: return false
@@ -226,4 +230,14 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         issued.add(plan.fingerprint)
         return failClosedPortCall { port.dispatch(command) } ?: false
     }
+
+    /** Revokes every prepared individual-episode action when its UI owner is released. */
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        issued.clear()
+        return true
+    }
+
+    private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 }

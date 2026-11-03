@@ -692,6 +692,17 @@ if not all(fragment in episode for fragment in (
 )):
     fail.append('individual_episode_host_port_exception_boundary_missing')
 if not all(fragment in episode for fragment in (
+    'private val ownerThread = Thread.currentThread()',
+    'if (!onOwnerThread() || closed) return null',
+    'if (!onOwnerThread() || closed || !request.focusOnConfirmation',
+    'fun close(): Boolean',
+    'private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread',
+)) or not all(name in episode_test for name in (
+    'crossThreadAccessFailsClosedWithoutConsumingOwnerPlan',
+    'closeRevokesPreparedPlanAndAllFutureAccess',
+)):
+    fail.append('individual_episode_owner_thread_or_lifecycle_gate_missing')
+if not all(fragment in episode for fragment in (
     'videoFingerprint',
     'snapshotCoreVideo(videoSource)',
     'snapshotCoreVideo(secondSource)',
@@ -2652,7 +2663,7 @@ if any(x in mobile_story_order_instrumentation for x in [
     fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
 if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':514,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':515,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 
