@@ -9,10 +9,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputFilter
+import android.text.InputType
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -32,6 +35,8 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.ui.PlayerView
 import org.pss.stremio.tv.CoreMessagePort
 import org.pss.stremio.tv.CoreSkipSegment
+import org.pss.stremio.tv.CompanionTextEntryFacts
+import org.pss.stremio.tv.NativeCompanionTextEntryPolicy
 import org.pss.stremio.tv.NativeSkipOutcome
 import org.pss.stremio.tv.NativeMedia3FailureIntake
 import org.pss.stremio.tv.NativeSeekPort
@@ -82,6 +87,8 @@ class CompanionTvActivity : Activity() {
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private lateinit var controls: LinearLayout
+    private lateinit var syntheticSearchInput: EditText
+    private lateinit var syntheticSearchStatus: TextView
     private val manualButtons = LinkedHashMap<SkipKind, Button>()
     private var watchedOwner: AndroidTvTitleWatchedScreenOwner? = null
     private val watchedHost = SyntheticTitleWatchedAccountHost()
@@ -300,6 +307,33 @@ class CompanionTvActivity : Activity() {
         container.addView(controls)
         header("Stremio Companion Lab")
         small("Independent Android TV build. Existing Stremio remains untouched. No account or network access.")
+        small(
+            "Typed search below is an app-owned, process-local input surface only. " +
+                "It exposes no microphone, speech permission, companion session, " +
+                "Stremio catalogue or Fire TV acceptance claim."
+        )
+        syntheticSearchInput = EditText(this).apply {
+            hint = "Type a synthetic local search"
+            contentDescription = SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            filters = arrayOf(InputFilter.LengthFilter(MAX_SYNTHETIC_SEARCH_LENGTH))
+            setSingleLine(true)
+            isFocusable = true
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(160, 175, 190))
+        }
+        controls.addView(
+            syntheticSearchInput,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        button(SYNTHETIC_SEARCH_BUTTON_LABEL) { runSyntheticTypedSearch() }
+        syntheticSearchStatus = small(
+            "Typed input ready. Companion route and device identity remain unknown; " +
+                "live acceptance is false."
+        )
         val video = PlayerView(this).apply {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
@@ -695,6 +729,25 @@ class CompanionTvActivity : Activity() {
         ).joinToString(" | ").takeIf { it.isNotBlank() && it.length <= 4_096 }
     }
 
+    /**
+     * Read-only instrumentation surface for the local typed-search boundary. It
+     * never returns the query and cannot claim companion delivery or acceptance.
+     */
+    internal fun boundedSyntheticSearchRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::syntheticSearchInput.isInitialized ||
+            !::syntheticSearchStatus.isInitialized || !controls.isAttachedToWindow ||
+            !syntheticSearchInput.isAttachedToWindow ||
+            !syntheticSearchStatus.isAttachedToWindow ||
+            syntheticSearchInput.parent !== controls ||
+            syntheticSearchStatus.parent !== controls) {
+            return null
+        }
+        return syntheticSearchStatus.text.toString().takeIf {
+            it.isNotBlank() && it.length <= 2_048
+        }
+    }
+
     private fun updateStoryOrderDemo(message: String? = null) {
         val visible = StoryOrderContract.presentation(
             STORY_CANONICAL,
@@ -827,6 +880,30 @@ class CompanionTvActivity : Activity() {
         updateUi()
     }
 
+    private fun runSyntheticTypedSearch() {
+        val text = syntheticSearchInput.text?.toString().orEmpty()
+        val plan = NativeCompanionTextEntryPolicy.plan(
+            CompanionTextEntryFacts(
+                searchSurfaceActive = true,
+                typedSearchFocused = syntheticSearchInput.hasFocus(),
+                explicitCompanionInputGesture = true,
+                sensitiveInput = false,
+                deliveryConfirmedInStremio = false,
+                resultsRemainInStremio = false,
+                companionRoute = "unknown",
+                companionSessionIdentity = "unknown"
+            )
+        )
+        syntheticSearchStatus.text = if (text.isBlank()) {
+            "No synthetic query submitted. ${plan.action}: ${plan.reason}. " +
+                "Live acceptance remains false."
+        } else {
+            "Retained ${text.length} typed characters inside this local lab. " +
+                "${plan.action}: ${plan.reason}. No voice, network, account, " +
+                "official Stremio result or Fire TV acceptance is claimed."
+        }
+    }
+
     private fun header(text: String): TextView = TextView(this).apply {
         this.text = text
         textSize = 23f
@@ -895,6 +972,10 @@ class CompanionTvActivity : Activity() {
         private const val FIXTURE_ID = "local:synthetic-media:12s"
         private const val SYNTHETIC_SOURCE_ID = "local:synthetic-wav"
         private const val SYNTHETIC_PLAYER_GENERATION = 1L
+        internal const val SYNTHETIC_SEARCH_INPUT_DESCRIPTION =
+            "Synthetic typed search input"
+        internal const val SYNTHETIC_SEARCH_BUTTON_LABEL = "Run local typed search"
+        private const val MAX_SYNTHETIC_SEARCH_LENGTH = 160
         private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS =
             "synthetic_tv_subtitle_receipt_v1"
         private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS =
