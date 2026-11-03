@@ -217,6 +217,7 @@ class NativePlaybackRecoveryActuatorTest {
     }
 
     @Test fun malformedSnapshotAndContextMismatchFailPreparation() {
+        val shared = budget()
         val invalid = listOf(
             snapshot(watched = "A".repeat(64)),
             snapshot(resume = "short"),
@@ -225,7 +226,7 @@ class NativePlaybackRecoveryActuatorTest {
             snapshot(context = "video-2:source-1:generation-1")
         )
         for (state in invalid) {
-            val actuator = actuator(FakePort(state))
+            val actuator = actuator(FakePort(state), shared)
             assertNull(actuator.prepare(classification(), observation()))
         }
     }
