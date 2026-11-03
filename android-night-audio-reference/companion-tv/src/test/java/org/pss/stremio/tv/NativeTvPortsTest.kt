@@ -24,9 +24,13 @@ class NativeTvPortsTest {
     }
     private class Account(var state:SeriesAccountSnapshot?):StremioAccountPort {
         var sent=0
+        var snapshotReads=0
+        var beforeSnapshotRead:((Int)->Unit)?=null
         var snapshotFailure:Throwable?=null
         var dispatchFailure:Throwable?=null
         override fun currentSnapshot():SeriesAccountSnapshot? {
+            snapshotReads++
+            beforeSnapshotRead?.invoke(snapshotReads)
             snapshotFailure?.let { throw it }
             return state
         }
@@ -144,6 +148,38 @@ class NativeTvPortsTest {
         assertFalse(actuator.confirm(plan,input))
         assertFalse(actuator.confirm(plan,input))
         assertEquals(1,account.sent)
+    }
+
+    @Test fun titleFinalPreDispatchSnapshotDriftFailsClosed() {
+        val base=accountState()
+        val account=Account(base)
+        val actuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=actuator.prepare(WatchedScope.Series,true)!!
+        val input=TvWatchedConfirmation(true,"ENTER",plan.fingerprint)
+        account.beforeSnapshotRead={ read ->
+            if(read==3) account.state=base.copy(libraryItemFingerprint="c".repeat(64))
+        }
+
+        assertFalse(actuator.confirm(plan,input))
+        assertFalse(actuator.confirm(plan,input))
+        assertEquals(0,account.sent)
+        assertEquals(3,account.snapshotReads)
+    }
+
+    @Test fun titleFinalPreDispatchSnapshotFailureFailsClosed() {
+        val account=Account(accountState())
+        val actuator=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+        val plan=actuator.prepare(WatchedScope.Season(1),true)!!
+        val input=TvWatchedConfirmation(true,"DPAD_CENTER",plan.fingerprint)
+        account.beforeSnapshotRead={ read ->
+            if(read==3) throw LinkageError("final account snapshot unavailable")
+        }
+
+        assertFalse(actuator.confirm(plan,input))
+        account.beforeSnapshotRead=null
+        assertFalse(actuator.confirm(plan,input))
+        assertEquals(0,account.sent)
+        assertEquals(3,account.snapshotReads)
     }
 
     @Test fun titleActuatorOwnerThreadAndCloseRevokeAccess() {

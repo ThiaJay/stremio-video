@@ -74,7 +74,7 @@ jobs:
               failures+=int(tree.get('failures',0))
               errors+=int(tree.get('errors',0))
               names += [node.get('name','') for node in tree.findall('.//testcase')]
-          assert tests>=531 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests>=533 and failures==0 and errors==0, (tests,failures,errors)
           assert 'localWebVttHasDeterministicCuesAndIsIdempotent' in names, 'Synthetic WebVTT test not run'
           assert 'corruptLocalWebVttIsReplacedWithoutTouchingUnrelatedFiles' in names, 'Synthetic WebVTT repair test not run'
           for required in (
@@ -236,6 +236,8 @@ jobs:
               'copiedOrForeignTitlePlanCannotDispatch',
               'duplicateTitlePreparationAndFailedRefreshAreConsumed',
               'titleAccountPortFailuresFailClosedAndDispatchAttemptIsOneShot',
+              'titleFinalPreDispatchSnapshotDriftFailsClosed',
+              'titleFinalPreDispatchSnapshotFailureFailsClosed',
               'titleActuatorOwnerThreadAndCloseRevokeAccess'):
               assert required in names, 'Title watched actuator regression not executed: '+required
           assert 'localWavHasCorrectPcmHeaderAndDurationAndIsIdempotent' in names, 'Synthetic media test not run'

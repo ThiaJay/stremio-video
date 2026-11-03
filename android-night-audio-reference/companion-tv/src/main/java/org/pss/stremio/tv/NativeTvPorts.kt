@@ -135,6 +135,15 @@ class NativeTvWatchedActuator(
         consumed.add(plan.fingerprint)
         val fresh = failClosedPortCall { account.currentSnapshot() } ?: return false
         val command = failClosedPortCall { coordinator.confirm(plan, fresh, input) } ?: return false
+        // Re-read the complete canonical account snapshot immediately before the
+        // injected Core call. Confirmation itself can synchronously trigger host
+        // state changes, and a season command must never outlive the exact episode
+        // membership and release boundary which authorised it.
+        val finalState = failClosedPortCall { account.currentSnapshot() } ?: return false
+        val finalPlan = failClosedPortCall {
+            coordinator.prepare(finalState, plan.scope, plan.watched)
+        } ?: return false
+        if (finalPlan != plan) return false
         return failClosedPortCall { account.dispatch(command.coreAction) } ?: false
     }
 
