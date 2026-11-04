@@ -114,6 +114,20 @@ object NativeCompanionAcceptanceReceiptAdapter {
         expected: ExpectedCompanionAcceptance?,
         evaluatedAt: String?
     ): CompanionAcceptanceDecision {
+        if (!NativeCompanionAcceptanceReceipt.hasExpectedSourceAuthority(expected)) {
+            val validation = CompanionAcceptanceValidation(
+                accepted = false,
+                reason = "EXPECTED_SOURCE_AUTHORITY_INVALID"
+            )
+            return CompanionAcceptanceDecision(
+                validation,
+                CompanionTextEntryPlan(
+                    action = "PRESERVE_TYPED_SEARCH",
+                    reason = "COMPANION_ACCEPTANCE_${validation.reason}",
+                    acceptance = false
+                )
+            )
+        }
         val adaptation = adapt(raw)
         if (!adaptation.accepted || adaptation.receipt == null) {
             val validation = CompanionAcceptanceValidation(
