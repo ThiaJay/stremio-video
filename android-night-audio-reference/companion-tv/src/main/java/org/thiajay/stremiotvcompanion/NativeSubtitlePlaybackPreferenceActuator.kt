@@ -54,6 +54,7 @@ internal class NativeSubtitlePlaybackPreferenceActuator(
         val selectionOrigin: SelectionOrigin
     )
 
+    @ConsistentCopyVisibility
     data class Lease internal constructor(
         val trigger: Trigger,
         val action: Action,
