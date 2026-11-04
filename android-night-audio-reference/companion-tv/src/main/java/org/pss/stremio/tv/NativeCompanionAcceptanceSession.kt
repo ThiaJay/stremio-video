@@ -97,14 +97,14 @@ class NativeCompanionAcceptanceSession private constructor(
             expected: ExpectedCompanionAcceptance?,
             openedAt: String?
         ): NativeCompanionAcceptanceSession? {
-            if (expected == null) return null
+            if (!NativeCompanionAcceptanceReceipt.hasExpectedSourceAuthority(expected)) return null
             val openedAtMillis = try {
                 openedAt?.let { Instant.parse(it).toEpochMilli() }
             } catch (_: RuntimeException) {
                 null
             } ?: return null
             return NativeCompanionAcceptanceSession(
-                expected,
+                expected!!,
                 Thread.currentThread(),
                 openedAtMillis
             )
