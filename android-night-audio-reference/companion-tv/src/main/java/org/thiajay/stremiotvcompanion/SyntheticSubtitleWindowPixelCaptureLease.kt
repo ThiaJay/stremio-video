@@ -16,6 +16,7 @@ internal class SyntheticSubtitleWindowPixelCaptureLease(
         val cueRevision: Long
     )
 
+    @ConsistentCopyVisibility
     data class Lease internal constructor(
         val attemptId: Long,
         val context: Context
@@ -59,7 +60,7 @@ internal class SyntheticSubtitleWindowPixelCaptureLease(
         if (!ownsThread() || closed || active !== lease) return Resolution.STALE_IGNORED
         active = null
         return if (copySucceeded && currentContext == lease.context &&
-            currentContext != null && valid(currentContext)) {
+            valid(currentContext)) {
             Resolution.CURRENT_SUCCESS
         } else {
             Resolution.CURRENT_FAILURE
