@@ -70,6 +70,17 @@ class NativeCompanionAcceptanceSessionTest {
         assertNull(NativeCompanionAcceptanceSession.open(null, openedAt))
     }
 
+    @Test fun sessionRequiresExpectedReviewedExecutorAuthority() {
+        for (executor in listOf<String?>(null, "short", "B".repeat(64))) {
+            assertNull(
+                NativeCompanionAcceptanceSession.open(
+                    expected(executorSourceSha256 = executor),
+                    openedAt
+                )
+            )
+        }
+    }
+
     @Test fun sessionDiagnosticsExposeNoQueryOrDigest() {
         val expected = expected()
         val session = NativeCompanionAcceptanceSession.open(expected, openedAt)!!
@@ -131,8 +142,11 @@ class NativeCompanionAcceptanceSessionTest {
     private fun session() =
         NativeCompanionAcceptanceSession.open(expected(), openedAt)
 
-    private fun expected() = ExpectedCompanionAcceptance(
+    private fun expected(
+        executorSourceSha256: String? = "b".repeat(64)
+    ) = ExpectedCompanionAcceptance(
         contractSourceSha256 = source,
+        executorSourceSha256 = executorSourceSha256,
         deviceIdentityDigest = device,
         deviceModel = "AFTKRT",
         appPackage = "com.stremio.one",
