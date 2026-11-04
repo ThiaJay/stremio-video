@@ -14,6 +14,7 @@ class NativeCompanionAcceptanceReceiptTest {
 
     private fun expected(
         contractSourceSha256: String? = source,
+        executorSourceSha256: String? = executor,
         deviceIdentityDigest: String? = device,
         deviceModel: String? = "AFTKRT",
         appPackage: String? = "com.stremio.one",
@@ -21,6 +22,7 @@ class NativeCompanionAcceptanceReceiptTest {
         expectedTextSha256: String? = NativeCompanionAcceptanceReceipt.digestExpectedText("bounded query")
     ) = ExpectedCompanionAcceptance(
         contractSourceSha256,
+        executorSourceSha256,
         deviceIdentityDigest,
         deviceModel,
         appPackage,
@@ -129,6 +131,7 @@ class NativeCompanionAcceptanceReceiptTest {
             receipt(contractSourceSha256 = "A".repeat(64)),
             receipt(contractSourceSha256 = "d".repeat(64)),
             receipt(executorSourceSha256 = "short"),
+            receipt(executorSourceSha256 = "d".repeat(64)),
             receipt(executorReviewed = false),
             receipt(executorReviewed = null)
         )
@@ -136,6 +139,21 @@ class NativeCompanionAcceptanceReceiptTest {
             assertEquals(
                 "SOURCE_BINDING_NOT_VERIFIED",
                 NativeCompanionAcceptanceReceipt.validate(value, expected(), evaluatedAt).reason
+            )
+        }
+    }
+
+    @Test fun expectedReviewedExecutorBindingIsMandatory() {
+        val invalid = listOf(
+            expected(executorSourceSha256 = null),
+            expected(executorSourceSha256 = "short"),
+            expected(executorSourceSha256 = "B".repeat(64)),
+            expected(executorSourceSha256 = "d".repeat(64))
+        )
+        for (value in invalid) {
+            assertEquals(
+                "SOURCE_BINDING_NOT_VERIFIED",
+                NativeCompanionAcceptanceReceipt.validate(receipt(), value, evaluatedAt).reason
             )
         }
     }
@@ -329,7 +347,9 @@ class NativeCompanionAcceptanceReceiptTest {
         assertTrue("deviceIdentityDigest" in fields)
         val expectedFields = ExpectedCompanionAcceptance::class.java.declaredFields.map { it.name }
         assertFalse(expectedFields.any { it == "expectedText" || it == "query" })
+        assertTrue("executorSourceSha256" in expectedFields)
         assertTrue("expectedTextSha256" in expectedFields)
         assertFalse(expected().toString().contains(expected().expectedTextSha256!!))
+        assertFalse(expected().toString().contains(expected().executorSourceSha256!!))
     }
 }
