@@ -177,6 +177,32 @@ class MobileStoryOrderControllerTest {
         assertNull(controller.next("unknown"))
     }
 
+    @Test fun callerHintMutationCannotChangeBoundScreenGeneration() {
+        val mutableOrder = hints.storyOrder!!.toMutableList()
+        val controller = MobileStoryOrderController(
+            canonical,
+            StoryOrderHints(1, mutableOrder)
+        )
+
+        mutableOrder.clear()
+        mutableOrder += ancillarySpecial.id
+        val first = controller.present(MobileStoryOrderMode.STORY)!!
+        assertEquals(
+            listOf(regularOne.id, narrativeSpecial.id, regularTwo.id),
+            first.map { it.stableVideoId }
+        )
+        assertSame(narrativeSpecial, controller.next(regularOne.id))
+
+        mutableOrder.clear()
+        mutableOrder += listOf(regularTwo.id, regularOne.id)
+        val second = controller.present(MobileStoryOrderMode.STORY)!!
+        assertEquals(
+            listOf(regularOne.id, narrativeSpecial.id, regularTwo.id),
+            second.map { it.stableVideoId }
+        )
+        assertSame(regularTwo, controller.next(narrativeSpecial.id))
+    }
+
     @Test fun watchedRefreshRevokesRowsAndRebindsMarkersByStableId() {
         val controller = MobileStoryOrderController(canonical, hints)
         val stale = controller.present(MobileStoryOrderMode.STORY)!!.first()
