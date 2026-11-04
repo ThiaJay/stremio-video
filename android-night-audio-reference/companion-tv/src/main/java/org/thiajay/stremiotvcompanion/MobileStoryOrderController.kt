@@ -35,7 +35,7 @@ class MobileStoryOrderRow internal constructor(
  */
 class MobileStoryOrderController(
     canonical: List<CanonicalEpisode>,
-    private val hints: StoryOrderHints?,
+    hints: StoryOrderHints?,
     watchedStableIds: Set<String> = emptySet()
 ) {
     companion object {
@@ -77,6 +77,12 @@ class MobileStoryOrderController(
     private val controllerSeal = Any()
     private val canonicalSnapshot =
         StoryOrderContract.presentation(canonical, null, storyOrderSelected = false)
+    private val storySnapshot = when (
+        val resolved = StoryOrderContract.resolve(canonicalSnapshot, hints)
+    ) {
+        is StoryOrderResolution.Valid -> resolved.episodes
+        is StoryOrderResolution.CanonicalFallback -> null
+    }
     private var watchedSnapshot = snapshotWatchedIds(watchedStableIds, canonicalSnapshot)
     private val issued = LinkedHashMap<String, Issued>()
     private var activeEpisodes: List<CanonicalEpisode> = emptyList()
@@ -91,14 +97,13 @@ class MobileStoryOrderController(
 
         val episodes = when (mode) {
             MobileStoryOrderMode.CANONICAL -> canonicalSnapshot
-            MobileStoryOrderMode.STORY -> when (
-                val resolved = StoryOrderContract.resolve(canonicalSnapshot, hints)
-            ) {
-                is StoryOrderResolution.Valid -> {
+            MobileStoryOrderMode.STORY -> {
+                if (storySnapshot != null) {
                     effectiveStoryOrder = true
-                    resolved.episodes
+                    storySnapshot
+                } else {
+                    canonicalSnapshot
                 }
-                is StoryOrderResolution.CanonicalFallback -> canonicalSnapshot
             }
         }
         if (episodes.isEmpty()) return null
