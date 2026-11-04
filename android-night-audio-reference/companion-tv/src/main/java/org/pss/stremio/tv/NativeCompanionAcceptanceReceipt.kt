@@ -40,6 +40,7 @@ data class CompanionAcceptanceReceipt(
 
 data class ExpectedCompanionAcceptance(
     val contractSourceSha256: String?,
+    val executorSourceSha256: String?,
     val deviceIdentityDigest: String?,
     val deviceModel: String?,
     val appPackage: String?,
@@ -82,8 +83,11 @@ object NativeCompanionAcceptanceReceipt {
             return reject("UNSUPPORTED_RECEIPT_CONTRACT")
         }
         if (!isSha256(receipt.contractSourceSha256) ||
+            !isSha256(expected.contractSourceSha256) ||
             receipt.contractSourceSha256 != expected.contractSourceSha256 ||
             !isSha256(receipt.executorSourceSha256) ||
+            !isSha256(expected.executorSourceSha256) ||
+            receipt.executorSourceSha256 != expected.executorSourceSha256 ||
             receipt.executorReviewed != true
         ) {
             return reject("SOURCE_BINDING_NOT_VERIFIED")
@@ -198,6 +202,11 @@ object NativeCompanionAcceptanceReceipt {
     }
 
     private fun isSha256(value: String?) = value != null && sha256.matches(value)
+
+    internal fun hasExpectedSourceAuthority(expected: ExpectedCompanionAcceptance?) =
+        expected != null &&
+            isSha256(expected.contractSourceSha256) &&
+            isSha256(expected.executorSourceSha256)
 
     private fun exactText(value: String?) = value != null &&
         value.isNotEmpty() &&
