@@ -50,8 +50,8 @@ class CompanionTvTitleWatchedInstrumentationTest {
             assertNotNull("Synthetic series watched action was not uniquely rendered", button)
         }
         assertTrue(
-            "Synthetic watched window did not become visibly focused",
-            awaitVisibleWindowFocus(5_000L)
+            "Synthetic watched window did not obtain one stable visible view focus",
+            awaitStableVisibleWindowFocus(5_000L)
         )
         assertTrue(
             "Synthetic watched action did not receive real visible window focus",
@@ -127,16 +127,32 @@ class CompanionTvTitleWatchedInstrumentationTest {
         return snapshot
     }
 
-    private fun awaitVisibleWindowFocus(timeoutMs: Long): Boolean {
+    private fun awaitStableVisibleWindowFocus(timeoutMs: Long): Boolean {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
+        var stableFocusIdentity = 0
+        var stableSince = 0L
         while (SystemClock.uptimeMillis() < deadline) {
-            var focused = false
+            var focusedIdentity = 0
             scenario.onActivity { activity ->
                 val root = activity.window.decorView
-                focused = root.isShown && root.hasWindowFocus()
+                val focusedView = root.findFocus()
+                if (root.isShown && root.hasWindowFocus() &&
+                    focusedView?.isShown == true
+                ) {
+                    focusedIdentity = System.identityHashCode(focusedView)
+                }
             }
-            if (focused) return true
-            SystemClock.sleep(100L)
+            val now = SystemClock.uptimeMillis()
+            if (focusedIdentity == 0) {
+                stableFocusIdentity = 0
+                stableSince = 0L
+            } else if (focusedIdentity != stableFocusIdentity) {
+                stableFocusIdentity = focusedIdentity
+                stableSince = now
+            } else if (now - stableSince >= STABLE_WINDOW_FOCUS_MILLIS) {
+                return true
+            }
+            SystemClock.sleep(FOCUS_POLL_MILLIS)
         }
         return false
     }
@@ -201,5 +217,7 @@ class CompanionTvTitleWatchedInstrumentationTest {
         const val FUTURE_EPISODE = "local:mobile-watched:1:3"
         const val ANCILLARY_SPECIAL = "local:mobile-watched:0:99"
         const val REMOTE_MOVE_SETTLE_MILLIS = 50L
+        const val FOCUS_POLL_MILLIS = 50L
+        const val STABLE_WINDOW_FOCUS_MILLIS = 500L
     }
 }

@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 42834)
+Total output lines: 2758
+
 #!/usr/bin/env python3
 """Fail-closed, source-only safeguards for the isolated Android TV companion candidate."""
 from __future__ import annotations
@@ -1137,171 +1140,7 @@ if any(name not in mobile_title_widget_controller_test for name in [
     fail.append('native_mobile_title_widget_controller_regressions_missing')
 if ('class NativeMobileTitleWatchedViewPortRelay : NativeMobileTitleWatchedViewPort' not in title_watched_view_port_relay or
     'class NativeTvTitleWatchedViewPortRelay : NativeTvTitleWatchedViewPort' not in title_watched_view_port_relay):
-    fail.append('mobile_or_tv_title_view_port_relay_missing')
-if (title_watched_view_port_relay.count('if (delegate != null || view === this) return poison()') != 2 or
-    title_watched_view_port_relay.count('delegate = view') != 2):
-    fail.append('title_view_port_relay_one_time_bind_missing')
-if (title_watched_view_port_relay.count('Thread.currentThread() === ownerThread') != 2 or
-    title_watched_view_port_relay.count('fun close(): Boolean') != 2):
-    fail.append('title_view_port_relay_thread_or_close_guard_missing')
-if (title_watched_view_port_relay.count('if (!accepted) return poison()') != 4 or
-    title_watched_view_port_relay.count('catch (_: Exception)') != 2 or
-    title_watched_view_port_relay.count('catch (_: LinkageError)') != 2):
-    fail.append('title_view_port_relay_rejection_or_exception_poison_missing')
-if ('class AndroidMobileTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners or
-    'class AndroidTvTitleWatchedScreenOwner private constructor' not in android_title_watched_screen_owners):
-    fail.append('actual_android_title_screen_composition_owners_missing')
-if (android_title_watched_screen_owners.count('Looper.myLooper() !== Looper.getMainLooper()') != 4 or
-    android_title_watched_screen_owners.count('Thread.currentThread() === ownerThread') != 2):
-    fail.append('android_title_screen_main_owner_thread_gate_missing')
-if ('NativeMobileTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
-    'NativeTvTitleWatchedHostBinding(coordinator, account, relay)' not in android_title_watched_screen_owners or
-    'private var ready = relay.bind(port)' not in android_title_watched_screen_owners):
-    fail.append('android_title_screen_host_widget_composition_missing')
-if ('import org.pss.stremio.tv.CanonicalWatchedStatePort' not in android_title_watched_screen_owners or
-    android_title_watched_screen_owners.count('account: CanonicalWatchedStatePort') != 4 or
-    'account: StremioAccountPort' in android_title_watched_screen_owners):
-    fail.append('android_title_screen_canonical_readback_port_not_mandatory')
-if ('class SessionBoundCanonicalWatchedAccountAdapter' not in canonical_watched_account_adapter or
-    ': CanonicalWatchedStatePort' not in canonical_watched_account_adapter or
-    'interface CanonicalWatchedAccountHostPort' not in canonical_watched_account_adapter):
-    fail.append('session_bound_canonical_watched_account_adapter_missing')
-if ('val before = host.sessionEpoch()' not in canonical_watched_account_adapter or
-    'raw.sessionEpoch != before' not in canonical_watched_account_adapter or
-    'val after = host.sessionEpoch()' not in canonical_watched_account_adapter or
-    'after != before' not in canonical_watched_account_adapter):
-    fail.append('canonical_account_epoch_sandwich_missing')
-if ('raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.watchedVideoIds.toList())' not in
-        canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(it.toList())' not in canonical_watched_account_adapter or
-    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_host_collections_not_detached')
-if ('val resumeVideoId: String?' not in canonical_watched_account_adapter or
-    'val resumeTimeOffset: Long' not in canonical_watched_account_adapter or
-    'raw.resumeTimeOffset < 0L' not in canonical_watched_account_adapter or
-    'resumeVideoId = raw.resumeVideoId' not in canonical_watched_account_adapter or
-    'resumeTimeOffset = raw.resumeTimeOffset' not in canonical_watched_account_adapter or
-    'malformedResumeReadbackFailsClosedBeforeDispatch' not in canonical_watched_account_adapter_test):
-    fail.append('canonical_account_core_resume_readback_contract_missing')
-if ('message.keys != setOf("action", "args")' not in canonical_watched_account_adapter or
-    '"MarkAsWatched"' not in canonical_watched_account_adapter or
-    '"MarkSeasonAsWatched"' not in canonical_watched_account_adapter or
-    'else -> return null' not in canonical_watched_account_adapter):
-    fail.append('canonical_account_dispatch_not_narrowly_allowlisted')
-adapter_dispatch = canonical_watched_account_adapter[
-    canonical_watched_account_adapter.find('override fun dispatch('):
-    canonical_watched_account_adapter.find('fun close(): Boolean')
-]
-if ('latestLease = null' not in adapter_dispatch or
-    adapter_dispatch.find('latestLease = null') >
-        adapter_dispatch.find('host.dispatchTitleWatched(dispatchExpectation, command)')):
-    fail.append('canonical_account_lease_not_consumed_before_dispatch')
-if ('data class CanonicalWatchedDispatchExpectation(' not in canonical_watched_account_adapter or
-    'val snapshot: SeriesAccountSnapshot' not in canonical_watched_account_adapter or
-    'val readback: CanonicalWatchedStateReadback' not in canonical_watched_account_adapter or
-    'host.dispatchTitleWatched(dispatchExpectation, command)' not in canonical_watched_account_adapter or
-    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_atomic_complete_state_dispatch_missing')
-if ('Thread.currentThread() === ownerThread' not in canonical_watched_account_adapter or
-    'private val lifecycleLock = Any()' not in canonical_watched_account_adapter or
-    canonical_watched_account_adapter.count('synchronized(lifecycleLock)') != 4 or
-    '@Volatile\n    private var closed = false' not in canonical_watched_account_adapter or
-    'fun close(): Boolean = synchronized(lifecycleLock)' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_owner_thread_or_close_missing')
-if ('SessionBoundCanonicalWatchedAccountAdapter(' in java_text or
-    'CanonicalWatchedAccountHostPort' in java_text):
-    fail.append('canonical_account_adapter_wired_to_synthetic_activity')
-if ('latestLease = null\n        val observation = observeOrNull()' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_failed_refresh_retains_snapshot_lease')
-if ('if (observation == null || observation.identity != expected.identity) {' not in
-        canonical_watched_account_adapter or
-    'latestLease = null\n                return@synchronized null' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_failed_readback_retains_snapshot_lease')
-if ('val expected = latestLease ?: return@synchronized false\n        latestLease = null' not in
-        canonical_watched_account_adapter):
-    fail.append('canonical_account_dispatch_preconditions_retain_snapshot_lease')
-if ('private data class DispatchLease(' not in canonical_watched_account_adapter or
-    'latestLease = DispatchLease(observation.identity, observation.readback)' not in
-        canonical_watched_account_adapter or
-    'observation.readback != expected.readback' not in canonical_watched_account_adapter or
-    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState' not in
-        canonical_watched_account_adapter_test or
-    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch' not in
-        canonical_watched_account_adapter_test):
-    fail.append('canonical_account_watched_resume_dispatch_lease_missing')
-if any(name not in canonical_watched_account_adapter_test for name in [
-    'detachesSnapshotAndWatchedIdsFromHostCollections',
-    'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease',
-    'canonicalReadbackRefreshRebindsDispatchLeaseToLatestState',
-    'watchedOrResumeDriftAfterReadbackRefusesBeforeHostDispatch',
-    'atomicHostExpectationRejectsSameEpochCallbackBoundaryDrift',
-    'watchedReadbackRequiresMatchingObservedSnapshot',
-    'failedSnapshotRefreshCannotReviveEarlierLease',
-    'mismatchedReadbackCannotReviveEarlierLeaseAfterIdentityAba',
-    'failedDispatchPreconditionsConsumeLeaseBeforeIdentityAba',
-    'dispatchAcceptsOnlyExactTitleWatchedCommands',
-    'dispatchConsumesSnapshotLeaseBeforeRejectedHostCall',
-    'dispatchBindsHostCallToObservedSessionEpoch',
-    'sessionEpochDriftFailsClosed',
-    'closedAdapterNeverTouchesHostCallbacks',
-    'ownedScreenConstructionExceptionRevokesAdapterWithoutHostAccess',
-    'ownedScreenNullRevokesButSuccessfulConstructionTransfersLifecycle',
-    'externalScreenConstructionFailuresAreContainedWithoutOwnership',
-    'foreignThreadCloseRevokesWithoutHostAccess',
-    'foreignCloseWaitsForInFlightOwnerDispatchThenRevokes',
-    'screenOwnedLeaseForeignRevokeStopsAccountWithoutHostAccess',
-    'externalScreenAccountLeaseNeverOwnsCallerPort',
-    'screenOwnedLeaseTerminationRequestIsStickyAndRevokesAccount',
-    'externalScreenLeaseTerminationNeverOwnsCallerPort',
-    'throwingHostCollectionsAndCallbacksFailClosed'
-]):
-    fail.append('canonical_account_adapter_regressions_missing')
-if (android_title_watched_screen_owners.count('pendingOutcome != null) return false') != 2 or
-    android_title_watched_screen_owners.count('val outcome = host.activate(') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = outcome') != 2):
-    fail.append('android_title_screen_one_outcome_mailbox_missing')
-if (android_title_watched_screen_owners.count('fun consumeOutcome()') != 2 or
-    android_title_watched_screen_owners.count('pendingOutcome = null') < 8 or
-    android_title_watched_screen_owners.count(
-        'ownedAccountLease.isTerminationRequested() || !host.isOperational()'
-    ) != 2 or
-    android_title_watched_screen_owners.count('return outcome') != 4):
-    fail.append('android_title_screen_outcome_consumption_missing')
-if (android_title_watched_screen_owners.count('val hostClosed = host.close()') != 2 or
-    android_title_watched_screen_owners.count('val relayClosed = relay.close()') != 2):
-    fail.append('android_title_screen_lifecycle_close_missing')
-if (android_title_watched_screen_owners.count(
-        'val rendered = host.render(seasonNumber)'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'if (!rendered && !host.isOperational()) poison()'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'if (!host.isOperational()) {\n            ownedAccountLease.requestTermination()'
-    ) != 2):
-    fail.append('android_title_screen_fatal_host_liveness_not_propagated')
-if (android_title_watched_screen_owners.count('accountHost: CanonicalWatchedAccountHostPort') != 2 or
-    android_title_watched_screen_owners.count(
-        'CanonicalWatchedScreenConstructionBoundary.owned(accountHost)'
-    ) != 2 or
-    android_title_watched_screen_owners.count(
-        'CanonicalWatchedScreenConstructionBoundary.external'
-    ) != 2):
-    fail.append('android_title_screen_owned_account_host_overloads_missing')
-if ('internal object CanonicalWatchedScreenConstructionBoundary' not in
-        canonical_watched_account_adapter or
-    'if (owner == null) account.close()' not in canonical_watched_account_adapter or
-    'catch (_: Exception)' not in canonical_watched_account_adapter or
-    'catch (_: LinkageError)' not in canonical_watched_account_adapter):
-    fail.append('android_title_screen_construction_failure_boundary_missing')
-if ('class CanonicalWatchedScreenOwnedAccountLease' not in
+    fail.append('mobile_or_tv_title_vi…2834 tokens truncated… ('class CanonicalWatchedScreenOwnedAccountLease' not in
         canonical_watched_account_adapter or
     'private val terminationRequested = AtomicBoolean(false)' not in
         canonical_watched_account_adapter or
@@ -2614,9 +2453,13 @@ if any(x in title_watched_instrumentation for x in [
 ]):
     fail.append('synthetic_title_watched_instrumentation_forbidden_surface')
 if not all(x in title_watched_instrumentation for x in [
-    'awaitVisibleWindowFocus(5_000L)',
-    'root.isShown && root.hasWindowFocus()',
-    'SystemClock.sleep(100L)',
+    'awaitStableVisibleWindowFocus(5_000L)',
+    'root.isShown && root.hasWindowFocus() &&',
+    'focusedView?.isShown == true',
+    'System.identityHashCode(focusedView)',
+    'now - stableSince >= STABLE_WINDOW_FOCUS_MILLIS',
+    'STABLE_WINDOW_FOCUS_MILLIS = 500L',
+    'SystemClock.sleep(FOCUS_POLL_MILLIS)',
     'awaitRemoteFocus(MARK_SERIES_WATCHED, 64)',
     'awaitRemoteFocus(MARK_SERIES_UNWATCHED, 64)',
     'awaitRemoteDialogFocus(CONFIRM, 8)',
