@@ -40,7 +40,7 @@ class CompanionTvStoryOrderInstrumentationTest {
     @Test
     fun testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30() {
         val canonical = awaitStoryStatus(CANONICAL_LABEL, 5_000L)
-        assertStableWatchedMarkers(canonical, shouldContainAncillary = true)
+        assertNoWatchedMarkers(canonical, shouldContainAncillary = true)
         scenario.onActivity { activity ->
             val toggle = findViews(activity.window.decorView)
                 .filterIsInstance<Button>()
@@ -64,8 +64,9 @@ class CompanionTvStoryOrderInstrumentationTest {
         assertTrue(selected, selected.contains(REGULAR_EPISODE_1))
         assertTrue(selected, selected.contains(NARRATIVE_SPECIAL))
         assertTrue(selected, selected.contains(REGULAR_EPISODE_2))
+        assertTrue(selected, selected.contains(FUTURE_EPISODE))
         assertFalse(selected, selected.contains(ANCILLARY_SPECIAL))
-        assertStableWatchedMarkers(selected, shouldContainAncillary = false)
+        assertNoWatchedMarkers(selected, shouldContainAncillary = false)
 
         assertTrue(
             "Synthetic Next Story action did not receive real visible window focus",
@@ -77,17 +78,19 @@ class CompanionTvStoryOrderInstrumentationTest {
         val advanced = awaitStoryStatus(ADVANCED_STABLE_ID, 5_000L)
         assertTrue(advanced, advanced.contains(ORIGINAL_OBJECT_MESSAGE))
         assertTrue(advanced, advanced.contains(NARRATIVE_SPECIAL))
+        assertTrue(advanced, advanced.contains(FUTURE_EPISODE))
         assertFalse(advanced, advanced.contains(ANCILLARY_SPECIAL))
-        assertStableWatchedMarkers(advanced, shouldContainAncillary = false)
+        assertNoWatchedMarkers(advanced, shouldContainAncillary = false)
     }
 
-    private fun assertStableWatchedMarkers(
+    private fun assertNoWatchedMarkers(
         snapshot: String,
         shouldContainAncillary: Boolean
     ) {
-        assertTrue(snapshot, snapshot.contains(WATCHED_NARRATIVE_SPECIAL))
-        assertTrue(snapshot, snapshot.contains(WATCHED_REGULAR_EPISODE_2))
         assertFalse(snapshot, snapshot.contains(WATCHED_REGULAR_EPISODE_1))
+        assertFalse(snapshot, snapshot.contains(WATCHED_NARRATIVE_SPECIAL))
+        assertFalse(snapshot, snapshot.contains(WATCHED_REGULAR_EPISODE_2))
+        assertFalse(snapshot, snapshot.contains(WATCHED_FUTURE_EPISODE))
         assertFalse(snapshot, snapshot.contains(WATCHED_ANCILLARY_SPECIAL))
         if (shouldContainAncillary) {
             assertTrue(snapshot, snapshot.contains(ANCILLARY_SPECIAL))
@@ -161,19 +164,23 @@ class CompanionTvStoryOrderInstrumentationTest {
         const val CANONICAL_LABEL = "Presentation: Canonical"
         const val STORY_LABEL = "Presentation: Story Order"
         const val NEXT_STORY_LABEL = "Next Story item (local metadata only)"
-        const val REGULAR_EPISODE_1 = "local:story:1:1"
-        const val NARRATIVE_SPECIAL = "local:story:0:2"
-        const val REGULAR_EPISODE_2 = "local:story:1:2"
-        const val ANCILLARY_SPECIAL = "local:story:0:99"
+        const val REGULAR_EPISODE_1 = "local:mobile-watched:1:1"
+        const val NARRATIVE_SPECIAL = "local:mobile-watched:0:2"
+        const val REGULAR_EPISODE_2 = "local:mobile-watched:1:2"
+        const val FUTURE_EPISODE = "local:mobile-watched:1:3"
+        const val ANCILLARY_SPECIAL = "local:mobile-watched:0:99"
         const val WATCHED_NARRATIVE_SPECIAL =
-            "local:story:0:2 [S0 E2] • Watched"
+            "local:mobile-watched:0:2 [S0 E2] • Watched"
         const val WATCHED_REGULAR_EPISODE_2 =
-            "local:story:1:2 [S1 E2] • Watched"
+            "local:mobile-watched:1:2 [S1 E2] • Watched"
         const val WATCHED_REGULAR_EPISODE_1 =
-            "local:story:1:1 [S1 E1] • Watched"
+            "local:mobile-watched:1:1 [S1 E1] • Watched"
+        const val WATCHED_FUTURE_EPISODE =
+            "local:mobile-watched:1:3 [S1 E3] • Watched"
         const val WATCHED_ANCILLARY_SPECIAL =
-            "local:story:0:99 [S0 E99] • Watched"
-        const val ADVANCED_STABLE_ID = "Selected stable ID: local:story:0:2"
+            "local:mobile-watched:0:99 [S0 E99] • Watched"
+        const val ADVANCED_STABLE_ID =
+            "Selected stable ID: local:mobile-watched:0:2"
         const val ORIGINAL_OBJECT_MESSAGE =
             "Resolved the original canonical object by stable ID."
     }

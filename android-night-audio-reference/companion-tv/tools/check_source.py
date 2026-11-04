@@ -2604,7 +2604,12 @@ if not all(x in title_watched_instrumentation for x in [
     'local:mobile-watched:0:99',
     'assertTrue(status, status.contains(NARRATIVE_SPECIAL))',
     'assertFalse(status, status.contains(FUTURE_EPISODE))',
-    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))'
+    'assertFalse(status, status.contains(ANCILLARY_SPECIAL))',
+    'assertStoryMarkers(',
+    'expectedWatched = setOf(',
+    'activity.boundedStoryOrderRuntimeStatusForInstrumentation()',
+    'snapshot.contains(marker) == expectedWatched.contains(id)',
+    'assertStoryMarkers(expectedWatched = emptySet())'
 ]):
     fail.append('synthetic_title_watched_api30_instrumentation_missing')
 if any(x in title_watched_instrumentation for x in [
@@ -2679,8 +2684,14 @@ if not all(x in java_text for x in [
     'boundedStoryOrderRuntimeStatusForInstrumentation()',
     'storyOrderToggle.parent !== controls',
     'storyOrderSummary.parent !== controls',
-    'STORY_WATCHED_IDS.contains(it.id)',
-    'No player, account or mutable watched-state binding.',
+    'val readbackIds = watchedHost.watchedIds().toSet()',
+    'it.size <= STORY_CANONICAL.size && canonicalIds.containsAll(it)',
+    'watchedIds.contains(it.id)',
+    'Markers reflect canonical local watched readback only.',
+    'Watched markers held because local readback left the canonical ID set.',
+    'No player, account or production watched-state binding.',
+    'outcome == NativeTvTitleWatchedOutcome.APPLIED',
+    'Story Order markers refreshed from canonical local watched readback.',
     'it.length <= 4_096'
 ]):
     fail.append('synthetic_story_order_bounded_status_surface_missing')
@@ -2696,15 +2707,17 @@ if not all(x in story_order_instrumentation for x in [
     'Presentation: Canonical',
     'Presentation: Story Order',
     'Next Story item (local metadata only)',
-    'local:story:1:1',
-    'local:story:0:2',
-    'local:story:1:2',
-    'local:story:0:99',
-    'assertStableWatchedMarkers(canonical, shouldContainAncillary = true)',
-    'assertStableWatchedMarkers(selected, shouldContainAncillary = false)',
-    'assertStableWatchedMarkers(advanced, shouldContainAncillary = false)',
-    'local:story:0:2 [S0 E2] • Watched',
-    'local:story:1:2 [S1 E2] • Watched',
+    'local:mobile-watched:1:1',
+    'local:mobile-watched:0:2',
+    'local:mobile-watched:1:2',
+    'local:mobile-watched:1:3',
+    'local:mobile-watched:0:99',
+    'assertNoWatchedMarkers(canonical, shouldContainAncillary = true)',
+    'assertNoWatchedMarkers(selected, shouldContainAncillary = false)',
+    'assertNoWatchedMarkers(advanced, shouldContainAncillary = false)',
+    'local:mobile-watched:0:2 [S0 E2] • Watched',
+    'local:mobile-watched:1:2 [S1 E2] • Watched',
+    'local:mobile-watched:1:3 [S1 E3] • Watched',
     'Resolved the original canonical object by stable ID.'
 ]):
     fail.append('synthetic_story_order_api30_instrumentation_missing')

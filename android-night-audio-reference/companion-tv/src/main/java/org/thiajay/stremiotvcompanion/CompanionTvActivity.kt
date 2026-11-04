@@ -395,9 +395,9 @@ class CompanionTvActivity : Activity() {
         button("Night Audio Strong") { setNightAudio(PcmDynamicsProcessor.Strength.STRONG, "Strong") }
         button("Stop playback and reset Night Audio") { stopFixture() }
         small(
-            "Story Order below uses synthetic local metadata and fixed local watched " +
-                "markers only. It cannot read a Stremio catalogue, start a stream or " +
-                "read or change account watched state."
+            "Story Order below uses synthetic local metadata and canonical local " +
+                "watched readback only. It cannot read a Stremio catalogue, start a " +
+                "stream or read or change account watched state."
         )
         storyOrderToggle = button("Presentation: Canonical") {
             storyOrderSelected = !storyOrderSelected
@@ -775,6 +775,11 @@ class CompanionTvActivity : Activity() {
     }
 
     private fun updateStoryOrderDemo(message: String? = null) {
+        val canonicalIds = STORY_CANONICAL.mapTo(LinkedHashSet()) { it.id }
+        val readbackIds = watchedHost.watchedIds().toSet()
+        val watchedIds = readbackIds.takeIf {
+            it.size <= STORY_CANONICAL.size && canonicalIds.containsAll(it)
+        } ?: emptySet()
         val visible = StoryOrderContract.presentation(
             STORY_CANONICAL,
             STORY_HINTS,
@@ -786,14 +791,19 @@ class CompanionTvActivity : Activity() {
             "Presentation: Canonical"
         }
         val sequence = visible.joinToString("  →  ") {
-            val watched = if (STORY_WATCHED_IDS.contains(it.id)) " • Watched" else ""
+            val watched = if (watchedIds.contains(it.id)) " • Watched" else ""
             "${it.id} [S${it.season} E${it.episode ?: "?"}]$watched"
         }
         storyOrderSummary.text = listOfNotNull(
             message,
             "Selected stable ID: $storyDemoCurrentId",
             "Visible local sequence: $sequence",
-            "No player, account or mutable watched-state binding."
+            if (watchedIds.size == readbackIds.size) {
+                "Markers reflect canonical local watched readback only."
+            } else {
+                "Watched markers held because local readback left the canonical ID set."
+            },
+            "No player, account or production watched-state binding."
         ).joinToString("\n")
     }
 
@@ -831,6 +841,11 @@ class CompanionTvActivity : Activity() {
             watchedStatus.text =
                 result + "\nSynthetic watched IDs: " +
                     watchedHost.watchedIds().ifEmpty { listOf("none") }.joinToString()
+            if (outcome == NativeTvTitleWatchedOutcome.APPLIED) {
+                updateStoryOrderDemo(
+                    "Story Order markers refreshed from canonical local watched readback."
+                )
+            }
             if (!current.render(1)) {
                 watchedStatus.text =
                     watchedStatus.text.toString() +
@@ -1007,22 +1022,20 @@ class CompanionTvActivity : Activity() {
         private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS =
             "synthetic_tv_subtitle_state_v1"
         private val STORY_CANONICAL = listOf(
-            CanonicalEpisode("local:story:1:1", 1, 1, "Episode one"),
-            CanonicalEpisode("local:story:0:2", 0, 2, "Narrative special"),
-            CanonicalEpisode("local:story:1:2", 1, 2, "Episode two"),
-            CanonicalEpisode("local:story:0:99", 0, 99, "Ancillary extra")
+            CanonicalEpisode("local:mobile-watched:1:1", 1, 1, "Episode one"),
+            CanonicalEpisode("local:mobile-watched:0:2", 0, 2, "Narrative special"),
+            CanonicalEpisode("local:mobile-watched:1:2", 1, 2, "Episode two"),
+            CanonicalEpisode("local:mobile-watched:1:3", 1, 3, "Episode three (future)"),
+            CanonicalEpisode("local:mobile-watched:0:99", 0, 99, "Ancillary extra")
         )
         private val STORY_HINTS = StoryOrderHints(
             storyOrderVersion = 1,
             storyOrder = listOf(
-                "local:story:1:1",
-                "local:story:0:2",
-                "local:story:1:2"
+                "local:mobile-watched:1:1",
+                "local:mobile-watched:0:2",
+                "local:mobile-watched:1:2",
+                "local:mobile-watched:1:3"
             )
-        )
-        private val STORY_WATCHED_IDS = setOf(
-            "local:story:0:2",
-            "local:story:1:2"
         )
     }
 

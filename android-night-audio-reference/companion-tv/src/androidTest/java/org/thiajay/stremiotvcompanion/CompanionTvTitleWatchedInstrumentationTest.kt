@@ -69,6 +69,13 @@ class CompanionTvTitleWatchedInstrumentationTest {
         assertTrue(status, status.contains(NARRATIVE_SPECIAL))
         assertFalse(status, status.contains(FUTURE_EPISODE))
         assertFalse(status, status.contains(ANCILLARY_SPECIAL))
+        assertStoryMarkers(
+            expectedWatched = setOf(
+                EXPECTED_EPISODE_1,
+                NARRATIVE_SPECIAL,
+                EXPECTED_EPISODE_2
+            )
+        )
 
         var oppositeActionReady = false
         scenario.onActivity { activity ->
@@ -102,6 +109,7 @@ class CompanionTvTitleWatchedInstrumentationTest {
         assertFalse(cleared, cleared.contains(NARRATIVE_SPECIAL))
         assertFalse(cleared, cleared.contains(FUTURE_EPISODE))
         assertFalse(cleared, cleared.contains(ANCILLARY_SPECIAL))
+        assertStoryMarkers(expectedWatched = emptySet())
 
         assertTrue(
             "Canonical unwatched readback did not re-arm a remotely focusable watched action",
@@ -125,6 +133,27 @@ class CompanionTvTitleWatchedInstrumentationTest {
                 snapshot.replace('\n', ' ')
         )
         return snapshot
+    }
+
+    private fun assertStoryMarkers(expectedWatched: Set<String>) {
+        var snapshot = ""
+        scenario.onActivity { activity ->
+            snapshot = activity.boundedStoryOrderRuntimeStatusForInstrumentation()
+                ?: "STORY_ORDER_RUNTIME_STATUS_UNAVAILABLE"
+        }
+        val byId = mapOf(
+            EXPECTED_EPISODE_1 to "$EXPECTED_EPISODE_1 [S1 E1] • Watched",
+            NARRATIVE_SPECIAL to "$NARRATIVE_SPECIAL [S0 E2] • Watched",
+            EXPECTED_EPISODE_2 to "$EXPECTED_EPISODE_2 [S1 E2] • Watched",
+            FUTURE_EPISODE to "$FUTURE_EPISODE [S1 E3] • Watched",
+            ANCILLARY_SPECIAL to "$ANCILLARY_SPECIAL [S0 E99] • Watched"
+        )
+        for ((id, marker) in byId) {
+            assertTrue(
+                "Wrong TV Story Order watched marker for $id: $snapshot",
+                snapshot.contains(marker) == expectedWatched.contains(id)
+            )
+        }
     }
 
     private fun awaitStableVisibleWindowFocus(timeoutMs: Long): Boolean {
