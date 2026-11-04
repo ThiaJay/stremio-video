@@ -207,6 +207,44 @@ class MobileStoryOrderViewHostTest {
         assertNull(host.next(first.id))
     }
 
+    @Test fun watchedRefreshClearsOldRowsAndRendersOneExactReplacement() {
+        val view = RecordingView()
+        val host = MobileStoryOrderHostBinding(canonical, hints, view)
+        assertTrue(host.render(MobileStoryOrderMode.STORY))
+        val stale = view.actions.first()
+
+        assertTrue(
+            host.refreshWatchedStableIds(
+                setOf(special.id, second.id),
+                MobileStoryOrderMode.STORY
+            )
+        )
+        assertEquals(
+            mapOf(first.id to false, special.id to true, second.id to true),
+            view.actions.associate { it.stableVideoId to it.watched }
+        )
+        assertNull(
+            host.activate(
+                stale,
+                first.id,
+                MobileStoryOrderController.SEMANTIC_SELECTION
+            )
+        )
+        assertTrue(view.actions.isEmpty())
+
+        val invalidView = RecordingView()
+        val invalidHost = MobileStoryOrderHostBinding(canonical, hints, invalidView)
+        assertTrue(invalidHost.render(MobileStoryOrderMode.STORY))
+        assertFalse(
+            invalidHost.refreshWatchedStableIds(
+                setOf("series:unknown"),
+                MobileStoryOrderMode.STORY
+            )
+        )
+        assertTrue(invalidView.actions.isEmpty())
+        assertFalse(invalidHost.isOperational())
+    }
+
     @Test fun oversizedMobilePresentationFailsClosedBeforeView() {
         val oversized = List(MobileStoryOrderHostBinding.MAX_PRESENTED_ROWS + 1) { index ->
             CanonicalEpisode("series:1:" + index, 1, index + 1, "Episode " + index)

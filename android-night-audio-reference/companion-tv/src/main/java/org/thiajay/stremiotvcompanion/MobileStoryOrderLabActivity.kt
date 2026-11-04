@@ -63,6 +63,19 @@ class MobileStoryOrderLabActivity : Activity() {
                     watchedStatus.text =
                         result + "\nSynthetic watched IDs: " +
                             watchedHost.watchedIds().ifEmpty { listOf("none") }.joinToString()
+                    if (outcome == NativeMobileTitleWatchedOutcome.APPLIED) {
+                        val currentStory = storyOwner
+                        if (currentStory != null && !currentStory.refreshWatchedStableIds(
+                                watchedHost.watchedIds().toSet(),
+                                MobileStoryOrderMode.STORY
+                            )) {
+                            storyStatus.text =
+                                "Story Order lab closed after watched-state refresh was refused. " +
+                                    "No external action was attempted."
+                            currentStory.close()
+                            storyOwner = null
+                        }
+                    }
                     if (!current.render(1)) {
                         watchedStatus.text =
                             watchedStatus.text.toString() +
@@ -169,7 +182,7 @@ class MobileStoryOrderLabActivity : Activity() {
             storyRows,
             SYNTHETIC_CANONICAL,
             SYNTHETIC_HINTS,
-            SYNTHETIC_STORY_WATCHED_IDS
+            watchedHost.watchedIds().toSet()
         )
         if (createdStory == null || !createdStory.render(MobileStoryOrderMode.STORY)) {
             createdStory?.close()
@@ -259,22 +272,20 @@ class MobileStoryOrderLabActivity : Activity() {
             "synthetic_mobile_subtitle_receipt_v1"
         private const val SYNTHETIC_SUBTITLE_STATE_PREFS =
             "synthetic_mobile_subtitle_state_v1"
-        private val SYNTHETIC_STORY_WATCHED_IDS = setOf(
-            "local:mobile-story:0:2",
-            "local:mobile-story:1:2"
-        )
         private val SYNTHETIC_CANONICAL = listOf(
-            CanonicalEpisode("local:mobile-story:1:1", 1, 1, "Episode one"),
-            CanonicalEpisode("local:mobile-story:0:2", 0, 2, "Narrative special"),
-            CanonicalEpisode("local:mobile-story:1:2", 1, 2, "Episode two"),
-            CanonicalEpisode("local:mobile-story:0:99", 0, 99, "Ancillary extra")
+            CanonicalEpisode("local:mobile-watched:1:1", 1, 1, "Episode one"),
+            CanonicalEpisode("local:mobile-watched:0:2", 0, 2, "Narrative special"),
+            CanonicalEpisode("local:mobile-watched:1:2", 1, 2, "Episode two"),
+            CanonicalEpisode("local:mobile-watched:1:3", 1, 3, "Episode three (future)"),
+            CanonicalEpisode("local:mobile-watched:0:99", 0, 99, "Ancillary extra")
         )
         private val SYNTHETIC_HINTS = StoryOrderHints(
             storyOrderVersion = 1,
             storyOrder = listOf(
-                "local:mobile-story:1:1",
-                "local:mobile-story:0:2",
-                "local:mobile-story:1:2"
+                "local:mobile-watched:1:1",
+                "local:mobile-watched:0:2",
+                "local:mobile-watched:1:2",
+                "local:mobile-watched:1:3"
             )
         )
     }

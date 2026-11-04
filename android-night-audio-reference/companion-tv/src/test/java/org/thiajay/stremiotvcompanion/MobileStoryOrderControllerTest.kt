@@ -177,6 +177,29 @@ class MobileStoryOrderControllerTest {
         assertNull(controller.next("unknown"))
     }
 
+    @Test fun watchedRefreshRevokesRowsAndRebindsMarkersByStableId() {
+        val controller = MobileStoryOrderController(canonical, hints)
+        val stale = controller.present(MobileStoryOrderMode.STORY)!!.first()
+
+        assertTrue(controller.refreshWatchedStableIds(setOf(narrativeSpecial.id, regularTwo.id)))
+        assertNull(
+            controller.select(
+                stale,
+                regularOne.id,
+                MobileStoryOrderController.SEMANTIC_SELECTION
+            )
+        )
+        val refreshed = controller.present(MobileStoryOrderMode.STORY)!!
+        assertEquals(
+            mapOf(regularOne.id to false, narrativeSpecial.id to true, regularTwo.id to true),
+            refreshed.associate { it.stableVideoId to it.watched }
+        )
+
+        assertTrue(!controller.refreshWatchedStableIds(setOf("series:unknown")))
+        assertTrue(!controller.isOperational())
+        assertNull(controller.present(MobileStoryOrderMode.STORY))
+    }
+
     @Test fun ownerThreadAndCloseFailClosed() {
         val controller = MobileStoryOrderController(canonical, hints)
         val foreignPresent = AtomicReference<List<MobileStoryOrderRow>?>()

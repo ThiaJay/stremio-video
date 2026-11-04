@@ -86,6 +86,17 @@ class AndroidMobileStoryOrderScreenOwner private constructor(
         return host.next(currentVideoId)
     }
 
+    fun refreshWatchedStableIds(
+        watchedStableIds: Set<String>,
+        mode: MobileStoryOrderMode
+    ): Boolean {
+        if (!onMainOwnerThread() || closed || !ready || pendingSelection != null) {
+            return false
+        }
+        if (!host.refreshWatchedStableIds(watchedStableIds, mode)) return poison()
+        return true
+    }
+
     fun close(): Boolean {
         if (!onMainOwnerThread() || closed) return false
         closed = true

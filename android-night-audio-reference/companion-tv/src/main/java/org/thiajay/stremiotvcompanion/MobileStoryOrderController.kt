@@ -77,7 +77,7 @@ class MobileStoryOrderController(
     private val controllerSeal = Any()
     private val canonicalSnapshot =
         StoryOrderContract.presentation(canonical, null, storyOrderSelected = false)
-    private val watchedSnapshot = snapshotWatchedIds(watchedStableIds, canonicalSnapshot)
+    private var watchedSnapshot = snapshotWatchedIds(watchedStableIds, canonicalSnapshot)
     private val issued = LinkedHashMap<String, Issued>()
     private var activeEpisodes: List<CanonicalEpisode> = emptyList()
     private var effectiveStoryOrder = false
@@ -151,6 +151,24 @@ class MobileStoryOrderController(
         return activeEpisodes[index + 1]
     }
 
+    /**
+     * Replace only the watched-marker projection for the same canonical screen.
+     *
+     * A refresh revokes every issued row and continuation generation before the
+     * new stable-ID set is admitted. Unknown, malformed, oversized or unstable
+     * input permanently closes this controller rather than retaining a stale
+     * account projection.
+     */
+    fun refreshWatchedStableIds(source: Set<String>): Boolean {
+        if (!onOwnerThread() || closed) return false
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+        val refreshed = snapshotWatchedIds(source, canonicalSnapshot) ?: return poison()
+        watchedSnapshot = refreshed
+        return true
+    }
+
     fun close(): Boolean {
         if (!onOwnerThread() || closed) return false
         closed = true
@@ -161,6 +179,15 @@ class MobileStoryOrderController(
     }
 
     fun isOperational(): Boolean = onOwnerThread() && !closed
+
+    private fun poison(): Boolean {
+        closed = true
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+        watchedSnapshot = null
+        return false
+    }
 
     private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 }

@@ -125,6 +125,22 @@ class MobileStoryOrderHostBinding(
         return controller.next(currentVideoId)
     }
 
+    /**
+     * Atomically revoke the visible generation, admit an exact stable-ID watched
+     * projection and render a replacement presentation. A failed refresh never
+     * leaves the previous rows actionable or visible.
+     */
+    fun refreshWatchedStableIds(
+        watchedStableIds: Set<String>,
+        mode: MobileStoryOrderMode
+    ): Boolean {
+        if (!onOwnerThread() || closed || rendering) return false
+        issued.clear()
+        if (!clearOrFalse()) return poison()
+        if (!controller.refreshWatchedStableIds(watchedStableIds)) return poison()
+        return render(mode)
+    }
+
     fun close(): Boolean {
         if (!onOwnerThread() || closed || rendering) return false
         closed = true

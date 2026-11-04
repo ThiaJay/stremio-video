@@ -56,14 +56,13 @@ class MobileStoryOrderInstrumentationTest {
                 .filterIsInstance<Button>()
                 .map { it.text.toString() }
             assertTrue(labels.toString(), labels.any { it.contains(REGULAR_EPISODE_1) })
-            assertTrue(labels.toString(), labels.any {
-                it.contains(NARRATIVE_SPECIAL_TITLE) && it.contains(WATCHED_MARKER)
-            })
-            assertTrue(labels.toString(), labels.any {
-                it.contains(REGULAR_EPISODE_2) && it.contains(WATCHED_MARKER)
-            })
+            assertTrue(labels.toString(), labels.any { it.contains(NARRATIVE_SPECIAL_TITLE) })
+            assertTrue(labels.toString(), labels.any { it.contains(REGULAR_EPISODE_2) })
             assertFalse(labels.toString(), labels.any {
-                it.contains(REGULAR_EPISODE_1) && it.contains(WATCHED_MARKER)
+                (it.contains(REGULAR_EPISODE_1) ||
+                    it.contains(NARRATIVE_SPECIAL_TITLE) ||
+                    it.contains(REGULAR_EPISODE_2) ||
+                    it.contains(FUTURE_EPISODE)) && it.contains(WATCHED_MARKER)
             })
             if (shouldContainAncillary) {
                 assertTrue(labels.toString(), labels.any { it.contains(ANCILLARY_TITLE) })
@@ -121,14 +120,15 @@ class MobileStoryOrderInstrumentationTest {
         const val SHOW_STORY_ORDER = "Show story order"
         const val REGULAR_EPISODE_1 = "S1 E1  Episode one"
         const val NARRATIVE_SPECIAL_TITLE = "Narrative special"
-        const val NARRATIVE_SPECIAL_LABEL = "S0 E2  Narrative special  • Watched"
+        const val NARRATIVE_SPECIAL_LABEL = "S0 E2  Narrative special"
         const val REGULAR_EPISODE_2 = "S1 E2  Episode two"
+        const val FUTURE_EPISODE = "S1 E3  Episode three (future)"
         const val ANCILLARY_TITLE = "Ancillary extra"
         const val WATCHED_MARKER = "• Watched"
         const val SELECTED_STABLE_ID =
-            "Selected exact synthetic episode: local:mobile-story:0:2"
+            "Selected exact synthetic episode: local:mobile-watched:0:2"
         const val ORIGINAL_OBJECT_MESSAGE =
             "Selection resolved the original synthetic canonical object by stable ID."
-        const val ANCILLARY_STABLE_ID = "local:mobile-story:0:99"
+        const val ANCILLARY_STABLE_ID = "local:mobile-watched:0:99"
     }
 }
