@@ -158,6 +158,7 @@ class CompanionTvTitleWatchedInstrumentationTest {
             if (move < maximumMoves) {
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
                 instrumentation.waitForIdleSync()
+                SystemClock.sleep(REMOTE_MOVE_SETTLE_MILLIS)
             }
         }
         return false
@@ -175,6 +176,7 @@ class CompanionTvTitleWatchedInstrumentationTest {
             if (move < maximumMoves) {
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
                 instrumentation.waitForIdleSync()
+                SystemClock.sleep(REMOTE_MOVE_SETTLE_MILLIS)
             }
         }
         return false
@@ -198,5 +200,6 @@ class CompanionTvTitleWatchedInstrumentationTest {
         const val NARRATIVE_SPECIAL = "local:mobile-watched:0:2"
         const val FUTURE_EPISODE = "local:mobile-watched:1:3"
         const val ANCILLARY_SPECIAL = "local:mobile-watched:0:99"
+        const val REMOTE_MOVE_SETTLE_MILLIS = 50L
     }
 }
