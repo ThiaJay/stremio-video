@@ -32,6 +32,28 @@ class NativeCompanionAcceptanceReceiptAdapterTest {
         assertFalse(decision.toString().contains("bounded query"))
     }
 
+    @Test fun adaptedReceiptCannotBypassExpectedReviewedExecutor() {
+        val decision = NativeCompanionAcceptanceReceiptAdapter.adaptValidateAndPlan(
+            wire(),
+            expected(executorSourceSha256 = "d".repeat(64)),
+            evaluatedAt
+        )
+        assertFalse(decision.validation.accepted)
+        assertEquals("SOURCE_BINDING_NOT_VERIFIED", decision.validation.reason)
+        assertEquals("PRESERVE_TYPED_SEARCH", decision.plan.action)
+    }
+
+    @Test fun invalidExpectedAuthorityRejectsBeforeHostileWireAccess() {
+        val decision = NativeCompanionAcceptanceReceiptAdapter.adaptValidateAndPlan(
+            ThrowingEntriesMap(),
+            expected(executorSourceSha256 = null),
+            evaluatedAt
+        )
+        assertFalse(decision.validation.accepted)
+        assertEquals("EXPECTED_SOURCE_AUTHORITY_INVALID", decision.validation.reason)
+        assertEquals("PRESERVE_TYPED_SEARCH", decision.plan.action)
+    }
+
     @Test fun missingAndUnknownKeysRejectClosedSchema() {
         val missing = wire().apply { remove("route") }
         val unknown = wire().apply { put("unknown", "value") }
@@ -175,8 +197,11 @@ class NativeCompanionAcceptanceReceiptAdapterTest {
         assertFalse(fieldNames.any { it.contains("accountMutation", ignoreCase = true) })
     }
 
-    private fun expected() = ExpectedCompanionAcceptance(
+    private fun expected(
+        executorSourceSha256: String? = "b".repeat(64)
+    ) = ExpectedCompanionAcceptance(
         contractSourceSha256 = source,
+        executorSourceSha256 = executorSourceSha256,
         deviceIdentityDigest = device,
         deviceModel = "AFTKRT",
         appPackage = "com.stremio.one",
