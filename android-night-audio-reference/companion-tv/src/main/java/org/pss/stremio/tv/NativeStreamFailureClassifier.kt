@@ -53,6 +53,20 @@ object NativeStreamFailureClassifier {
         if (value.decoderError == "egl_bad_alloc") {
             return stop("backend_resource_exhaustion", "release_player_and_stop")
         }
+        // Retryable provider, source and transport facts must never bypass
+        // terminal parser or decoder evidence from the same sanitised failure.
+        if (value.containerError == "matroska_ebml") {
+            return stop("matroska_parser", "stop_with_actionable_container_error")
+        }
+        if (value.containerError == "unsupported") {
+            return stop("unsupported_container", "stop_with_actionable_container_error")
+        }
+        if (value.decoderError !in setOf("none", "unknown")) {
+            return stop(
+                if (value.decoderError == "drm") "drm" else "codec_or_audio_decoder",
+                "stop_with_actionable_decoder_error"
+            )
+        }
         if (value.providerStatus == "not_ready") {
             return retry("provider_readiness", "wait_for_provider_readiness", value.sameEpisodeRetryCount)
         }
@@ -74,18 +88,6 @@ object NativeStreamFailureClassifier {
         }
         if (value.transportError !in setOf("none", "unknown")) {
             return retry("http_transport", "retry_same_transport_route", value.sameEpisodeRetryCount)
-        }
-        if (value.containerError == "matroska_ebml") {
-            return stop("matroska_parser", "stop_with_actionable_container_error")
-        }
-        if (value.containerError == "unsupported") {
-            return stop("unsupported_container", "stop_with_actionable_container_error")
-        }
-        if (value.decoderError !in setOf("none", "unknown")) {
-            return stop(
-                if (value.decoderError == "drm") "drm" else "codec_or_audio_decoder",
-                "stop_with_actionable_decoder_error"
-            )
         }
         if (value.playbackHealthEligible) {
             return result("playback_health", "delegate_to_bounded_playback_recovery")

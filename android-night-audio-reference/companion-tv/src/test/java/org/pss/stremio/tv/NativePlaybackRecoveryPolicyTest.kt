@@ -89,6 +89,30 @@ class NativePlaybackRecoveryPolicyTest {
         }
     }
 
+    @Test fun contradictoryRetryFactsCannotBypassTerminalMediaEvidence() {
+        val cases = listOf(
+            SanitisedStreamFailureFacts(
+                providerStatus = "not_ready",
+                containerError = "matroska_ebml"
+            ) to "stop_with_actionable_container_error",
+            SanitisedStreamFailureFacts(
+                httpStatus = 503,
+                decoderError = "codec"
+            ) to "stop_with_actionable_decoder_error",
+            SanitisedStreamFailureFacts(
+                transportError = "timeout",
+                decoderError = "drm"
+            ) to "stop_with_actionable_decoder_error"
+        )
+        for ((facts, expectedAction) in cases) {
+            val plan = NativePlaybackRecoveryPolicy.plan(facts, observation())
+            assertEquals("terminal_stop", plan.authority)
+            assertEquals(expectedAction, plan.action)
+            assertEquals(0, plan.classifierAttemptsGranted)
+            assertNull(plan.playbackRecovery)
+        }
+    }
+
     @Test fun retryableSourceClassificationExclusivelyOwnsItsSingleAttempt() {
         val plan = NativePlaybackRecoveryPolicy.plan(
             classification(

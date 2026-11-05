@@ -86,6 +86,38 @@ class NativeStreamFailureClassifierTest {
         }
     }
 
+    @Test fun terminalMediaEvidenceOverridesRetryableProviderSourceAndTransportFacts() {
+        val cases = listOf(
+            SanitisedStreamFailureFacts(
+                providerStatus = "not_ready",
+                containerError = "matroska_ebml"
+            ) to ("matroska_parser" to "stop_with_actionable_container_error"),
+            SanitisedStreamFailureFacts(
+                httpStatus = 503,
+                containerError = "unsupported"
+            ) to ("unsupported_container" to "stop_with_actionable_container_error"),
+            SanitisedStreamFailureFacts(
+                transportError = "timeout",
+                decoderError = "codec"
+            ) to ("codec_or_audio_decoder" to "stop_with_actionable_decoder_error"),
+            SanitisedStreamFailureFacts(
+                httpStatus = 403,
+                decoderError = "audio"
+            ) to ("codec_or_audio_decoder" to "stop_with_actionable_decoder_error"),
+            SanitisedStreamFailureFacts(
+                providerStatus = "not_ready",
+                decoderError = "drm"
+            ) to ("drm" to "stop_with_actionable_decoder_error")
+        )
+        for ((facts, expected) in cases) {
+            val result = classify(facts)
+            assertEquals(expected.first, result.category)
+            assertEquals(expected.second, result.action)
+            assertFalse(result.retryAllowed)
+            assertEquals(0, result.maxAdditionalAttempts)
+        }
+    }
+
     @Test fun providerSourceAndTransportOwnExactlyOneSameEpisodeRetry() {
         val first = listOf(
             SanitisedStreamFailureFacts(providerStatus = "not_ready", playbackHealthEligible = true),
