@@ -795,6 +795,12 @@ if ('focusedActionId != action.actionId' not in title_watched_menu or
     'remoteKey != "ENTER" && remoteKey != "DPAD_CENTER"' not in title_watched_menu or
     'unwatchAcknowledged = unwatchAcknowledged' not in title_watched_menu):
     fail.append('title_watched_remote_focus_or_unwatch_confirmation_missing')
+if ('val finalSnapshot = snapshotOrNull()' not in title_watched_menu or
+    'if (finalSnapshot != fresh || finalPlan != record.plan ||' not in title_watched_menu or
+    'videos = it.videos.toList()' not in title_watched_menu or
+    'storyOrder = it.storyOrder?.toList()' not in title_watched_menu or
+    'finalSnapshotAfterWatchedReadbackDriftFailsBeforeDispatch' not in title_watched_menu_test):
+    fail.append('title_watched_final_account_metadata_revalidation_missing')
 if ('Thread.currentThread() === ownerThread' not in title_watched_menu or
     'private var closed = false' not in title_watched_menu or
     'const val MAX_PRESENTED_ACTIONS = 4' not in title_watched_menu):
@@ -844,6 +850,7 @@ if any(name not in title_watched_menu_test for name in [
     'activatingOneActionRevokesEverySiblingFromThatGeneration',
     'unwatchRequiresAcknowledgementAndPresentationIsOneShot',
     'accountDriftRefusesPresentedAction',
+    'finalSnapshotAfterWatchedReadbackDriftFailsBeforeDispatch',
     'staleAndForgedActionsCannotExecute',
     'ownerThreadAndCloseFailClosed',
     'snapshotAndDispatchExceptionsFailClosed',

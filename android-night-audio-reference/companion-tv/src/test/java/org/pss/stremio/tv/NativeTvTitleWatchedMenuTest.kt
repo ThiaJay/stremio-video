@@ -32,6 +32,7 @@ class NativeTvTitleWatchedMenuTest {
         var throwOnDispatch = false
         var applyDispatchToReadback = true
         var readbackOverride: CanonicalWatchedStateReadback? = null
+        var afterWatchedStateRead: (() -> Unit)? = null
         var resumeVideoId: String? = "s1e2"
         var resumeTimeOffset = 42_000L
 
@@ -66,16 +67,19 @@ class NativeTvTitleWatchedMenuTest {
             return true
         }
 
-        override fun currentWatchedState(): CanonicalWatchedStateReadback? =
-            readbackOverride ?: value?.let {
-            CanonicalWatchedStateReadback(
+        override fun currentWatchedState(): CanonicalWatchedStateReadback? {
+            val state = readbackOverride ?: value?.let {
+                CanonicalWatchedStateReadback(
                 accountFingerprint = it.accountFingerprint,
                 libraryItemFingerprint = it.libraryItemFingerprint,
                 seriesId = it.seriesId,
                 watchedVideoIds = watchedIds.toList(),
                 resumeVideoId = resumeVideoId,
                 resumeTimeOffset = resumeTimeOffset
-            )
+                )
+            }
+            afterWatchedStateRead?.invoke()
+            return state
         }
     }
 
@@ -191,6 +195,27 @@ class NativeTvTitleWatchedMenuTest {
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
         val selected = action(menu.present(1), WatchedScope.Season(1), true)
         account.value = account.value!!.copy(libraryItemFingerprint = "c".repeat(64))
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.REFUSED,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        assertEquals(0, account.sent.size)
+    }
+
+    @Test fun finalSnapshotAfterWatchedReadbackDriftFailsBeforeDispatch() {
+        val original = snapshot()
+        val account = Account(original)
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+        account.afterWatchedStateRead = {
+            account.afterWatchedStateRead = null
+            account.value = original.copy(
+                libraryItemFingerprint = "c".repeat(64),
+                seriesId = "other-series",
+                readyMetaId = "other-series"
+            )
+        }
 
         assertEquals(
             NativeTvTitleWatchedOutcome.REFUSED,

@@ -267,6 +267,7 @@ jobs:
           assert 'activatingOneActionRevokesEverySiblingFromThatGeneration' in names, 'TV title-action generation revocation regression not executed'
           assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'
           assert 'accountDriftRefusesPresentedAction' in names, 'TV title-action account-drift regression not executed'
+          assert 'finalSnapshotAfterWatchedReadbackDriftFailsBeforeDispatch' in names, 'TV title-action final account/metadata drift regression not executed'
           assert 'staleAndForgedActionsCannotExecute' in names, 'TV title-action issuance regression not executed'
           assert 'ownerThreadAndCloseFailClosed' in names, 'TV title-action lifecycle regression not executed'
           assert 'snapshotAndDispatchExceptionsFailClosed' in names, 'TV title-action exception regression not executed'

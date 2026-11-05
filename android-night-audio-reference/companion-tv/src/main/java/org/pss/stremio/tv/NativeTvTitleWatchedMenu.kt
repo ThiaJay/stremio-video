@@ -177,6 +177,23 @@ class NativeTvTitleWatchedMenu(
         val before = watchedStateOrNull()
             ?.takeIf { validReadback(it, fresh) }
             ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val finalSnapshot = snapshotOrNull()
+            ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val finalPlan = try {
+            coordinatorFor(record.plan.watched).prepare(
+                finalSnapshot,
+                record.plan.scope,
+                record.plan.watched
+            )
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+        if (finalSnapshot != fresh || finalPlan != record.plan ||
+            !validReadback(before, finalSnapshot)) {
+            return NativeTvTitleWatchedOutcome.REFUSED
+        }
         if (!dispatchOrFalse(command.coreAction)) return NativeTvTitleWatchedOutcome.REFUSED
         pendingReadback = PendingReadback(record.plan, before)
         val postDispatch = snapshotOrNull()
@@ -196,7 +213,12 @@ class NativeTvTitleWatchedMenu(
     private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 
     private fun snapshotOrNull(): SeriesAccountSnapshot? = try {
-        account.currentSnapshot()
+        account.currentSnapshot()?.let {
+            it.copy(
+                videos = it.videos.toList(),
+                storyOrder = it.storyOrder?.toList()
+            )
+        }
     } catch (_: Exception) {
         null
     } catch (_: LinkageError) {
