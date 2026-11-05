@@ -509,4 +509,24 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(2, menu.present(null).size)
         assertEquals(1, account.sent.size)
     }
+
+    @Test fun seasonWatchedPreservesResumeIdentityAndOffset() {
+        val account = Account(snapshot()).apply { applyDispatchToReadback = false }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Season(1), true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        account.watchedIds.addAll(account.value!!.videos.map { it.id })
+        account.resumeVideoId = "s1e1"
+        account.resumeTimeOffset = 0L
+        assertTrue(menu.present(1).isEmpty())
+
+        account.resumeVideoId = "s1e2"
+        account.resumeTimeOffset = 42_000L
+        assertEquals(4, menu.present(1).size)
+        assertEquals(1, account.sent.size)
+    }
 }

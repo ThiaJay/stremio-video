@@ -265,7 +265,9 @@ class NativeTvTitleWatchedMenu(
                 state.resumeVideoId == pending.before.resumeVideoId &&
                     state.resumeTimeOffset == pending.before.resumeTimeOffset
             }
-            is WatchedScope.Season -> true
+            is WatchedScope.Season ->
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == pending.before.resumeTimeOffset
         }
         if (!resumeConfirmed) return false
         coordinators[!pending.plan.watched] = TvWatchedCoordinator()
