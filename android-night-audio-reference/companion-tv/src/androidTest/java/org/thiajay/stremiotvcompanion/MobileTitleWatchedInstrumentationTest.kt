@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -68,7 +69,7 @@ class MobileTitleWatchedInstrumentationTest {
         }
 
         clickUniqueButton(MARK_SERIES_UNWATCHED)
-        onView(withText(CONFIRM)).perform(click())
+        onView(withText(CONFIRM)).inRoot(isDialog()).perform(click())
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
         val cleared = awaitText(EMPTY_WATCHED_READBACK, 5_000L)
