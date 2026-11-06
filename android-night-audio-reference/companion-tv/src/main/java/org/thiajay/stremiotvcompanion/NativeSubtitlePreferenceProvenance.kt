@@ -80,9 +80,10 @@ object NativeSubtitlePreferenceProvenance {
             sameInstallationKeys
         }
         if (!hasExactKeys(evidence, expectedKeys)) return false
+        val evidenceInstallationDigest = evidence["installationDigest"] as? String ?: return false
         if (activeInstallationDigest == null ||
             !digest.matches(activeInstallationDigest) ||
-            evidence["installationDigest"] != activeInstallationDigest
+            evidenceInstallationDigest != activeInstallationDigest
         ) return false
         val revision = positiveRevision(evidence["preferenceRevision"]) ?: return false
         if (revision < 1L) return false
@@ -90,8 +91,10 @@ object NativeSubtitlePreferenceProvenance {
         if (!sameBinding(evidence["binding"], expected)) return false
 
         if (kind == "explicit-local-choice") {
-            if (evidence["surface"] !in choiceSurfaces ||
-                evidence["choice"] != "enabled" ||
+            val surface = evidence["surface"] as? String ?: return false
+            val choice = evidence["choice"] as? String ?: return false
+            if (surface !in choiceSurfaces ||
+                choice != "enabled" ||
                 sessionPreference?.enabled != true
             ) return false
         }
@@ -132,11 +135,14 @@ object NativeSubtitlePreferenceProvenance {
         }
         val revision = positiveRevision(preferenceRevision) ?: return null
         val event = snapshotExactObject(localChoiceEvent, choiceEventKeys.size, false) ?: return null
+        val eventInstallationDigest = event["installationDigest"] as? String ?: return null
+        val surface = event["surface"] as? String ?: return null
+        val choice = event["choice"] as? String ?: return null
         if (!hasExactKeys(event, choiceEventKeys) ||
-            event["installationDigest"] != activeInstallationDigest ||
+            eventInstallationDigest != activeInstallationDigest ||
             positiveRevision(event["preferenceRevision"]) != revision ||
-            event["surface"] !in choiceSurfaces ||
-            event["choice"] != "enabled" ||
+            surface !in choiceSurfaces ||
+            choice != "enabled" ||
             sessionPreference?.enabled != true
         ) return null
 
@@ -146,7 +152,7 @@ object NativeSubtitlePreferenceProvenance {
                 "kind" to "explicit-local-choice",
                 "installationDigest" to activeInstallationDigest,
                 "preferenceRevision" to revision,
-                "surface" to event["surface"],
+                "surface" to surface,
                 "choice" to "enabled",
                 "binding" to preferenceBinding(sessionPreference, globalLanguage)
             )
@@ -181,9 +187,11 @@ object NativeSubtitlePreferenceProvenance {
         ) return null
 
         val readback = snapshotExactObject(storageReadback, storageReadbackKeys.size, true) ?: return null
+        val readbackScope = readback["scope"] as? String ?: return null
+        val readbackInstallationDigest = readback["installationDigest"] as? String ?: return null
         if (!hasExactKeys(readback, storageReadbackKeys) ||
-            readback["scope"] != "installation-local" ||
-            readback["installationDigest"] != activeInstallationDigest
+            readbackScope != "installation-local" ||
+            readbackInstallationDigest != activeInstallationDigest
         ) return null
         val revision = positiveRevision(stored["preferenceRevision"]) ?: return null
         if (positiveRevision(readback["preferenceRevision"]) != revision ||
@@ -244,21 +252,28 @@ object NativeSubtitlePreferenceProvenance {
     }
 
     private fun sameBinding(candidate: Any?, expected: Any?): Boolean {
-        val left = candidate as? Map<*, *> ?: return false
-        val right = expected as? Map<*, *> ?: return false
-        if (!hasExactKeys(left, bindingKeys) || !hasExactKeys(right, bindingKeys)) return false
-        return bindingKeys.all { left[it] == right[it] }
+        val left = immutableBinding(candidate) ?: return false
+        val right = immutableBinding(expected) ?: return false
+        return left == right
     }
 
     private fun immutableBinding(value: Any?): Map<String, Any?>? {
         val source = value as? Map<*, *> ?: return null
         if (!hasExactKeys(source, bindingKeys)) return null
+        val sessionEnabled = source["sessionEnabled"]
+        val sessionLanguage = source["sessionLanguage"]
+        val globalLanguage = source["globalLanguage"]
+        val sessionSource = source["sessionSource"]
+        if (sessionEnabled != null && sessionEnabled !is Boolean) return null
+        if (sessionLanguage != null && sessionLanguage !is String) return null
+        if (globalLanguage != null && globalLanguage !is String) return null
+        if (sessionSource != null && sessionSource !is String) return null
         return immutableMap(
             linkedMapOf(
-                "sessionEnabled" to source["sessionEnabled"],
-                "sessionLanguage" to source["sessionLanguage"],
-                "globalLanguage" to source["globalLanguage"],
-                "sessionSource" to source["sessionSource"]
+                "sessionEnabled" to sessionEnabled,
+                "sessionLanguage" to sessionLanguage,
+                "globalLanguage" to globalLanguage,
+                "sessionSource" to sessionSource
             )
         )
     }

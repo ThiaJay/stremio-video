@@ -238,6 +238,47 @@ class NativeSubtitlePreferenceProvenanceTest {
         assertTrue(verify(session, "eng", receipt, installation))
     }
 
+    @Test fun hostileAuthorityScalarsFailClosedWithoutExecutingEquality() {
+        val hostile = HostileEquality()
+        val forgedBinding = linkedMapOf<String, Any?>(
+            "sessionEnabled" to hostile,
+            "sessionLanguage" to hostile,
+            "globalLanguage" to hostile,
+            "sessionSource" to hostile
+        )
+        assertFalse(
+            verify(
+                session,
+                "eng",
+                sameInstallationReceipt(mapOf("binding" to forgedBinding)),
+                installation
+            )
+        )
+        assertFalse(
+            verify(
+                session,
+                "eng",
+                sameInstallationReceipt(mapOf("installationDigest" to hostile)),
+                installation
+            )
+        )
+        assertNull(
+            issue(
+                localChoiceEvent = choiceEvent().toMutableMap().apply {
+                    put("surface", hostile)
+                }
+            )
+        )
+        val explicit = issue()!!
+        assertNull(
+            promote(
+                explicit,
+                readback(explicit).toMutableMap().apply { put("scope", hostile) }
+            )
+        )
+        assertEquals(0, hostile.equalsCalls)
+    }
+
     private fun verify(
         preference: SessionPreference?,
         globalLanguage: String?,
@@ -351,6 +392,18 @@ class NativeSubtitlePreferenceProvenanceTest {
                 override fun iterator(): Iterator<Map.Entry<String, Any?>> =
                     detached.iterator()
             }
+    }
+
+    private class HostileEquality {
+        var equalsCalls = 0
+            private set
+
+        override fun equals(other: Any?): Boolean {
+            equalsCalls++
+            return true
+        }
+
+        override fun hashCode(): Int = 0
     }
 
     private fun promote(

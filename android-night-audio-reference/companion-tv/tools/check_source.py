@@ -1737,18 +1737,23 @@ if not all(x in native_subtitle_provenance for x in [
     fail.append('native_subtitle_provenance_exact_schema')
 if not all(x in native_subtitle_provenance for x in [
     'lowercase(Locale.ROOT)', "replace('_', '-')",
-    'it == "embedded" || it == "external"', 'bindingKeys.all'
+    'it == "embedded" || it == "external"',
+    'sessionEnabled !is Boolean', 'sessionLanguage !is String',
+    'globalLanguage !is String', 'sessionSource !is String',
+    'return left == right'
 ]):
     fail.append('native_subtitle_provenance_binding')
 if not all(x in native_subtitle_provenance for x in [
     'setOf("first-run", "subtitle-settings")',
-    'event["choice"] != "enabled"',
+    'val choice = event["choice"] as? String ?: return null',
+    'choice != "enabled"',
     'sessionPreference?.enabled != true',
     'An enabled flag, account hydration or a preferred language is never consent.'
 ]):
     fail.append('native_subtitle_provenance_explicit_choice')
 if not all(x in native_subtitle_provenance for x in [
-    'readback["scope"] != "installation-local"',
+    'val readbackScope = readback["scope"] as? String ?: return null',
+    'readbackScope != "installation-local"',
     'positiveRevision(readback["preferenceRevision"]) != revision',
     '!sameBinding(readback["binding"], stored["binding"])',
     '"kind" to "same-installation-setting"'
@@ -1761,7 +1766,7 @@ if (
         'not prove UI, signed package, private-client or device acceptance.'
     ]) or
     'NativeSubtitlePreferenceProvenance' in java_text or
-    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation'])
+    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'malformedDigestAndRevisionFailClosed', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation', 'hostileAuthorityScalarsFailClosedWithoutExecutingEquality'])
 ):
     fail.append('native_subtitle_provenance_unwired_regressions')
 if not all(x in native_subtitle_provenance for x in [
