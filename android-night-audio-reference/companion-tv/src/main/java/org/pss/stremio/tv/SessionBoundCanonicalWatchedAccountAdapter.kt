@@ -16,7 +16,10 @@ data class CanonicalWatchedAccountObservation(
     val sessionEpoch: Long,
     val snapshot: SeriesAccountSnapshot,
     val watchedVideoIds: List<String>,
-    /** Exact Core library-item history pointer. Null is a valid empty history. */
+    /**
+     * Exact Core library-item history pointer. Null is valid only for empty
+     * history, which requires a zero time_offset.
+     */
     val resumeVideoId: String?,
     /** Exact non-negative Core library-item time_offset value, without unit conversion. */
     val resumeTimeOffset: Long
@@ -247,7 +250,8 @@ class SessionBoundCanonicalWatchedAccountAdapter(
                 watchedIds.size != watchedIds.toSet().size
             ) return null
             if (raw.resumeVideoId?.let { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } == true ||
-                raw.resumeTimeOffset < 0L
+                raw.resumeTimeOffset < 0L ||
+                (raw.resumeVideoId == null && raw.resumeTimeOffset != 0L)
             ) return null
 
             val after = host.sessionEpoch()

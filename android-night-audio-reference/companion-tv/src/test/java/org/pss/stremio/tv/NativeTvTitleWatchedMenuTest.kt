@@ -319,6 +319,29 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(3, account.sent.size)
     }
 
+    @Test fun emptyHistoryCannotCarryPositiveResumeOffset() {
+        val account = Account(snapshot()).apply {
+            resumeVideoId = null
+            resumeTimeOffset = 42_000L
+        }
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val invalid = action(menu.present(1), WatchedScope.Series, true)
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.REFUSED,
+            menu.activate(invalid, invalid.actionId, "ENTER")
+        )
+        assertEquals(0, account.sent.size)
+
+        account.resumeTimeOffset = 0L
+        val valid = action(menu.present(1), WatchedScope.Series, true)
+        assertEquals(
+            NativeTvTitleWatchedOutcome.APPLIED,
+            menu.activate(valid, valid.actionId, "ENTER")
+        )
+        assertEquals(1, account.sent.size)
+    }
+
     @Test fun acceptedDispatchBlocksNewGenerationUntilCanonicalReadbackMatches() {
         val account = Account(snapshot()).apply { applyDispatchToReadback = false }
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)

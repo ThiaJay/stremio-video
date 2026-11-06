@@ -33,7 +33,10 @@ data class CanonicalWatchedStateReadback(
     val libraryItemFingerprint: String,
     val seriesId: String,
     val watchedVideoIds: List<String>,
-    /** Historical Core video_id. It must not be rewritten by a title action. */
+    /**
+     * Historical Core video_id. It must not be rewritten by a title action.
+     * Null is empty history and is valid only with a zero time_offset.
+     */
     val resumeVideoId: String?,
     /** Exact non-negative Core time_offset value, without unit conversion. */
     val resumeTimeOffset: Long
@@ -297,7 +300,8 @@ class NativeTvTitleWatchedMenu(
             state.watchedVideoIds.any { it.isBlank() } ||
             state.watchedVideoIds.size != state.watchedVideoIds.toSet().size ||
             state.resumeVideoId?.isBlank() == true ||
-            state.resumeTimeOffset < 0L
+            state.resumeTimeOffset < 0L ||
+            (state.resumeVideoId == null && state.resumeTimeOffset != 0L)
         ) return false
         val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()
         return canonicalVideoIds.containsAll(state.watchedVideoIds) &&

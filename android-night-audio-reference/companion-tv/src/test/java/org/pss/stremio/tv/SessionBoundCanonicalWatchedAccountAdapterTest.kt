@@ -157,12 +157,17 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         host.resumeVideoId = "s1e2"
         host.resumeTimeOffset = -1L
         assertNull(adapter.currentSnapshot())
+        host.resumeVideoId = null
+        host.resumeTimeOffset = 42_000L
+        assertNull(adapter.currentSnapshot())
         assertFalse(adapter.dispatch(seriesCommand()))
         assertEquals(0, host.dispatchedEpochs.size)
 
         host.resumeTimeOffset = 0L
         assertNotNull(adapter.currentSnapshot())
-        assertEquals(0L, adapter.currentWatchedState()!!.resumeTimeOffset)
+        val emptyHistory = adapter.currentWatchedState()!!
+        assertNull(emptyHistory.resumeVideoId)
+        assertEquals(0L, emptyHistory.resumeTimeOffset)
     }
 
     @Test fun canonicalReadbackRefreshRebindsDispatchLeaseToLatestState() {
