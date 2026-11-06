@@ -334,10 +334,11 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(0, account.sent.size)
 
         account.resumeTimeOffset = 0L
-        val valid = action(menu.present(1), WatchedScope.Series, true)
+        val freshMenu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val valid = action(freshMenu.present(1), WatchedScope.Series, true)
         assertEquals(
             NativeTvTitleWatchedOutcome.APPLIED,
-            menu.activate(valid, valid.actionId, "ENTER")
+            freshMenu.activate(valid, valid.actionId, "ENTER")
         )
         assertEquals(1, account.sent.size)
     }
