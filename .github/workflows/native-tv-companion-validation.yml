@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' '9c74db1d38c3232c332c14fdb3731006d69178329f7e1a2228c4a3e26477e385  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+          printf '%s\n' '77c9162bac9454dd32047f6bfb25581113e9b1ee64ed11c174682702f300456b  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
       - name: Validate exact source contract and safety guard
         run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK

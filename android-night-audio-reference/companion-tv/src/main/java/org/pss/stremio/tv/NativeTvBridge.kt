@@ -188,6 +188,19 @@ class TvWatchedCoordinator {
         return order.mapNotNull { byId[it] }
     }
 
+    /**
+     * Injective framing for security-sensitive snapshot fingerprints. Episode IDs and
+     * release strings are externally supplied canonical metadata and may themselves
+     * contain punctuation, so delimiter-joined fields cannot bind a unique snapshot.
+     */
+    private fun framed(values: List<String>): String = buildString {
+        append(values.size).append('[')
+        values.forEach { value ->
+            append(value.length).append(':').append(value)
+        }
+        append(']')
+    }
+
     fun prepare(s: SeriesAccountSnapshot, scope: WatchedScope, watched: Boolean): WatchedPlan? {
         if (!s.metaReady || !s.libraryReady || s.mediaType != "series" || s.seriesId.isBlank() || s.readyMetaId != s.seriesId) return null
         if (!hexSha.matches(s.accountFingerprint) || !hexSha.matches(s.libraryItemFingerprint)) return null
@@ -211,13 +224,21 @@ class TvWatchedCoordinator {
         }
         if (selected.isEmpty()) return null
         val ids = selected.map { it.id }.sorted()
-        val catalogue = s.videos.sortedBy { it.id }.joinToString("|") { ep ->
-            listOf(ep.id, ep.season, ep.episode, ep.releasedAt ?: "unknown").joinToString("/")
-        }
-        val signature = listOf(s.accountFingerprint, s.libraryItemFingerprint, s.seriesId, s.mediaType,
-            scope.toString(), watched.toString(), ids.joinToString(","), catalogue,
-            (s.storyOrder ?: emptyList()).joinToString(","), s.storyOrderVersion?.toString() ?: "unknown")
-            .joinToString("|").toByteArray(Charsets.UTF_8)
+        val catalogue = framed(s.videos.sortedBy { it.id }.map { ep ->
+            framed(listOf(ep.id, ep.season.toString(), ep.episode.toString(), ep.releasedAt ?: "unknown"))
+        })
+        val signature = framed(listOf(
+            s.accountFingerprint,
+            s.libraryItemFingerprint,
+            s.seriesId,
+            s.mediaType,
+            scope.toString(),
+            watched.toString(),
+            framed(ids),
+            catalogue,
+            framed(s.storyOrder ?: emptyList()),
+            s.storyOrderVersion?.toString() ?: "unknown"
+        )).toByteArray(Charsets.UTF_8)
         val fingerprint = MessageDigest.getInstance("SHA-256")
             .digest(signature).joinToString("") { "%02x".format(it) }
         val text = if (watched) "Mark" else "Remove watched status from"

@@ -111,7 +111,7 @@ ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcom
 CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
 CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
 BUILD=ROOT/'build.gradle'
-CHECKSUM='9c74db1d38c3232c332c14fdb3731006d69178329f7e1a2228c4a3e26477e385'
+CHECKSUM='77c9162bac9454dd32047f6bfb25581113e9b1ee64ed11c174682702f300456b'
 
 manifest=ET.parse(MANIFEST).getroot()
 fail=[]
@@ -184,6 +184,12 @@ if ('val runtimeNow = try { Instant.now() } catch (_: Exception) { return null }
     'if (s.now.isAfter(runtimeNow)) return null' not in bridge_text or
     'host snapshot cannot move the release clock forward' not in (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text()):
     fail.append('series_watched_release_clock_authority_missing')
+if ('private fun framed(values: List<String>): String' not in bridge_text or
+    'framed(ids)' not in bridge_text or
+    'framed(s.storyOrder ?: emptyList())' not in bridge_text or
+    'delimiter collision cannot authorise stale watched action' not in
+        (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text()):
+    fail.append('series_watched_structured_fingerprint_missing')
 java_text=SOURCE.read_text()
 synthetic_fixtures=SYNTHETIC_FIXTURES.read_text() if SYNTHETIC_FIXTURES.is_file() else ''
 synthetic_fixtures_test=SYNTHETIC_FIXTURES_TEST.read_text() if SYNTHETIC_FIXTURES_TEST.is_file() else ''

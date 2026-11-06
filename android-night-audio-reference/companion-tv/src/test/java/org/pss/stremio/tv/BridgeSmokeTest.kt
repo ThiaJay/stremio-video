@@ -99,6 +99,27 @@ fun main() {
     checkCase(watched.prepare(state.copy(accountFingerprint="bad"),WatchedScope.Series,true) == null,"account fingerprint required")
     checkCase(watched.prepare(state.copy(videos=canonical+canonical.first()),WatchedScope.Series,true) == null,"duplicate ID refused")
     checkCase(watched.prepare(state.copy(storyOrder=listOf("s1e1","extra")),WatchedScope.Series,true)?.selectedIds?.contains("special") == false,"invalid Story Order falls back to ordinary regular episodes")
+    val sharedReleased = CanonicalEpisode("s1e1", 1, 1, "2025-01-01T00:00:00Z")
+    val collisionA = state.copy(
+        videos = listOf(sharedReleased, CanonicalEpisode("x", 1, 2, "3/4")),
+        storyOrder = null,
+        storyOrderVersion = null
+    )
+    val collisionB = state.copy(
+        videos = listOf(sharedReleased, CanonicalEpisode("x/1", 2, 3, "4")),
+        storyOrder = null,
+        storyOrderVersion = null
+    )
+    val collisionGuard = TvWatchedCoordinator()
+    val collisionPlan = collisionGuard.prepare(collisionA, WatchedScope.Series, true)!!
+    val distinctPlan = collisionGuard.prepare(collisionB, WatchedScope.Series, true)!!
+    checkCase(collisionPlan.selectedIds == distinctPlan.selectedIds, "collision fixture keeps selected membership constant")
+    checkCase(collisionPlan.fingerprint != distinctPlan.fingerprint, "structured fingerprint binds distinct canonical records")
+    checkCase(collisionGuard.confirm(
+        collisionPlan,
+        collisionB,
+        TvWatchedConfirmation(true, "ENTER", collisionPlan.fingerprint)
+    ) == null, "delimiter collision cannot authorise stale watched action")
     checkCase(canonical == before, "synthetic metadata unchanged")
     println("PASS: $assertions native TV skip and watched action safety assertions")
 }
