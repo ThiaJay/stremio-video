@@ -36,6 +36,25 @@ class NativeSubtitlePreferenceProvenanceTest {
         assertFalse(verify(session, "eng", receipt, "b".repeat(64)))
     }
 
+    @Test fun sameInstallationReceiptCannotPromoteMissingOrNullEnabledState() {
+        for (preference in listOf(
+            null,
+            SessionPreference(language = "eng"),
+            SessionPreference(enabled = null, language = "eng")
+        )) {
+            val receipt = sameInstallationReceipt(
+                mapOf(
+                    "binding" to NativeSubtitlePreferenceProvenance.preferenceBinding(
+                        preference,
+                        "eng"
+                    )
+                )
+            )
+            assertFalse(verify(preference, "eng", receipt, installation))
+            assertTrue(needs(preference, "eng", receipt, installation))
+        }
+    }
+
     @Test fun malformedDigestAndRevisionFailClosed() {
         assertFalse(verify(session, "eng", sameInstallationReceipt(), "A".repeat(64)))
         assertFalse(verify(session, "eng", sameInstallationReceipt(), "short"))

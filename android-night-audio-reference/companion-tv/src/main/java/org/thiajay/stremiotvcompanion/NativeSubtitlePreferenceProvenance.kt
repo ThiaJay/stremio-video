@@ -4,10 +4,11 @@ import java.util.Collections
 import java.util.Locale
 
 /**
- * Native Android translation of Foundation PR #70's exact installation-local
- * subtitle-preference provenance contract at head
- * 99ea3173184029bbd7ee5ae7dc33d31d553fc135 and runtime blob
- * e63e9a35ec9e0bdeab0de17debaf5a3ce929d8d4.
+ * Native Android translation of the shared installation-local subtitle
+ * preference provenance contract synchronised through Web PR #57 head
+ * 712711ac738436e9de0a7fe8944f28bd280242ec and Foundation PR #70 head
+ * e28b377d5b4f599b14778201ba4f072d03286e1b, runtime blob
+ * 69d0c3651025558442eaf1cbcccffe7311a96684.
  *
  * This pure boundary performs no storage, account, player, network or UI work.
  * An enabled flag, account hydration or a preferred language is never consent.
@@ -88,14 +89,16 @@ object NativeSubtitlePreferenceProvenance {
         val revision = positiveRevision(evidence["preferenceRevision"]) ?: return false
         if (revision < 1L) return false
         val expected = preferenceBinding(sessionPreference, globalLanguage)
+        // Both receipt kinds require an explicitly enabled session. A stored
+        // language or partially hydrated preference is not consent.
+        if (sessionPreference?.enabled != true) return false
         if (!sameBinding(evidence["binding"], expected)) return false
 
         if (kind == "explicit-local-choice") {
             val surface = evidence["surface"] as? String ?: return false
             val choice = evidence["choice"] as? String ?: return false
             if (surface !in choiceSurfaces ||
-                choice != "enabled" ||
-                sessionPreference?.enabled != true
+                choice != "enabled"
             ) return false
         }
         return true
