@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' '77c9162bac9454dd32047f6bfb25581113e9b1ee64ed11c174682702f300456b  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
+          printf '%s\n' '9e00180f147663c9425c3d97f5f16fc2360fc34125f472783f9b0ea2d1a41a9a  android-night-audio-reference/companion-tv/src/main/java/org/pss/stremio/tv/NativeTvBridge.kt' | sha256sum -c -
       - name: Validate exact source contract and safety guard
         run: python3 android-night-audio-reference/companion-tv/tools/check_source.py
       - name: Compile and run original + extended JVM test suite, then build Android APK
@@ -264,6 +264,7 @@ jobs:
           assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'
           assert 'futureEpisodeSuppressesUnsafeSeasonActions' in names, 'TV title-action future-episode regression not executed'
           assert 'delimiterBearingCatalogueFieldsCannotAuthorizeStalePlan' in names, 'TV title-action structured-fingerprint regression not executed'
+          assert 'externalCanonicalPortCannotBypassAdapterMetadataBounds' in names, 'TV title-action shared metadata-bound regression not executed'
           assert 'focusAndRemoteConfirmationDispatchExactSeriesAction' in names, 'TV title-action remote-focus regression not executed'
           assert 'activatingOneActionRevokesEverySiblingFromThatGeneration' in names, 'TV title-action generation revocation regression not executed'
           assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'

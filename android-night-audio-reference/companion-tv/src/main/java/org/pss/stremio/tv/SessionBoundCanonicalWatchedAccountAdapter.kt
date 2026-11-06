@@ -147,10 +147,10 @@ class SessionBoundCanonicalWatchedAccountAdapter(
     private val host: CanonicalWatchedAccountHostPort
 ) : CanonicalWatchedStatePort {
     companion object {
-        const val MAX_CANONICAL_EPISODES = 10_000
+        const val MAX_CANONICAL_EPISODES = CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
         const val MAX_WATCHED_VIDEO_IDS = 10_000
-        const val MAX_STABLE_ID_LENGTH = 240
-        const val MAX_RELEASED_AT_LENGTH = 64
+        const val MAX_STABLE_ID_LENGTH = CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+        const val MAX_RELEASED_AT_LENGTH = CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH
     }
 
     private data class ObservationIdentity(

@@ -111,7 +111,7 @@ ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcom
 CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
 CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
 BUILD=ROOT/'build.gradle'
-CHECKSUM='77c9162bac9454dd32047f6bfb25581113e9b1ee64ed11c174682702f300456b'
+CHECKSUM='9e00180f147663c9425c3d97f5f16fc2360fc34125f472783f9b0ea2d1a41a9a'
 
 manifest=ET.parse(MANIFEST).getroot()
 fail=[]
@@ -190,6 +190,13 @@ if ('private fun framed(values: List<String>): String' not in bridge_text or
     'delimiter collision cannot authorise stale watched action' not in
         (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text()):
     fail.append('series_watched_structured_fingerprint_missing')
+if ('object CanonicalWatchedBounds' not in bridge_text or
+    's.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH' not in bridge_text or
+    's.videos.size > CanonicalWatchedBounds.MAX_CANONICAL_EPISODES' not in bridge_text or
+    'it.id.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH' not in bridge_text or
+    'externalCanonicalPortCannotBypassAdapterMetadataBounds' not in
+        (ROOT/'src/test/java/org/pss/stremio/tv/NativeTvTitleWatchedMenuTest.kt').read_text()):
+    fail.append('series_watched_shared_metadata_bounds_missing')
 java_text=SOURCE.read_text()
 synthetic_fixtures=SYNTHETIC_FIXTURES.read_text() if SYNTHETIC_FIXTURES.is_file() else ''
 synthetic_fixtures_test=SYNTHETIC_FIXTURES_TEST.read_text() if SYNTHETIC_FIXTURES_TEST.is_file() else ''
@@ -852,6 +859,7 @@ if ('val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.
 if any(name not in title_watched_menu_test for name in [
     'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting',
     'futureEpisodeSuppressesUnsafeSeasonActions',
+    'externalCanonicalPortCannotBypassAdapterMetadataBounds',
     'focusAndRemoteConfirmationDispatchExactSeriesAction',
     'activatingOneActionRevokesEverySiblingFromThatGeneration',
     'unwatchRequiresAcknowledgementAndPresentationIsOneShot',
@@ -2777,7 +2785,7 @@ if any(x in mobile_story_order_instrumentation for x in [
     fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
 if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':524,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':525,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

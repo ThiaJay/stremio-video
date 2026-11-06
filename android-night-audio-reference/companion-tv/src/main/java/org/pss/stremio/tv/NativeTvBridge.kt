@@ -164,6 +164,13 @@ data class TvWatchedConfirmation(
 
 data class CoreWatchedAction(val coreAction: Map<String, Any>)
 
+/** Shared canonical-account admission bounds for every Android title-action path. */
+object CanonicalWatchedBounds {
+    const val MAX_CANONICAL_EPISODES = 10_000
+    const val MAX_STABLE_ID_LENGTH = 240
+    const val MAX_RELEASED_AT_LENGTH = 64
+}
+
 class TvWatchedCoordinator {
     private val dispatched = HashSet<String>()
     private val hexSha = Regex("^[a-f0-9]{64}$")
@@ -202,9 +209,25 @@ class TvWatchedCoordinator {
     }
 
     fun prepare(s: SeriesAccountSnapshot, scope: WatchedScope, watched: Boolean): WatchedPlan? {
-        if (!s.metaReady || !s.libraryReady || s.mediaType != "series" || s.seriesId.isBlank() || s.readyMetaId != s.seriesId) return null
+        if (!s.metaReady || !s.libraryReady || s.mediaType != "series" ||
+            s.seriesId.isBlank() || s.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+            s.readyMetaId != s.seriesId ||
+            s.readyMetaId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+        ) return null
         if (!hexSha.matches(s.accountFingerprint) || !hexSha.matches(s.libraryItemFingerprint)) return null
-        if (s.videos.isEmpty() || s.videos.any { it.id.isBlank() || it.season < 0 || it.episode < 0 }) return null
+        if (s.videos.isEmpty() ||
+            s.videos.size > CanonicalWatchedBounds.MAX_CANONICAL_EPISODES ||
+            (s.storyOrder?.size ?: 0) > CanonicalWatchedBounds.MAX_CANONICAL_EPISODES ||
+            s.videos.any {
+                it.id.isBlank() ||
+                    it.id.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+                    (it.releasedAt?.length ?: 0) > CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH ||
+                    it.season < 0 || it.episode < 0
+            } ||
+            s.storyOrder?.any {
+                it.isBlank() || it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+            } == true
+        ) return null
         if (s.videos.map { it.id }.toSet().size != s.videos.size) return null
         // The host snapshot may conservatively lag the runtime clock, but it may
         // never move the release boundary into the future. Otherwise a

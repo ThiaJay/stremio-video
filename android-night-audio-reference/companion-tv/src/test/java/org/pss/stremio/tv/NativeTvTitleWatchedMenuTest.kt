@@ -149,6 +149,38 @@ class NativeTvTitleWatchedMenuTest {
         ))
     }
 
+    @Test fun externalCanonicalPortCannotBypassAdapterMetadataBounds() {
+        val tooLong = "x".repeat(CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH + 1)
+        val coordinator = TvWatchedCoordinator()
+        val valid = snapshot()
+
+        assertNull(coordinator.prepare(
+            valid.copy(seriesId = tooLong, readyMetaId = tooLong),
+            WatchedScope.Series,
+            true
+        ))
+        assertNull(coordinator.prepare(
+            snapshot(listOf(CanonicalEpisode(tooLong, 1, 1, released))),
+            WatchedScope.Series,
+            true
+        ))
+        assertNull(coordinator.prepare(
+            valid.copy(storyOrder = listOf(tooLong)),
+            WatchedScope.Series,
+            true
+        ))
+        assertNull(coordinator.prepare(
+            snapshot(listOf(CanonicalEpisode(
+                "s1e1",
+                1,
+                1,
+                released + "x".repeat(CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH)
+            ))),
+            WatchedScope.Series,
+            true
+        ))
+    }
+
     @Test fun focusAndRemoteConfirmationDispatchExactSeriesAction() {
         val account = Account(snapshot())
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
