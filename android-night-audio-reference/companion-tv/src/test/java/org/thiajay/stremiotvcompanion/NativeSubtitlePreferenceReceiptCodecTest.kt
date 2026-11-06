@@ -126,6 +126,22 @@ class NativeSubtitlePreferenceReceiptCodecTest {
         }
     }
 
+    @Test fun hostileAuthorityScalarsFailClosedWithoutExecutingEquality() {
+        val hostile = HostileEquality()
+        for (field in listOf("kind", "choice", "surface")) {
+            val forged = LinkedHashMap(receipt()).apply { put(field, hostile) }
+            assertNull(NativeSubtitlePreferenceReceiptCodec.encode(forged))
+        }
+        for (field in listOf("sessionEnabled", "sessionSource")) {
+            val forged = LinkedHashMap(receipt())
+            forged["binding"] = LinkedHashMap(
+                forged["binding"] as Map<String, Any?>
+            ).apply { put(field, hostile) }
+            assertNull(NativeSubtitlePreferenceReceiptCodec.encode(forged))
+        }
+        assertEquals(0, hostile.equalsCalls)
+    }
+
     private fun receipt(
         digestValue: String = digest,
         revision: Long = 7L,
@@ -173,5 +189,17 @@ class NativeSubtitlePreferenceReceiptCodecTest {
             if (target.indices.all { source[index + it] == target[it] }) return index
         }
         return -1
+    }
+
+    private class HostileEquality {
+        var equalsCalls = 0
+            private set
+
+        override fun equals(other: Any?): Boolean {
+            equalsCalls++
+            return true
+        }
+
+        override fun hashCode(): Int = 0
     }
 }

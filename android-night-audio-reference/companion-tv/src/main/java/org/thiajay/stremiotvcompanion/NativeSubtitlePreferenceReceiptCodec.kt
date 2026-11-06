@@ -46,23 +46,27 @@ object NativeSubtitlePreferenceReceiptCodec {
     fun encode(receipt: Map<*, *>?): String? {
         return try {
             val exact = snapshotExact(receipt, TOP_LEVEL_KEYS) ?: return null
+            val kind = exact["kind"] as? String ?: return null
+            val choice = exact["choice"] as? String ?: return null
             if (wholeNumber(exact["schemaVersion"]) != 1L ||
-                exact["kind"] != "explicit-local-choice" ||
-                exact["choice"] != "enabled"
+                kind != "explicit-local-choice" ||
+                choice != "enabled"
             ) return null
 
             val digest = exact["installationDigest"] as? String ?: return null
             if (!DIGEST.matches(digest)) return null
             val revision = wholeNumber(exact["preferenceRevision"])
                 ?.takeIf { it in 1L..MAX_SAFE_INTEGER } ?: return null
-            val surface = when (exact["surface"]) {
+            val surfaceValue = exact["surface"] as? String ?: return null
+            val surface = when (surfaceValue) {
                 "first-run" -> 1
                 "subtitle-settings" -> 2
                 else -> return null
             }
             val binding = snapshotExact(exact["binding"] as? Map<*, *>, BINDING_KEYS)
                 ?: return null
-            if (binding["sessionEnabled"] != true) return null
+            val sessionEnabled = binding["sessionEnabled"] as? Boolean ?: return null
+            if (!sessionEnabled) return null
             val sessionLanguage = canonicalLanguage(binding["sessionLanguage"]) ?: run {
                 if (binding["sessionLanguage"] == null) null else return null
             }
@@ -71,7 +75,11 @@ object NativeSubtitlePreferenceReceiptCodec {
             }
             val sessionSource = when (val value = binding["sessionSource"]) {
                 null -> null
-                "embedded", "external" -> value as String
+                is String -> if (value == "embedded" || value == "external") {
+                    value
+                } else {
+                    return null
+                }
                 else -> return null
             }
 
