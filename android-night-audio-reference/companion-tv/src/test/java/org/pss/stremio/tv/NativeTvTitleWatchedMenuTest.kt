@@ -126,6 +126,29 @@ class NativeTvTitleWatchedMenuTest {
         assertEquals(0, account.sent.size)
     }
 
+    @Test fun delimiterBearingCatalogueFieldsCannotAuthorizeStalePlan() {
+        val shared = CanonicalEpisode("s1e1", 1, 1, released)
+        val collisionA = snapshot(listOf(
+            shared,
+            CanonicalEpisode("x", 1, 2, "3/4")
+        )).copy(storyOrder = null, storyOrderVersion = null)
+        val collisionB = snapshot(listOf(
+            shared,
+            CanonicalEpisode("x/1", 2, 3, "4")
+        )).copy(storyOrder = null, storyOrderVersion = null)
+        val coordinator = TvWatchedCoordinator()
+        val issued = coordinator.prepare(collisionA, WatchedScope.Series, true)!!
+        val distinct = coordinator.prepare(collisionB, WatchedScope.Series, true)!!
+
+        assertEquals(issued.selectedIds, distinct.selectedIds)
+        assertNotEquals(issued.fingerprint, distinct.fingerprint)
+        assertNull(coordinator.confirm(
+            issued,
+            collisionB,
+            TvWatchedConfirmation(true, "ENTER", issued.fingerprint)
+        ))
+    }
+
     @Test fun focusAndRemoteConfirmationDispatchExactSeriesAction() {
         val account = Account(snapshot())
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)

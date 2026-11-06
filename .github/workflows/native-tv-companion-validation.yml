@@ -263,6 +263,7 @@ jobs:
           assert 'dispatchedPayloadIsDeepDetachedFromMutableCoreObject' in names, 'Deep snapshot regression not executed'
           assert 'readyCoreSnapshotPresentsFourTitleActionsWithoutWriting' in names, 'TV title-action presentation regression not executed'
           assert 'futureEpisodeSuppressesUnsafeSeasonActions' in names, 'TV title-action future-episode regression not executed'
+          assert 'delimiterBearingCatalogueFieldsCannotAuthorizeStalePlan' in names, 'TV title-action structured-fingerprint regression not executed'
           assert 'focusAndRemoteConfirmationDispatchExactSeriesAction' in names, 'TV title-action remote-focus regression not executed'
           assert 'activatingOneActionRevokesEverySiblingFromThatGeneration' in names, 'TV title-action generation revocation regression not executed'
           assert 'unwatchRequiresAcknowledgementAndPresentationIsOneShot' in names, 'TV title-action unwatch acknowledgement regression not executed'
