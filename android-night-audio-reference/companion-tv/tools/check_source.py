@@ -1192,12 +1192,19 @@ if ('val before = host.sessionEpoch()' not in canonical_watched_account_adapter 
     'val after = host.sessionEpoch()' not in canonical_watched_account_adapter or
     'after != before' not in canonical_watched_account_adapter):
     fail.append('canonical_account_epoch_sandwich_missing')
-if ('raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.watchedVideoIds.toList())' not in
+if ('private fun <T> snapshotList(source: List<T>, maximum: Int)' not in
         canonical_watched_account_adapter or
-    'Collections.unmodifiableList(raw.videos.map' not in canonical_watched_account_adapter or
-    'Collections.unmodifiableList(it.toList())' not in canonical_watched_account_adapter or
+    'val expectedSize = source.size' not in canonical_watched_account_adapter or
+    'if (expectedSize < 0 || expectedSize > maximum) return null' not in
+        canonical_watched_account_adapter or
+    'if (iterator.hasNext()) return null' not in canonical_watched_account_adapter or
+    'snapshotList(raw.watchedVideoIds,' not in canonical_watched_account_adapter or
+    'snapshotList(raw.videos, MAX_CANONICAL_EPISODES)' not in
+        canonical_watched_account_adapter or
+    'snapshotList(it, MAX_CANONICAL_EPISODES)' not in canonical_watched_account_adapter or
     'detachedDispatchCollectionsRejectJvmMutationWithoutCorruptingLease' not in
+        canonical_watched_account_adapter_test or
+    'detachedHostCollectionsMustRespectBoundsAfterIteration' not in
         canonical_watched_account_adapter_test):
     fail.append('canonical_account_host_collections_not_detached')
 if ('val resumeVideoId: String?' not in canonical_watched_account_adapter or

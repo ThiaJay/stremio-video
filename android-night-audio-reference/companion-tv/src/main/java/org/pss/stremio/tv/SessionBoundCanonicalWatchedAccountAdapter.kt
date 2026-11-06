@@ -176,6 +176,25 @@ class SessionBoundCanonicalWatchedAccountAdapter(
     @Volatile
     private var closed = false
 
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<T>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
     override fun currentSnapshot(): SeriesAccountSnapshot? = synchronized(lifecycleLock) {
         if (!onOwnerThread() || closed) return@synchronized null
         latestLease = null
@@ -244,8 +263,8 @@ class SessionBoundCanonicalWatchedAccountAdapter(
             if (raw.sessionEpoch != before) return null
 
             val snapshot = detachSnapshot(raw.snapshot) ?: return null
-            if (raw.watchedVideoIds.size > MAX_WATCHED_VIDEO_IDS) return null
-            val watchedIds = Collections.unmodifiableList(raw.watchedVideoIds.toList())
+            val watchedIds = snapshotList(raw.watchedVideoIds, MAX_WATCHED_VIDEO_IDS)
+                ?: return null
             if (watchedIds.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } ||
                 watchedIds.size != watchedIds.toSet().size
             ) return null
@@ -285,14 +304,15 @@ class SessionBoundCanonicalWatchedAccountAdapter(
             (raw.storyOrder?.size ?: 0) > MAX_CANONICAL_EPISODES
         ) return null
 
-        val videos = Collections.unmodifiableList(raw.videos.map {
+        val rawVideos = snapshotList(raw.videos, MAX_CANONICAL_EPISODES) ?: return null
+        val videos = Collections.unmodifiableList(rawVideos.map {
             if (it.id.isBlank() || it.id.length > MAX_STABLE_ID_LENGTH ||
                 (it.releasedAt?.length ?: 0) > MAX_RELEASED_AT_LENGTH
             ) return null
             it.copy()
         })
         val storyOrder = raw.storyOrder?.let {
-            Collections.unmodifiableList(it.toList())
+            snapshotList(it, MAX_CANONICAL_EPISODES) ?: return null
         }
         if (storyOrder?.any { it.isBlank() || it.length > MAX_STABLE_ID_LENGTH } == true) return null
         return raw.copy(videos = videos, storyOrder = storyOrder)

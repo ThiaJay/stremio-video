@@ -581,4 +581,22 @@ class SessionBoundCanonicalWatchedAccountAdapterTest {
         assertFalse(adapter.dispatch(seriesCommand()))
         assertEquals(0, host.sent.size)
     }
+
+    @Test fun detachedHostCollectionsMustRespectBoundsAfterIteration() {
+        val host = Host()
+        val adapter = SessionBoundCanonicalWatchedAccountAdapter(host)
+        val repeated = CanonicalEpisode("s1e1", 1, 1, "2025-01-01T00:00:00Z")
+        host.value = host.value.copy(videos = object : java.util.AbstractList<CanonicalEpisode>() {
+            override val size: Int = 1
+            override fun get(index: Int): CanonicalEpisode = repeated
+            override fun iterator(): MutableIterator<CanonicalEpisode> =
+                MutableList(
+                    SessionBoundCanonicalWatchedAccountAdapter.MAX_CANONICAL_EPISODES + 1
+                ) { repeated }.iterator()
+        })
+
+        assertNull(adapter.currentSnapshot())
+        assertFalse(adapter.dispatch(seriesCommand()))
+        assertEquals(0, host.dispatchedEpochs.size)
+    }
 }
