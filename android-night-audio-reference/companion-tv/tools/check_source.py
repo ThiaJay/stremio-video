@@ -111,7 +111,7 @@ ANDROID_TITLE_WATCHED_SCREEN_OWNERS=ROOT/'src/main/java/org/thiajay/stremiotvcom
 CANONICAL_WATCHED_ACCOUNT_ADAPTER=ROOT/'src/main/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapter.kt'
 CANONICAL_WATCHED_ACCOUNT_ADAPTER_TEST=ROOT/'src/test/java/org/pss/stremio/tv/SessionBoundCanonicalWatchedAccountAdapterTest.kt'
 BUILD=ROOT/'build.gradle'
-CHECKSUM='9e00180f147663c9425c3d97f5f16fc2360fc34125f472783f9b0ea2d1a41a9a'
+CHECKSUM='4cc1af451748319998b2d13916df9e0145b12c8f01ce0c0339e90a7d506db46d'
 
 manifest=ET.parse(MANIFEST).getroot()
 fail=[]
@@ -190,6 +190,16 @@ if ('private fun framed(values: List<String>): String' not in bridge_text or
     'delimiter collision cannot authorise stale watched action' not in
         (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text()):
     fail.append('series_watched_structured_fingerprint_missing')
+if ('private fun wellFormedUtf16(value: String): Boolean' not in bridge_text or
+    '!wellFormedUtf16(s.seriesId)' not in bridge_text or
+    '!wellFormedUtf16(it.id)' not in bridge_text or
+    '!wellFormedUtf16(it.releasedAt)' not in bridge_text or
+    '!wellFormedUtf16(it)' not in bridge_text or
+    'malformed UTF-16 catalogue identity fails closed' not in
+        (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text() or
+    'malformed UTF-16 Story Order identity fails closed' not in
+        (ROOT/'src/test/java/org/pss/stremio/tv/BridgeSmokeTest.kt').read_text()):
+    fail.append('series_watched_utf16_integrity_missing')
 if ('object CanonicalWatchedBounds' not in bridge_text or
     's.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH' not in bridge_text or
     's.videos.size > CanonicalWatchedBounds.MAX_CANONICAL_EPISODES' not in bridge_text or

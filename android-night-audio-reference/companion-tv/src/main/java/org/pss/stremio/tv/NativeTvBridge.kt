@@ -175,6 +175,24 @@ class TvWatchedCoordinator {
     private val dispatched = HashSet<String>()
     private val hexSha = Regex("^[a-f0-9]{64}$")
 
+    private fun wellFormedUtf16(value: String): Boolean {
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            when {
+                current.isHighSurrogate() -> {
+                    if (index + 1 >= value.length || !value[index + 1].isLowSurrogate()) {
+                        return false
+                    }
+                    index += 2
+                }
+                current.isLowSurrogate() -> return false
+                else -> index += 1
+            }
+        }
+        return true
+    }
+
     private fun released(ep: CanonicalEpisode, now: Instant): Boolean {
         if (ep.releasedAt.isNullOrBlank() || !ep.releasedAt.endsWith("Z")) return false
         val instant = try { Instant.parse(ep.releasedAt) } catch (_: Exception) { return false }
@@ -211,8 +229,10 @@ class TvWatchedCoordinator {
     fun prepare(s: SeriesAccountSnapshot, scope: WatchedScope, watched: Boolean): WatchedPlan? {
         if (!s.metaReady || !s.libraryReady || s.mediaType != "series" ||
             s.seriesId.isBlank() || s.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+            !wellFormedUtf16(s.seriesId) ||
             s.readyMetaId != s.seriesId ||
-            s.readyMetaId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+            s.readyMetaId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+            !wellFormedUtf16(s.readyMetaId)
         ) return null
         if (!hexSha.matches(s.accountFingerprint) || !hexSha.matches(s.libraryItemFingerprint)) return null
         if (s.videos.isEmpty() ||
@@ -221,11 +241,15 @@ class TvWatchedCoordinator {
             s.videos.any {
                 it.id.isBlank() ||
                     it.id.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+                    !wellFormedUtf16(it.id) ||
                     (it.releasedAt?.length ?: 0) > CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH ||
+                    (it.releasedAt != null && !wellFormedUtf16(it.releasedAt)) ||
                     it.season < 0 || it.episode < 0
             } ||
             s.storyOrder?.any {
-                it.isBlank() || it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+                it.isBlank() ||
+                    it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+                    !wellFormedUtf16(it)
             } == true
         ) return null
         if (s.videos.map { it.id }.toSet().size != s.videos.size) return null

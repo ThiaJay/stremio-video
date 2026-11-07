@@ -120,6 +120,26 @@ fun main() {
         collisionB,
         TvWatchedConfirmation(true, "ENTER", collisionPlan.fingerprint)
     ) == null, "delimiter collision cannot authorise stale watched action")
+    val malformedCatalogueA = state.copy(
+        videos = canonical + CanonicalEpisode("\uD800", 4, 1, "2025-03-01T00:00:00Z"),
+        storyOrder = null
+    )
+    val malformedCatalogueB = state.copy(
+        videos = canonical + CanonicalEpisode("\uD801", 4, 1, "2025-03-01T00:00:00Z"),
+        storyOrder = null
+    )
+    checkCase(
+        watched.prepare(malformedCatalogueA, WatchedScope.Series, true) == null,
+        "malformed UTF-16 catalogue identity fails closed"
+    )
+    checkCase(
+        watched.prepare(malformedCatalogueB, WatchedScope.Series, true) == null,
+        "distinct malformed UTF-16 catalogue identity fails closed"
+    )
+    checkCase(
+        watched.prepare(state.copy(storyOrder = listOf("s1e1", "\uD800")), WatchedScope.Series, true) == null,
+        "malformed UTF-16 Story Order identity fails closed"
+    )
     checkCase(canonical == before, "synthetic metadata unchanged")
     println("PASS: $assertions native TV skip and watched action safety assertions")
 }
