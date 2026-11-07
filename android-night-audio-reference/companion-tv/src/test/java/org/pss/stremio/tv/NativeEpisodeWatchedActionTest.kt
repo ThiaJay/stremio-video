@@ -3,6 +3,7 @@ package org.pss.stremio.tv
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
+import java.util.AbstractList
 
 class NativeEpisodeWatchedActionTest {
     private val base = SeriesAccountSnapshot(
@@ -339,5 +340,45 @@ class NativeEpisodeWatchedActionTest {
         assertFalse(floatingActuator.confirm(floatingPlan,
             TvWatchedConfirmation(true,"ENTER",floatingPlan.fingerprint)))
         assertEquals(0,floatingAccount.writes)
+    }
+
+    @Test fun catalogueIsFrozenOnceBeforePlanFingerprinting() {
+        val target=base.videos[0]
+        val unrelated=target.copy(id="tt18:1:9")
+        fun driftingCatalogue():List<CanonicalEpisode> = object:AbstractList<CanonicalEpisode>() {
+            private var iteratorReads=0
+            override val size:Int=1
+            override fun get(index:Int):CanonicalEpisode =
+                if(index==0) target else throw IndexOutOfBoundsException(index)
+            override fun iterator():MutableIterator<CanonicalEpisode> {
+                iteratorReads++
+                return mutableListOf(if(iteratorReads<=2) target else unrelated).iterator()
+            }
+        }
+        val driftingPort=object:CoreEpisodeAccountPort {
+            override fun currentSnapshot():SeriesAccountSnapshot =
+                base.copy(videos=driftingCatalogue())
+            override fun canonicalVideoFromReadyMetaDetails(id:String):Map<String,Any?>? =
+                mapOf("id" to target.id,"season" to target.season,"episode" to target.episode)
+                    .takeIf { id==target.id }
+            override fun dispatch(message:Map<String,Any>):Boolean = true
+        }
+        val expected=NativeTvEpisodeWatchedActuator(
+            FakeAccount(base.copy(videos=listOf(target)))
+        ).prepare(target.id,true)!!
+        val actual=NativeTvEpisodeWatchedActuator(driftingPort).prepare(target.id,true)!!
+
+        assertEquals(expected,actual)
+    }
+
+    @Test fun invalidUnrelatedCatalogueIdentityFailsClosed() {
+        val oversizedId="x".repeat(CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH+1)
+        val p=FakeAccount(base.copy(
+            videos=base.videos+CanonicalEpisode(
+                oversizedId,1,3,"2025-02-01T00:00:00Z")
+        ))
+
+        assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
+        assertEquals(0,p.writes)
     }
 }
