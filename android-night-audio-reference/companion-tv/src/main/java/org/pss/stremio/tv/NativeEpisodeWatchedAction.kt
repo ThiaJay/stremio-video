@@ -40,6 +40,14 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     private fun hash(parts: String): String = MessageDigest.getInstance("SHA-256")
         .digest(parts.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
+    private fun framed(values: List<String>): String = buildString {
+        append(values.size).append('[')
+        values.forEach { value ->
+            append(value.length).append(':').append(value)
+        }
+        append(']')
+    }
+
     private inline fun <T> failClosedPortCall(block: () -> T): T? = try {
         block()
     } catch (_: Exception) {
@@ -249,11 +257,23 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         if (video["episode"] != null && video["episode"] != epMeta.episode) return null
         val objectHash = canonical(video) ?: return null
         val videoFingerprint = hash(objectHash)
-        val fullCatalogue = state.videos.sortedBy { it.id }.joinToString("|") { ep ->
-            "${ep.id}/${ep.season}/${ep.episode}/${ep.releasedAt ?: "unknown"}"
-        }
-        val fingerprint = hash(listOf(state.accountFingerprint, state.libraryItemFingerprint,
-            state.seriesId, stableVideoId, markWatched.toString(), fullCatalogue, videoFingerprint).joinToString("|"))
+        val fullCatalogue = framed(state.videos.sortedBy { it.id }.map { ep ->
+            framed(listOf(
+                ep.id,
+                ep.season.toString(),
+                ep.episode.toString(),
+                ep.releasedAt ?: "unknown"
+            ))
+        })
+        val fingerprint = hash(framed(listOf(
+            state.accountFingerprint,
+            state.libraryItemFingerprint,
+            state.seriesId,
+            stableVideoId,
+            markWatched.toString(),
+            fullCatalogue,
+            videoFingerprint
+        )))
         return TvEpisodeWatchedPlan(stableVideoId, markWatched, fingerprint, videoFingerprint,
             (if (markWatched) "Mark episode watched" else "Mark episode unwatched") + ": $stableVideoId")
     }
