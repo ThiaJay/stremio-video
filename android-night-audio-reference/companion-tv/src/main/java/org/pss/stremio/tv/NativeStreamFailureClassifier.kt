@@ -47,9 +47,6 @@ object NativeStreamFailureClassifier {
         if (value.episodeAdvanced && !value.userRequestedNextEpisode) {
             return stop("next_episode_navigation", "stop_unrequested_episode")
         }
-        if (value.backendSwitchCount >= 2) {
-            return stop("backend_switch_loop", "stop_backend_cycling")
-        }
         if (value.decoderError == "egl_bad_alloc") {
             return stop("backend_resource_exhaustion", "release_player_and_stop")
         }
@@ -66,6 +63,13 @@ object NativeStreamFailureClassifier {
                 if (value.decoderError == "drm") "drm" else "codec_or_audio_decoder",
                 "stop_with_actionable_decoder_error"
             )
+        }
+        // Existing backend-switch history must not erase the specific
+        // terminal media cause observed for the current load. Parser,
+        // decoder and EGL stops remain actionable; the generic loop stop is
+        // used only when no such current-load evidence exists.
+        if (value.backendSwitchCount >= 2) {
+            return stop("backend_switch_loop", "stop_backend_cycling")
         }
         if (value.providerStatus == "not_ready") {
             return retry("provider_readiness", "wait_for_provider_readiness", value.sameEpisodeRetryCount)

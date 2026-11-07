@@ -113,6 +113,30 @@ class NativePlaybackRecoveryPolicyTest {
         }
     }
 
+    @Test fun backendSwitchHistoryCannotReplaceSpecificTerminalMediaStop() {
+        val cases = listOf(
+            SanitisedStreamFailureFacts(
+                backendSwitchCount = 2,
+                containerError = "matroska_ebml"
+            ) to "stop_with_actionable_container_error",
+            SanitisedStreamFailureFacts(
+                backendSwitchCount = 2,
+                decoderError = "codec"
+            ) to "stop_with_actionable_decoder_error",
+            SanitisedStreamFailureFacts(
+                backendSwitchCount = 2,
+                decoderError = "egl_bad_alloc"
+            ) to "release_player_and_stop"
+        )
+        for ((facts, expectedAction) in cases) {
+            val plan = NativePlaybackRecoveryPolicy.plan(facts, observation())
+            assertEquals("terminal_stop", plan.authority)
+            assertEquals(expectedAction, plan.action)
+            assertEquals(0, plan.classifierAttemptsGranted)
+            assertNull(plan.playbackRecovery)
+        }
+    }
+
     @Test fun retryableSourceClassificationExclusivelyOwnsItsSingleAttempt() {
         val plan = NativePlaybackRecoveryPolicy.plan(
             classification(
