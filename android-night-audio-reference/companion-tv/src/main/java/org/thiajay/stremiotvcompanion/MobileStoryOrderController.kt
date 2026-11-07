@@ -48,15 +48,18 @@ class MobileStoryOrderController(
             canonical: List<CanonicalEpisode>
         ): Set<String>? {
             return try {
-                val copied = LinkedHashSet<String>()
+                val expectedSize = source.size
+                if (expectedSize < 0 || expectedSize > MAX_WATCHED_IDS) return null
+                val copied = LinkedHashSet<String>(expectedSize)
                 val iterator = source.iterator()
-                while (iterator.hasNext()) {
-                    if (copied.size >= MAX_WATCHED_IDS) return null
+                repeat(expectedSize) {
+                    if (!iterator.hasNext()) return null
                     val id = iterator.next()
                     if (id.isBlank() || id.length > MAX_STABLE_ID_LENGTH || !copied.add(id)) {
                         return null
                     }
                 }
+                if (iterator.hasNext()) return null
                 val canonicalIds = canonical.mapTo(HashSet()) { it.id }
                 if (!canonicalIds.containsAll(copied)) return null
                 Collections.unmodifiableSet(copied)
