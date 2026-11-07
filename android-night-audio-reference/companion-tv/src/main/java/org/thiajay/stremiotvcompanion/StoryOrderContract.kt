@@ -212,4 +212,3 @@ object StoryOrderContract {
         return NextStoryDecision.UseCanonicalEpisode(resolved.episodes[index + 1])
     }
 }
-c3980ea45c9746837967e2ae5b3d369680fdc1cff1a209d5872f52131f56fe19  android-night-audio-reference/companion-tv/src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt
