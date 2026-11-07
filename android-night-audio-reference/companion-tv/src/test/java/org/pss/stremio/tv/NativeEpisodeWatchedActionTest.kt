@@ -400,4 +400,26 @@ class NativeEpisodeWatchedActionTest {
 
         assertNotEquals(leftPlan.fingerprint,rightPlan.fingerprint)
     }
+
+    @Test fun malformedUtf16CatalogueIdentityFailsClosed() {
+        val first=FakeAccount(base.copy(videos=base.videos+CanonicalEpisode(
+            "\uD800",1,3,"2025-03-01T00:00:00Z"
+        )))
+        val second=FakeAccount(base.copy(videos=base.videos+CanonicalEpisode(
+            "\uD801",1,3,"2025-03-01T00:00:00Z"
+        )))
+
+        assertNull(NativeTvEpisodeWatchedActuator(first).prepare("tt18:1:1",true))
+        assertNull(NativeTvEpisodeWatchedActuator(second).prepare("tt18:1:1",true))
+    }
+
+    @Test fun malformedUtf16CanonicalVideoMetadataFailsClosed() {
+        val first=FakeAccount(base)
+        first.video=first.video+mapOf("overview" to "\uD800")
+        val second=FakeAccount(base)
+        second.video=second.video+mapOf("overview" to "\uD801")
+
+        assertNull(NativeTvEpisodeWatchedActuator(first).prepare("tt18:1:1",true))
+        assertNull(NativeTvEpisodeWatchedActuator(second).prepare("tt18:1:1",true))
+    }
 }
