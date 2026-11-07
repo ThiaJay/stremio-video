@@ -1,0 +1,201 @@
+package org.thiajay.stremiotvcompanion
+
+import java.util.Collections
+
+enum class MobileStoryOrderMode {
+    CANONICAL,
+    STORY
+}
+
+/**
+ * Exact immutable row issued to an Android mobile Story Order view.
+ *
+ * A stable video ID or list position by itself is never activation authority.
+ * Selection must return this exact row to the issuing controller.
+ */
+class MobileStoryOrderRow internal constructor(
+    val stableVideoId: String,
+    val title: String,
+    val season: Int,
+    val episodeNumber: Int?,
+    val watched: Boolean,
+    private val canonicalEpisode: CanonicalEpisode,
+    private val provenanceSeal: Any
+) {
+    internal fun episodeFor(seal: Any): CanonicalEpisode? =
+        if (provenanceSeal === seal) canonicalEpisode else null
+}
+
+/**
+ * Source-only Android mobile Story Order presentation and selection boundary.
+ *
+ * The controller snapshots canonical episodes on construction, delegates hint
+ * validation to StoryOrderContract and issues one exact row generation. It has
+ * no Android view, player, network, account or persistence effects.
+ */
+class MobileStoryOrderController(
+    canonical: List<CanonicalEpisode>,
+    hints: StoryOrderHints?,
+    watchedStableIds: Set<String> = emptySet()
+) {
+    companion object {
+        const val SEMANTIC_SELECTION = "semantic-select"
+        const val MAX_WATCHED_IDS = 10_000
+        const val MAX_STABLE_ID_LENGTH = 240
+
+        private fun snapshotWatchedIds(
+            source: Set<String>,
+            canonical: List<CanonicalEpisode>
+        ): Set<String>? {
+            return try {
+                val expectedSize = source.size
+                if (expectedSize < 0 || expectedSize > MAX_WATCHED_IDS) return null
+                val copied = LinkedHashSet<String>(expectedSize)
+                val iterator = source.iterator()
+                repeat(expectedSize) {
+                    if (!iterator.hasNext()) return null
+                    val id = iterator.next()
+                    if (id.isBlank() || id.length > MAX_STABLE_ID_LENGTH || !copied.add(id)) {
+                        return null
+                    }
+                }
+                if (iterator.hasNext()) return null
+                val canonicalIds = canonical.mapTo(HashSet()) { it.id }
+                if (!canonicalIds.containsAll(copied)) return null
+                Collections.unmodifiableSet(copied)
+            } catch (_: Exception) {
+                null
+            } catch (_: LinkageError) {
+                null
+            }
+        }
+    }
+
+    private data class Issued(
+        val row: MobileStoryOrderRow,
+        val episode: CanonicalEpisode
+    )
+
+    private val ownerThread = Thread.currentThread()
+    private val controllerSeal = Any()
+    private val canonicalSnapshot =
+        StoryOrderContract.presentation(canonical, null, storyOrderSelected = false)
+    private val storySnapshot = when (
+        val resolved = StoryOrderContract.resolve(canonicalSnapshot, hints)
+    ) {
+        is StoryOrderResolution.Valid -> resolved.episodes
+        is StoryOrderResolution.CanonicalFallback -> null
+    }
+    private var watchedSnapshot = snapshotWatchedIds(watchedStableIds, canonicalSnapshot)
+    private val issued = LinkedHashMap<String, Issued>()
+    private var activeEpisodes: List<CanonicalEpisode> = emptyList()
+    private var effectiveStoryOrder = false
+    private var closed = canonicalSnapshot.isEmpty() || watchedSnapshot == null
+
+    fun present(mode: MobileStoryOrderMode): List<MobileStoryOrderRow>? {
+        if (!onOwnerThread() || closed) return null
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+
+        val episodes = when (mode) {
+            MobileStoryOrderMode.CANONICAL -> canonicalSnapshot
+            MobileStoryOrderMode.STORY -> {
+                if (storySnapshot != null) {
+                    effectiveStoryOrder = true
+                    storySnapshot
+                } else {
+                    canonicalSnapshot
+                }
+            }
+        }
+        if (episodes.isEmpty()) return null
+
+        val rows = ArrayList<MobileStoryOrderRow>(episodes.size)
+        for (episode in episodes) {
+            val row = MobileStoryOrderRow(
+                stableVideoId = episode.id,
+                title = episode.title,
+                season = episode.season,
+                episodeNumber = episode.episode,
+                watched = watchedSnapshot!!.contains(episode.id),
+                canonicalEpisode = episode,
+                provenanceSeal = controllerSeal
+            )
+            if (issued.put(episode.id, Issued(row, episode)) != null) {
+                issued.clear()
+                activeEpisodes = emptyList()
+                effectiveStoryOrder = false
+                return null
+            }
+            rows += row
+        }
+        activeEpisodes = episodes
+        return Collections.unmodifiableList(rows)
+    }
+
+    fun select(
+        row: MobileStoryOrderRow,
+        selectedVideoId: String?,
+        semanticEvent: String
+    ): CanonicalEpisode? {
+        if (!onOwnerThread() || closed) return null
+        val record = issued.remove(row.stableVideoId)
+        issued.clear()
+        val exactEpisode = row.episodeFor(controllerSeal)
+        if (record == null ||
+            record.row !== row ||
+            exactEpisode !== record.episode ||
+            selectedVideoId != row.stableVideoId ||
+            semanticEvent != SEMANTIC_SELECTION
+        ) return null
+        return record.episode
+    }
+
+    fun next(currentVideoId: String): CanonicalEpisode? {
+        if (!onOwnerThread() || closed || !effectiveStoryOrder) return null
+        val index = activeEpisodes.indexOfFirst { it.id == currentVideoId }
+        if (index < 0 || index + 1 >= activeEpisodes.size) return null
+        return activeEpisodes[index + 1]
+    }
+
+    /**
+     * Replace only the watched-marker projection for the same canonical screen.
+     *
+     * A refresh revokes every issued row and continuation generation before the
+     * new stable-ID set is admitted. Unknown, malformed, oversized or unstable
+     * input permanently closes this controller rather than retaining a stale
+     * account projection.
+     */
+    fun refreshWatchedStableIds(source: Set<String>): Boolean {
+        if (!onOwnerThread() || closed) return false
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+        val refreshed = snapshotWatchedIds(source, canonicalSnapshot) ?: return poison()
+        watchedSnapshot = refreshed
+        return true
+    }
+
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+        return true
+    }
+
+    fun isOperational(): Boolean = onOwnerThread() && !closed
+
+    private fun poison(): Boolean {
+        closed = true
+        issued.clear()
+        activeEpisodes = emptyList()
+        effectiveStoryOrder = false
+        watchedSnapshot = null
+        return false
+    }
+
+    private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
+}
