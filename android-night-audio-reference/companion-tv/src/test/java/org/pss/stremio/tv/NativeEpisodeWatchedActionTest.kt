@@ -382,4 +382,22 @@ class NativeEpisodeWatchedActionTest {
         assertNull(NativeTvEpisodeWatchedActuator(p).prepare("tt18:1:1",true))
         assertEquals(0,p.writes)
     }
+
+    @Test fun delimiterBearingCatalogueFieldsCannotReuseEpisodePlanFingerprint() {
+        val target=base.videos[0]
+        val left=FakeAccount(base.copy(videos=listOf(
+            target,
+            CanonicalEpisode("x",1,2,"a|y/3/4/b")
+        )))
+        val right=FakeAccount(base.copy(videos=listOf(
+            target,
+            CanonicalEpisode("x",1,2,"a"),
+            CanonicalEpisode("y",3,4,"b")
+        )))
+
+        val leftPlan=NativeTvEpisodeWatchedActuator(left).prepare(target.id,true)!!
+        val rightPlan=NativeTvEpisodeWatchedActuator(right).prepare(target.id,true)!!
+
+        assertNotEquals(leftPlan.fingerprint,rightPlan.fingerprint)
+    }
 }
