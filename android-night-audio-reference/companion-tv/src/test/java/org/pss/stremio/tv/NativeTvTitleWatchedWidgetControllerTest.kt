@@ -30,6 +30,28 @@ class NativeTvTitleWatchedWidgetControllerTest {
         )
     }
 
+    private fun underreportedActions(
+        action: NativeTvTitleWatchedViewAction,
+        actualCount: Int,
+        onNext: () -> Unit
+    ): List<NativeTvTitleWatchedViewAction> =
+        object : java.util.AbstractList<NativeTvTitleWatchedViewAction>() {
+            override val size: Int = 1
+            override fun get(index: Int): NativeTvTitleWatchedViewAction = action
+            override fun iterator(): MutableIterator<NativeTvTitleWatchedViewAction> =
+                object : MutableIterator<NativeTvTitleWatchedViewAction> {
+                    private var remaining = actualCount
+                    override fun hasNext(): Boolean = remaining > 0
+                    override fun next(): NativeTvTitleWatchedViewAction {
+                        if (remaining <= 0) throw NoSuchElementException()
+                        remaining -= 1
+                        onNext()
+                        return action
+                    }
+                    override fun remove() = throw UnsupportedOperationException()
+                }
+        }
+
     @Test fun widgetControllerBuildsFocusableModelsWithoutActivation() {
         val controller = NativeTvTitleWatchedWidgetController()
         val actions = listOf(
@@ -160,6 +182,18 @@ class NativeTvTitleWatchedWidgetControllerTest {
         assertNull(controller.replace(listOf(action("duplicate"), action("duplicate"))))
         assertNull(controller.replace(listOf(action("not-focusable", focusable = false))))
         assertNull(controller.replace(List(5) { action("action-$it") }))
+    }
+
+    @Test fun underreportedTvWidgetGenerationStopsBeforeUnboundedIteration() {
+        val controller = NativeTvTitleWatchedWidgetController()
+        var nextCalls = 0
+        val actions = underreportedActions(
+            action("series-watched"),
+            NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS + 1
+        ) { nextCalls += 1 }
+
+        assertNull(controller.replace(actions))
+        assertEquals(1, nextCalls)
     }
 
     @Test fun widgetOwnerThreadClearAndCloseFailClosed() {

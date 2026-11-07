@@ -1012,10 +1012,14 @@ if ('class NativeTvTitleWatchedWidgetController' not in tv_title_widget_controll
     'class NativeTvTitleWatchedWidgetIntent internal constructor' not in tv_title_widget_controller or
     'class NativeTvTitleWatchedConfirmation internal constructor' not in tv_title_widget_controller):
     fail.append('native_tv_title_widget_controller_missing')
-if ('actions.size > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in tv_title_widget_controller or
-    'actions.map { it.actionId }.toSet().size != actions.size' not in tv_title_widget_controller or
+if ('val boundedActions = snapshotActions(actions) ?: return null' not in tv_title_widget_controller or
+    'boundedActions.map { it.actionId }.toSet().size != boundedActions.size' not in tv_title_widget_controller or
     'it.confirmation.isBlank() || !it.focusable' not in tv_title_widget_controller):
     fail.append('tv_widget_generation_validation_missing')
+if ('expectedSize > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in tv_title_widget_controller or
+    'if (iterator.hasNext()) return null' not in tv_title_widget_controller or
+    'underreportedTvWidgetGenerationStopsBeforeUnboundedIteration' not in tv_title_widget_controller_test):
+    fail.append('tv_widget_generation_exact_bound_missing')
 if ('record.widget !== widget' not in tv_title_widget_controller or
     'widget.actionFor(controllerSeal)' not in tv_title_widget_controller or
     'focusedActionId != widget.actionId' not in tv_title_widget_controller):
@@ -1089,10 +1093,14 @@ if ('class NativeMobileTitleWatchedWidgetController' not in mobile_title_widget_
     'class NativeMobileTitleWatchedWidgetIntent internal constructor' not in mobile_title_widget_controller or
     'class NativeMobileTitleWatchedConfirmation internal constructor' not in mobile_title_widget_controller):
     fail.append('native_mobile_title_widget_controller_missing')
-if ('actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in mobile_title_widget_controller or
-    'actions.map { it.actionId }.toSet().size != actions.size' not in mobile_title_widget_controller or
+if ('val boundedActions = snapshotActions(actions) ?: return null' not in mobile_title_widget_controller or
+    'boundedActions.map { it.actionId }.toSet().size != boundedActions.size' not in mobile_title_widget_controller or
     'it.confirmation.isBlank()' not in mobile_title_widget_controller):
     fail.append('mobile_widget_generation_validation_missing')
+if ('expectedSize > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS' not in mobile_title_widget_controller or
+    'if (iterator.hasNext()) return null' not in mobile_title_widget_controller or
+    'underreportedMobileWidgetGenerationStopsBeforeUnboundedIteration' not in mobile_title_widget_controller_test):
+    fail.append('mobile_widget_generation_exact_bound_missing')
 if ('record.widget !== widget' not in mobile_title_widget_controller or
     'widget.actionFor(controllerSeal)' not in mobile_title_widget_controller or
     'selectedActionId != widget.actionId' not in mobile_title_widget_controller):
@@ -2809,7 +2817,7 @@ if any(x in mobile_story_order_instrumentation for x in [
     fail.append('synthetic_mobile_story_order_instrumentation_forbidden_surface')
 if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_observer+synthetic_cue_observer_test+synthetic_track_observer+synthetic_track_observer_test+synthetic_playback_evidence+synthetic_playback_evidence_test+synthetic_preference_evidence+synthetic_preference_evidence_test+synthetic_render_pipeline+synthetic_render_pipeline_test+synthetic_window_pixels+synthetic_window_pixels_test+synthetic_window_pixel_lease+synthetic_window_pixel_lease_test+synthetic_window_pixel_instrumentation+native_subtitle_provenance+native_subtitle_provenance_test+native_subtitle_store+native_subtitle_store_test+native_subtitle_codec+native_subtitle_codec_test+android_subtitle_storage+android_subtitle_storage_test+subtitle_digest_source+subtitle_digest_source_test+android_subtitle_store_owner+android_subtitle_store_owner_test+android_subtitle_choice_session+android_subtitle_choice_session_test+android_subtitle_choice_transaction+android_subtitle_choice_transaction_test+android_subtitle_choice_widget_controller+android_subtitle_choice_widget_controller_test+android_subtitle_choice_widget_port+android_subtitle_choice_screen_owner+android_subtitle_choice_screen_owner_test+synthetic_subtitle_host+synthetic_subtitle_host_test+persistent_synthetic_subtitle_host+persistent_synthetic_subtitle_host_test+persistent_synthetic_subtitle_screen_owner+persistent_synthetic_subtitle_screen_owner_test+native_subtitle_playback_actuator+native_subtitle_playback_actuator_test+media3_subtitle_playback_adapter+media3_subtitle_playback_adapter_test+story+mobile_story+mobile_story_host+android_mobile_story_widget_port+android_mobile_story_screen_owner+mobile_story_activity+classifier+media3_intake+media3_retry_actuator+recovery+actuator+ports+episode+title_watched_menu+mobile_title_watched_menu+mobile_title_host_binding+tv_title_host_binding+tv_title_widget_controller+android_tv_title_widget_port+mobile_title_widget_controller+android_mobile_title_widget_port+title_watched_view_port_relay+android_title_watched_screen_owners+canonical_watched_account_adapter+synthetic_watched_host+synthetic_watched_host_test for x in ['datastorePut','datastoreDelete','http://','https://','getAuthKey','System.getenv','Log.d(']):
     fail.append('account_network_or_credential_surface')
-print(json.dumps({'ok':not fail,'checks':530,'issues':fail,'tested_bridge_sha256':CHECKSUM,
+print(json.dumps({'ok':not fail,'checks':532,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
 

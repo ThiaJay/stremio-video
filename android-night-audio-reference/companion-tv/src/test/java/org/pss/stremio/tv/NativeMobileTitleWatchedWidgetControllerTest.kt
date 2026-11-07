@@ -37,6 +37,28 @@ class NativeMobileTitleWatchedWidgetControllerTest {
         )
     }
 
+    private fun underreportedActions(
+        action: NativeMobileTitleWatchedViewAction,
+        actualCount: Int,
+        onNext: () -> Unit
+    ): List<NativeMobileTitleWatchedViewAction> =
+        object : java.util.AbstractList<NativeMobileTitleWatchedViewAction>() {
+            override val size: Int = 1
+            override fun get(index: Int): NativeMobileTitleWatchedViewAction = action
+            override fun iterator(): MutableIterator<NativeMobileTitleWatchedViewAction> =
+                object : MutableIterator<NativeMobileTitleWatchedViewAction> {
+                    private var remaining = actualCount
+                    override fun hasNext(): Boolean = remaining > 0
+                    override fun next(): NativeMobileTitleWatchedViewAction {
+                        if (remaining <= 0) throw NoSuchElementException()
+                        remaining -= 1
+                        onNext()
+                        return action
+                    }
+                    override fun remove() = throw UnsupportedOperationException()
+                }
+        }
+
     @Test fun mobileWidgetControllerBuildsDisplayModelsWithoutActivation() {
         val controller = NativeMobileTitleWatchedWidgetController()
         val actions = listOf(
@@ -132,6 +154,18 @@ class NativeMobileTitleWatchedWidgetControllerTest {
         assertNull(controller.replace(emptyList()))
         assertNull(controller.replace(listOf(action("duplicate"), action("duplicate"))))
         assertNull(controller.replace(List(5) { action("action-$it") }))
+    }
+
+    @Test fun underreportedMobileWidgetGenerationStopsBeforeUnboundedIteration() {
+        val controller = NativeMobileTitleWatchedWidgetController()
+        var nextCalls = 0
+        val actions = underreportedActions(
+            action("series-watched"),
+            NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS + 1
+        ) { nextCalls += 1 }
+
+        assertNull(controller.replace(actions))
+        assertEquals(1, nextCalls)
     }
 
     @Test fun mobileWidgetPreservesDestructiveAcknowledgementMetadata() {

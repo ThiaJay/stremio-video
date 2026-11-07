@@ -68,6 +68,27 @@ class NativeTvTitleWatchedWidgetController {
     private var pendingConfirmation: NativeTvTitleWatchedConfirmation? = null
     private var closed = false
 
+    private fun snapshotActions(
+        source: List<NativeTvTitleWatchedViewAction>
+    ): List<NativeTvTitleWatchedViewAction>? = try {
+        val expectedSize = source.size
+        if (expectedSize <= 0 ||
+            expectedSize > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS
+        ) return null
+        val iterator = source.iterator()
+        val detached = ArrayList<NativeTvTitleWatchedViewAction>(expectedSize)
+        repeat(expectedSize) {
+            if (!iterator.hasNext()) return null
+            detached += iterator.next()
+        }
+        if (iterator.hasNext()) return null
+        java.util.Collections.unmodifiableList(detached)
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
     fun replace(
         actions: List<NativeTvTitleWatchedViewAction>
     ): List<NativeTvTitleWatchedWidget>? {
@@ -75,17 +96,16 @@ class NativeTvTitleWatchedWidgetController {
         issued.clear()
         confirmableIntent = null
         pendingConfirmation = null
-        if (actions.isEmpty() ||
-            actions.size > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS ||
-            actions.any {
+        val boundedActions = snapshotActions(actions) ?: return null
+        if (boundedActions.any {
                 it.actionId.isBlank() || it.label.isBlank() ||
                     it.confirmation.isBlank() || !it.focusable
             } ||
-            actions.map { it.actionId }.toSet().size != actions.size
+            boundedActions.map { it.actionId }.toSet().size != boundedActions.size
         ) return null
 
-        val widgets = ArrayList<NativeTvTitleWatchedWidget>(actions.size)
-        for (action in actions) {
+        val widgets = ArrayList<NativeTvTitleWatchedWidget>(boundedActions.size)
+        for (action in boundedActions) {
             val widget = NativeTvTitleWatchedWidget(
                 actionId = action.actionId,
                 label = action.label,

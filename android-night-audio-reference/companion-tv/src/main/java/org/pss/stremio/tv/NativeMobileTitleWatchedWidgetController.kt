@@ -60,6 +60,27 @@ class NativeMobileTitleWatchedWidgetController {
     private var pendingConfirmation: NativeMobileTitleWatchedConfirmation? = null
     private var closed = false
 
+    private fun snapshotActions(
+        source: List<NativeMobileTitleWatchedViewAction>
+    ): List<NativeMobileTitleWatchedViewAction>? = try {
+        val expectedSize = source.size
+        if (expectedSize <= 0 ||
+            expectedSize > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS
+        ) return null
+        val iterator = source.iterator()
+        val detached = ArrayList<NativeMobileTitleWatchedViewAction>(expectedSize)
+        repeat(expectedSize) {
+            if (!iterator.hasNext()) return null
+            detached += iterator.next()
+        }
+        if (iterator.hasNext()) return null
+        java.util.Collections.unmodifiableList(detached)
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
     fun replace(
         actions: List<NativeMobileTitleWatchedViewAction>
     ): List<NativeMobileTitleWatchedWidget>? {
@@ -67,16 +88,15 @@ class NativeMobileTitleWatchedWidgetController {
         issued.clear()
         confirmableIntent = null
         pendingConfirmation = null
-        if (actions.isEmpty() ||
-            actions.size > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS ||
-            actions.any {
+        val boundedActions = snapshotActions(actions) ?: return null
+        if (boundedActions.any {
                 it.actionId.isBlank() || it.label.isBlank() || it.confirmation.isBlank()
             } ||
-            actions.map { it.actionId }.toSet().size != actions.size
+            boundedActions.map { it.actionId }.toSet().size != boundedActions.size
         ) return null
 
-        val widgets = ArrayList<NativeMobileTitleWatchedWidget>(actions.size)
-        for (action in actions) {
+        val widgets = ArrayList<NativeMobileTitleWatchedWidget>(boundedActions.size)
+        for (action in boundedActions) {
             val widget = NativeMobileTitleWatchedWidget(
                 actionId = action.actionId,
                 label = action.label,
