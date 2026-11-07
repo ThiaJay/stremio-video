@@ -115,21 +115,23 @@ class NativeTvWatchedActuator(
         null
     }
 
-    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? = try {
-        val expectedSize = source.size
-        if (expectedSize < 0 || expectedSize > maximum) return null
-        val detached = ArrayList<T>(expectedSize)
-        val iterator = source.iterator()
-        repeat(expectedSize) {
-            if (!iterator.hasNext()) return null
-            detached += iterator.next()
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val detached = ArrayList<T>(expectedSize)
+            val iterator = source.iterator()
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            java.util.Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
         }
-        if (iterator.hasNext()) return null
-        java.util.Collections.unmodifiableList(detached)
-    } catch (_: Exception) {
-        null
-    } catch (_: LinkageError) {
-        null
     }
 
     private fun snapshotAccountState(raw: SeriesAccountSnapshot): SeriesAccountSnapshot? {
