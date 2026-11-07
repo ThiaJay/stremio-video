@@ -151,6 +151,15 @@ class NativeCompanionAcceptanceReceiptAdapterTest {
         assertEquals("WIRE_SCHEMA_MISMATCH", result.reason)
     }
 
+    @Test fun surplusIteratorStopsAtClosedSchemaBoundary() {
+        val source = wire().entries.map { it.key to it.value }
+        val hostile = SurplusIteratorMap(source, surplusEntries = 10_000)
+        val result = NativeCompanionAcceptanceReceiptAdapter.adapt(hostile)
+        assertFalse(result.accepted)
+        assertEquals("WIRE_SCHEMA_MISMATCH", result.reason)
+        assertEquals(source.size, hostile.nextCalls)
+    }
+
     @Test fun duplicateIteratorKeyFailsClosed() {
         val source = wire().entries.map { it.key to it.value }.toMutableList()
         source[source.lastIndex] = source.first()
@@ -255,6 +264,42 @@ class NativeCompanionAcceptanceReceiptAdapterTest {
 
                 override fun iterator(): Iterator<Map.Entry<String, Any?>> =
                     detached.iterator()
+            }
+    }
+
+    private class SurplusIteratorMap(
+        source: List<Pair<String, Any?>>,
+        private val surplusEntries: Int
+    ) : AbstractMap<String, Any?>() {
+        private val detached = source.map { (key, value) ->
+            SimpleImmutableEntry<String, Any?>(key, value)
+        }
+        var nextCalls = 0
+            private set
+
+        override val entries: Set<Map.Entry<String, Any?>> =
+            object : AbstractSet<Map.Entry<String, Any?>>() {
+                override val size: Int
+                    get() = detached.size
+
+                override fun iterator(): Iterator<Map.Entry<String, Any?>> =
+                    object : Iterator<Map.Entry<String, Any?>> {
+                        private var index = 0
+
+                        override fun hasNext(): Boolean =
+                            index < detached.size + surplusEntries
+
+                        override fun next(): Map.Entry<String, Any?> {
+                            if (!hasNext()) throw NoSuchElementException()
+                            val current = index++
+                            nextCalls += 1
+                            return if (current < detached.size) {
+                                detached[current]
+                            } else {
+                                SimpleImmutableEntry("surplus-$current", "hostile")
+                            }
+                        }
+                    }
             }
     }
 }

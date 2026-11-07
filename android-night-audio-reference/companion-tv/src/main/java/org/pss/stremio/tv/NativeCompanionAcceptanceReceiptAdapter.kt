@@ -49,13 +49,18 @@ object NativeCompanionAcceptanceReceiptAdapter {
             val advertisedSize = raw.size
             if (advertisedSize != keys.size) return reject("WIRE_SCHEMA_MISMATCH")
             val copy = LinkedHashMap<String, Any?>(advertisedSize)
-            for (entry in raw.entries) {
+            val iterator = raw.entries.iterator()
+            repeat(advertisedSize) {
+                if (!iterator.hasNext()) return reject("WIRE_SCHEMA_MISMATCH")
+                val entry = iterator.next()
                 val key = entry.key as? String
                     ?: return reject("WIRE_SCHEMA_MISMATCH")
                 if (copy.containsKey(key)) return reject("WIRE_SCHEMA_MISMATCH")
                 copy[key] = entry.value
             }
-            if (raw.size != advertisedSize || copy.size != advertisedSize || copy.keys != keys) {
+            if (iterator.hasNext() || raw.size != advertisedSize ||
+                copy.size != advertisedSize || copy.keys != keys
+            ) {
                 return reject("WIRE_SCHEMA_MISMATCH")
             }
             copy
