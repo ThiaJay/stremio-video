@@ -226,6 +226,22 @@ class MobileStoryOrderControllerTest {
         assertNull(controller.present(MobileStoryOrderMode.STORY))
     }
 
+    @Test fun underreportedWatchedSetCannotPromoteCanonicalMarker() {
+        val underreported = object : AbstractSet<String>() {
+            override val size: Int = 0
+            override fun iterator(): Iterator<String> = listOf(regularOne.id).iterator()
+        }
+
+        val initial = MobileStoryOrderController(canonical, hints, underreported)
+        assertTrue(!initial.isOperational())
+        assertNull(initial.present(MobileStoryOrderMode.STORY))
+
+        val refreshed = MobileStoryOrderController(canonical, hints)
+        assertTrue(!refreshed.refreshWatchedStableIds(underreported))
+        assertTrue(!refreshed.isOperational())
+        assertNull(refreshed.present(MobileStoryOrderMode.STORY))
+    }
+
     @Test fun ownerThreadAndCloseFailClosed() {
         val controller = MobileStoryOrderController(canonical, hints)
         val foreignPresent = AtomicReference<List<MobileStoryOrderRow>?>()
