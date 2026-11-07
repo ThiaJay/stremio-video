@@ -190,6 +190,17 @@ class NativeCompanionAcceptanceReceiptTest {
         }
     }
 
+    @Test fun selfConsistentNonOfficialPackageCannotClaimOfficialRoute() {
+        val appPackage = "com.example.fake"
+        val result = NativeCompanionAcceptanceReceipt.validate(
+            receipt(appPackage = appPackage),
+            expected(appPackage = appPackage),
+            evaluatedAt
+        )
+        assertFalse(result.accepted)
+        assertEquals("APP_OR_ROUTE_MISMATCH", result.reason)
+    }
+
     @Test fun observationWindowAllowsOnlyTenMinutesAndThirtySecondsFutureSkew() {
         assertTrue(
             NativeCompanionAcceptanceReceipt.validate(

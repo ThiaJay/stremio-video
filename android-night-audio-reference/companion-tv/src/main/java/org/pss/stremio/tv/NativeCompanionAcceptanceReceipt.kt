@@ -66,6 +66,7 @@ data class CompanionAcceptanceDecision(
 
 object NativeCompanionAcceptanceReceipt {
     const val CONTRACT_ID = "fire-tv-companion-text-entry-acceptance"
+    const val OFFICIAL_STREMIO_PACKAGE = "com.stremio.one"
     private const val MAX_TEXT_LENGTH = 160
     private const val MAX_AGE_MILLIS = 10 * 60 * 1000L
     private const val MAX_FUTURE_SKEW_MILLIS = 30 * 1000L
@@ -105,6 +106,8 @@ object NativeCompanionAcceptanceReceipt {
             !exactIdentifier(expected.appPackage) ||
             !exactIdentifier(receipt.appVersion) ||
             !exactIdentifier(expected.appVersion) ||
+            receipt.appPackage != OFFICIAL_STREMIO_PACKAGE ||
+            expected.appPackage != OFFICIAL_STREMIO_PACKAGE ||
             receipt.appPackage != expected.appPackage ||
             receipt.appVersion != expected.appVersion ||
             receipt.route != NativeCompanionTextEntryPolicy.VERIFIED_OFFICIAL_FIRE_TV_APP
