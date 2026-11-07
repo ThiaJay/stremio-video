@@ -87,6 +87,25 @@ class NativeTvTitleWatchedMenu(
     private var pendingReadback: PendingReadback? = null
     private var closed = false
 
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<T>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            java.util.Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
     fun present(seasonNumber: Int?): List<NativeTvTitleWatchedAction> {
         if (!onOwnerThread() || closed) return emptyList()
         issued.clear()
@@ -217,10 +236,15 @@ class NativeTvTitleWatchedMenu(
 
     private fun snapshotOrNull(): SeriesAccountSnapshot? = try {
         account.currentSnapshot()?.let {
-            it.copy(
-                videos = it.videos.toList(),
-                storyOrder = it.storyOrder?.toList()
-            )
+            val videos = snapshotList(
+                it.videos,
+                CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+            ) ?: return null
+            val storyOrder = it.storyOrder?.let { order ->
+                snapshotList(order, CanonicalWatchedBounds.MAX_CANONICAL_EPISODES)
+                    ?: return null
+            }
+            it.copy(videos = videos, storyOrder = storyOrder)
         }
     } catch (_: Exception) {
         null
@@ -283,7 +307,11 @@ class NativeTvTitleWatchedMenu(
 
     private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
         val state = account.currentWatchedState() ?: return null
-        state.copy(watchedVideoIds = state.watchedVideoIds.toList())
+        val watchedVideoIds = snapshotList(
+            state.watchedVideoIds,
+            CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+        ) ?: return null
+        state.copy(watchedVideoIds = watchedVideoIds)
     } catch (_: Exception) {
         null
     } catch (_: LinkageError) {

@@ -89,6 +89,26 @@ class NativeTvTitleWatchedMenuTest {
         watched: Boolean
     ) = actions.single { it.scope == scope && it.watched == watched }
 
+    private fun <T> underreportedList(
+        value: T,
+        actualCount: Int,
+        onNext: () -> Unit
+    ): List<T> = object : java.util.AbstractList<T>() {
+        override val size: Int = 1
+        override fun get(index: Int): T = value
+        override fun iterator(): MutableIterator<T> = object : MutableIterator<T> {
+            private var remaining = actualCount
+            override fun hasNext(): Boolean = remaining > 0
+            override fun next(): T {
+                if (remaining <= 0) throw NoSuchElementException()
+                remaining -= 1
+                onNext()
+                return value
+            }
+            override fun remove() = throw UnsupportedOperationException()
+        }
+    }
+
     @Test fun readyCoreSnapshotPresentsFourTitleActionsWithoutWriting() {
         val account = Account(snapshot())
         val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
@@ -179,6 +199,49 @@ class NativeTvTitleWatchedMenuTest {
             WatchedScope.Series,
             true
         ))
+    }
+
+    @Test fun externalCanonicalPortIsBoundedBeforeCollectionCopy() {
+        var nextCalls = 0
+        val repeated = CanonicalEpisode("s1e1", 1, 1, released)
+        val account = Account(snapshot().copy(
+            videos = underreportedList(
+                repeated,
+                CanonicalWatchedBounds.MAX_CANONICAL_EPISODES + 1
+            ) { nextCalls += 1 },
+            storyOrder = null,
+            storyOrderVersion = null
+        ))
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+
+        assertTrue(menu.present(1).isEmpty())
+        assertEquals(1, nextCalls)
+        assertEquals(0, account.sent.size)
+    }
+
+    @Test fun externalCanonicalReadbackIsBoundedBeforeDispatch() {
+        var nextCalls = 0
+        val account = Account(snapshot())
+        val menu = NativeTvTitleWatchedMenu(TvWatchedCoordinator(), account)
+        val selected = action(menu.present(1), WatchedScope.Series, true)
+        account.readbackOverride = CanonicalWatchedStateReadback(
+            accountFingerprint = account.value!!.accountFingerprint,
+            libraryItemFingerprint = account.value!!.libraryItemFingerprint,
+            seriesId = account.value!!.seriesId,
+            watchedVideoIds = underreportedList(
+                "s1e1",
+                CanonicalWatchedBounds.MAX_CANONICAL_EPISODES + 1
+            ) { nextCalls += 1 },
+            resumeVideoId = account.resumeVideoId,
+            resumeTimeOffset = account.resumeTimeOffset
+        )
+
+        assertEquals(
+            NativeTvTitleWatchedOutcome.REFUSED,
+            menu.activate(selected, selected.actionId, "ENTER")
+        )
+        assertEquals(1, nextCalls)
+        assertEquals(0, account.sent.size)
     }
 
     @Test fun focusAndRemoteConfirmationDispatchExactSeriesAction() {
