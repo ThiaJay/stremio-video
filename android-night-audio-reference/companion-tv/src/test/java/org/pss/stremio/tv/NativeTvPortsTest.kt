@@ -79,6 +79,44 @@ class NativeTvPortsTest {
         val a=NativeTvWatchedActuator(TvWatchedCoordinator(),account)
         assertNull(a.prepare(WatchedScope.Series,true))
     }
+
+    @Test fun titleActuatorSnapshotsHostCatalogueExactlyOnce() {
+        val canonical=CanonicalEpisode("s1e1",1,1,"2025-01-01T00:00:00Z")
+        val replacement=CanonicalEpisode("s1e2",1,2,"2025-01-08T00:00:00Z")
+        var iteratorReads=0
+        val drifting=object:AbstractList<CanonicalEpisode>() {
+            override val size:Int=1
+            override fun get(index:Int)=if(index==0) canonical else throw IndexOutOfBoundsException()
+            override fun iterator():Iterator<CanonicalEpisode> {
+                iteratorReads++
+                return listOf(if(iteratorReads==1) canonical else replacement).iterator()
+            }
+        }
+        val raw=accountState().copy(videos=drifting)
+        val stablePlan=TvWatchedCoordinator().prepare(
+            raw.copy(videos=listOf(canonical)),WatchedScope.Series,true
+        )
+        val plan=NativeTvWatchedActuator(TvWatchedCoordinator(),Account(raw))
+            .prepare(WatchedScope.Series,true)
+
+        assertEquals(stablePlan,plan)
+        assertEquals(1,iteratorReads)
+    }
+
+    @Test fun titleActuatorRejectsDeclaredCatalogueCardinalityMismatch() {
+        val first=CanonicalEpisode("s1e1",1,1,"2025-01-01T00:00:00Z")
+        val second=CanonicalEpisode("s1e2",1,2,"2025-01-08T00:00:00Z")
+        val mismatched=object:AbstractList<CanonicalEpisode>() {
+            override val size:Int=1
+            override fun get(index:Int)=if(index==0) first else throw IndexOutOfBoundsException()
+            override fun iterator()=listOf(first,second).iterator()
+        }
+        val account=Account(accountState().copy(videos=mismatched))
+
+        assertNull(NativeTvWatchedActuator(TvWatchedCoordinator(),account)
+            .prepare(WatchedScope.Series,true))
+        assertEquals(0,account.sent)
+    }
     @Test fun currentCoreAccountRequiresFreshConfirmation() {
         val base=SeriesAccountSnapshot("a".repeat(64),"b".repeat(64),"series","series",true,true,
             listOf(CanonicalEpisode("s1e1",1,1,"2025-01-01T00:00:00Z")),null,null,Instant.parse("2026-10-12T16:00:00Z"))

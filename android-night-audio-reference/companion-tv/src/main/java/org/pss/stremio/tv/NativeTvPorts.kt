@@ -115,9 +115,44 @@ class NativeTvWatchedActuator(
         null
     }
 
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? = try {
+        val expectedSize = source.size
+        if (expectedSize < 0 || expectedSize > maximum) return null
+        val detached = ArrayList<T>(expectedSize)
+        val iterator = source.iterator()
+        repeat(expectedSize) {
+            if (!iterator.hasNext()) return null
+            detached += iterator.next()
+        }
+        if (iterator.hasNext()) return null
+        java.util.Collections.unmodifiableList(detached)
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
+    private fun snapshotAccountState(raw: SeriesAccountSnapshot): SeriesAccountSnapshot? {
+        val rawVideos = snapshotList(
+            raw.videos,
+            CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+        ) ?: return null
+        val videos = java.util.Collections.unmodifiableList(rawVideos.map { it.copy() })
+        val storyOrder = raw.storyOrder?.let { source ->
+            snapshotList(source, CanonicalWatchedBounds.MAX_CANONICAL_EPISODES)
+                ?: return null
+        }
+        return raw.copy(videos = videos, storyOrder = storyOrder)
+    }
+
+    private fun currentSnapshotOrNull(): SeriesAccountSnapshot? {
+        val raw = failClosedPortCall { account.currentSnapshot() } ?: return null
+        return snapshotAccountState(raw)
+    }
+
     fun prepare(scope: WatchedScope, watched: Boolean): WatchedPlan? {
         if (!onOwnerThread() || closed || prepared.size + consumed.size >= MAX_ISSUED_PLANS) return null
-        val state = failClosedPortCall { account.currentSnapshot() } ?: return null
+        val state = currentSnapshotOrNull() ?: return null
         val plan = failClosedPortCall { coordinator.prepare(state, scope, watched) } ?: return null
         if (plan.fingerprint in prepared || plan.fingerprint in consumed) return null
         prepared[plan.fingerprint] = plan
@@ -133,13 +168,13 @@ class NativeTvWatchedActuator(
         if (exact !== plan) return false
         prepared.remove(plan.fingerprint)
         consumed.add(plan.fingerprint)
-        val fresh = failClosedPortCall { account.currentSnapshot() } ?: return false
+        val fresh = currentSnapshotOrNull() ?: return false
         val command = failClosedPortCall { coordinator.confirm(plan, fresh, input) } ?: return false
         // Re-read the complete canonical account snapshot immediately before the
         // injected Core call. Confirmation itself can synchronously trigger host
         // state changes, and a season command must never outlive the exact episode
         // membership and release boundary which authorised it.
-        val finalState = failClosedPortCall { account.currentSnapshot() } ?: return false
+        val finalState = currentSnapshotOrNull() ?: return false
         val finalPlan = failClosedPortCall {
             coordinator.prepare(finalState, plan.scope, plan.watched)
         } ?: return false

@@ -718,13 +718,16 @@ if (not all(fragment in ports for fragment in (
         'val exact = prepared[plan.fingerprint] ?: return false',
         'if (exact !== plan) return false',
         'failClosedPortCall { account.currentSnapshot() }',
-        'val finalState = failClosedPortCall { account.currentSnapshot() } ?: return false',
+        'private fun <T> snapshotList(source: List<T>, maximum: Int)',
+        'private fun snapshotAccountState(raw: SeriesAccountSnapshot)',
+        'val state = currentSnapshotOrNull() ?: return null',
+        'val finalState = currentSnapshotOrNull() ?: return false',
         'coordinator.prepare(finalState, plan.scope, plan.watched)',
         'if (finalPlan != plan) return false',
         'failClosedPortCall { account.dispatch(command.coreAction) } ?: false',
         'fun close(): Boolean',
-    )) or ports.find('prepared.remove(plan.fingerprint)') > ports.find('val fresh = failClosedPortCall') or
-    ports.find('val finalState = failClosedPortCall') > ports.find('account.dispatch(command.coreAction)') or
+    )) or ports.find('prepared.remove(plan.fingerprint)') > ports.find('val fresh = currentSnapshotOrNull()') or
+    ports.find('val finalState = currentSnapshotOrNull()') > ports.find('account.dispatch(command.coreAction)') or
     not all(name in ports_test for name in (
         'copiedOrForeignTitlePlanCannotDispatch',
         'duplicateTitlePreparationAndFailedRefreshAreConsumed',
@@ -732,6 +735,8 @@ if (not all(fragment in ports for fragment in (
         'titleFinalPreDispatchSnapshotDriftFailsClosed',
         'titleFinalPreDispatchSnapshotFailureFailsClosed',
         'titleActuatorOwnerThreadAndCloseRevokeAccess',
+        'titleActuatorSnapshotsHostCatalogueExactlyOnce',
+        'titleActuatorRejectsDeclaredCatalogueCardinalityMismatch',
     ))):
     fail.append('title_watched_actuator_instance_lifecycle_or_exception_gate_missing')
 if 'MarkVideoAsWatched' not in episode or 'canonicalVideoFromReadyMetaDetails' not in episode:
