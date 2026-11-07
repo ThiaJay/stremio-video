@@ -2,6 +2,7 @@ package org.pss.stremio.tv
 
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.Collections
 
 /**
  * Loaded Core canonical video object, not a fabricated metadata preview or Story Order position.
@@ -45,6 +46,56 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         null
     } catch (_: LinkageError) {
         null
+    }
+
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<T>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    private fun snapshotAccountState(raw: SeriesAccountSnapshot): SeriesAccountSnapshot? {
+        if (raw.seriesId.isBlank() ||
+            raw.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+            raw.readyMetaId.isBlank() ||
+            raw.readyMetaId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+        ) return null
+        val rawVideos = snapshotList(
+            raw.videos,
+            CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+        ) ?: return null
+        val videos = Collections.unmodifiableList(rawVideos.map { episode ->
+            if (episode.id.isBlank() ||
+                episode.id.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+                episode.season < 0 ||
+                episode.episode < 0 ||
+                (episode.releasedAt?.length ?: 0) > CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH
+            ) return null
+            episode.copy()
+        })
+        if (videos.map { it.id }.toSet().size != videos.size) return null
+        val storyOrder = raw.storyOrder?.let { source ->
+            snapshotList(source, CanonicalWatchedBounds.MAX_CANONICAL_EPISODES)
+                ?: return null
+        }
+        if (storyOrder?.any {
+                it.isBlank() || it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+            } == true
+        ) return null
+        return raw.copy(videos = videos, storyOrder = storyOrder)
     }
 
     /**
@@ -174,7 +225,8 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     }
 
     private fun buildPlan(stableVideoId: String, markWatched: Boolean): TvEpisodeWatchedPlan? {
-        val state = failClosedPortCall { port.currentSnapshot() } ?: return null
+        val rawState = failClosedPortCall { port.currentSnapshot() } ?: return null
+        val state = snapshotAccountState(rawState) ?: return null
         val videoSource = failClosedPortCall {
             port.canonicalVideoFromReadyMetaDetails(stableVideoId)
         } ?: return null
