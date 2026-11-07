@@ -188,6 +188,37 @@ class NativeStreamFailureClassifierTest {
         assertEquals(0, result.maxAdditionalAttempts)
     }
 
+    @Test fun playbackDelegationRequiresEveryFoundationClearanceAndUnusedBudget() {
+        val verified = SanitisedStreamFailureFacts(
+            providerStatus = "ready",
+            httpStatus = null,
+            transportError = "none",
+            containerError = "none",
+            decoderError = "none",
+            backendSwitchCount = 0,
+            sameEpisodeRetryCount = 0,
+            episodeAdvanced = false,
+            playbackHealthEligible = true
+        )
+        val blocked = listOf(
+            verified.copy(providerStatus = "unknown"),
+            verified.copy(httpStatus = 204),
+            verified.copy(transportError = "unknown"),
+            verified.copy(containerError = "unknown"),
+            verified.copy(decoderError = "unknown"),
+            verified.copy(backendSwitchCount = 1),
+            verified.copy(sameEpisodeRetryCount = 1),
+            verified.copy(episodeAdvanced = true, userRequestedNextEpisode = true)
+        )
+        for (facts in blocked) {
+            val result = classify(facts)
+            assertEquals("unclassified", result.category)
+            assertEquals("stop_and_report_sanitised_failure", result.action)
+            assertFalse(result.retryAllowed)
+            assertEquals(0, result.maxAdditionalAttempts)
+        }
+    }
+
     @Test fun classifierOutputComposesWithNativeBudgetWithoutParallelRetry() {
         val retryFacts =
             SanitisedStreamFailureFacts(httpStatus = 503, playbackHealthEligible = true)
@@ -206,6 +237,14 @@ class NativeStreamFailureClassifierTest {
         assertEquals("playback_health", recoveryPlan.authority)
         assertEquals("transcodeAudio", recoveryPlan.action)
         assertEquals(0, recoveryPlan.classifierAttemptsGranted)
+
+        val consumedClassifierBudget = delegatedFacts.copy(sameEpisodeRetryCount = 1)
+        val stopped = NativePlaybackRecoveryPolicy.plan(
+            consumedClassifierBudget,
+            playbackObservation()
+        )
+        assertEquals("terminal_stop", stopped.authority)
+        assertEquals("stop_and_report_sanitised_failure", stopped.action)
     }
 
     private fun playbackObservation() = PlaybackHealthObservation(
