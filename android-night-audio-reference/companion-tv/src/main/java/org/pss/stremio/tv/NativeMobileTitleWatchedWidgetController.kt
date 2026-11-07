@@ -62,23 +62,25 @@ class NativeMobileTitleWatchedWidgetController {
 
     private fun snapshotActions(
         source: List<NativeMobileTitleWatchedViewAction>
-    ): List<NativeMobileTitleWatchedViewAction>? = try {
-        val expectedSize = source.size
-        if (expectedSize <= 0 ||
-            expectedSize > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS
-        ) return null
-        val iterator = source.iterator()
-        val detached = ArrayList<NativeMobileTitleWatchedViewAction>(expectedSize)
-        repeat(expectedSize) {
-            if (!iterator.hasNext()) return null
-            detached += iterator.next()
+    ): List<NativeMobileTitleWatchedViewAction>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize <= 0 ||
+                expectedSize > NativeMobileTitleWatchedMenu.MAX_PRESENTED_ACTIONS
+            ) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<NativeMobileTitleWatchedViewAction>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            java.util.Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
         }
-        if (iterator.hasNext()) return null
-        java.util.Collections.unmodifiableList(detached)
-    } catch (_: Exception) {
-        null
-    } catch (_: LinkageError) {
-        null
     }
 
     fun replace(

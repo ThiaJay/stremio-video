@@ -70,23 +70,25 @@ class NativeTvTitleWatchedWidgetController {
 
     private fun snapshotActions(
         source: List<NativeTvTitleWatchedViewAction>
-    ): List<NativeTvTitleWatchedViewAction>? = try {
-        val expectedSize = source.size
-        if (expectedSize <= 0 ||
-            expectedSize > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS
-        ) return null
-        val iterator = source.iterator()
-        val detached = ArrayList<NativeTvTitleWatchedViewAction>(expectedSize)
-        repeat(expectedSize) {
-            if (!iterator.hasNext()) return null
-            detached += iterator.next()
+    ): List<NativeTvTitleWatchedViewAction>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize <= 0 ||
+                expectedSize > NativeTvTitleWatchedMenu.MAX_PRESENTED_ACTIONS
+            ) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<NativeTvTitleWatchedViewAction>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            java.util.Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
         }
-        if (iterator.hasNext()) return null
-        java.util.Collections.unmodifiableList(detached)
-    } catch (_: Exception) {
-        null
-    } catch (_: LinkageError) {
-        null
     }
 
     fun replace(
