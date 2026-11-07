@@ -178,9 +178,12 @@ object NativePlaybackRecoveryPolicy {
             val expectedSize = value.size
             if (expectedSize !in 0..MAX_ATTEMPTS) return null
             val snapshot = ArrayList<String>(expectedSize)
+            val iterator = value.iterator()
             repeat(expectedSize) { index ->
-                snapshot += value[index]
+                if (snapshot.size != index || !iterator.hasNext()) return null
+                snapshot += iterator.next()
             }
+            if (iterator.hasNext()) return null
             snapshot
         } catch (_: Exception) {
             null

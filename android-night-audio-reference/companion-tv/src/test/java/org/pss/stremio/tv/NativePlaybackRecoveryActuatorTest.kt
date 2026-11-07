@@ -369,6 +369,22 @@ class NativePlaybackRecoveryActuatorTest {
         assertNull(replacement.prepare(classification(), exactHistory))
     }
 
+    @Test fun underReportedClaimedHistoryCannotMintPlaybackLease() {
+        val hiddenCompletedAction = object : AbstractList<String>() {
+            override val size: Int = 0
+            override fun get(index: Int): String = throw IndexOutOfBoundsException()
+            override fun iterator(): Iterator<String> = listOf("transcodeAudio").iterator()
+        }
+        val port = FakePort(snapshot())
+        assertNull(
+            actuator(port).prepare(
+                classification(),
+                observation(history = hiddenCompletedAction)
+            )
+        )
+        assertEquals(emptyList<String>(), port.actions)
+    }
+
     @Test fun episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes() {
         val recoveryPort = FakePort(snapshot())
         val shared = budget(recoveryPort.snapshot)

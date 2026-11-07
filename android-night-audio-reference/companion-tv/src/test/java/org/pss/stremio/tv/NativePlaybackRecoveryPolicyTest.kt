@@ -251,6 +251,21 @@ class NativePlaybackRecoveryPolicyTest {
         )
     }
 
+    @Test fun underReportedRecoveryHistoryCannotHideCompletedAction() {
+        val hiddenCompletedAction = object : AbstractList<String>() {
+            override val size: Int = 0
+            override fun get(index: Int): String = throw IndexOutOfBoundsException()
+            override fun iterator(): Iterator<String> = listOf("transcodeAudio").iterator()
+        }
+        assertEquals(
+            "stop_no_safe_playback_recovery",
+            NativePlaybackRecoveryPolicy.plan(
+                classification(),
+                observation(history = hiddenCompletedAction)
+            ).action
+        )
+    }
+
     @Test fun policyExposesNoPreclassifiedDecisionParameter() {
         val methods = NativePlaybackRecoveryPolicy::class.java.methods
             .filter { it.name == "plan" && it.parameterCount == 2 }

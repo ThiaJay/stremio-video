@@ -154,10 +154,11 @@ class NativePlaybackRecoveryActuator(
         return try {
             val expectedSize = claimed.size
             if (expectedSize != authoritative.size || expectedSize > RECOVERY_ACTIONS.size) return false
+            val iterator = claimed.iterator()
             repeat(expectedSize) { index ->
-                if (claimed[index] != authoritative[index]) return false
+                if (!iterator.hasNext() || iterator.next() != authoritative[index]) return false
             }
-            true
+            !iterator.hasNext()
         } catch (_: Exception) {
             false
         } catch (_: LinkageError) {
