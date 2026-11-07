@@ -94,10 +94,24 @@ object NativeStreamFailureClassifier {
             return retry("http_transport", "retry_same_transport_route", value.sameEpisodeRetryCount)
         }
         if (value.playbackHealthEligible) {
-            return result("playback_health", "delegate_to_bounded_playback_recovery")
+            if (hasVerifiedPlaybackHealthClearance(value)) {
+                return result("playback_health", "delegate_to_bounded_playback_recovery")
+            }
         }
         return stop("unclassified", "stop_and_report_sanitised_failure")
     }
+
+    private fun hasVerifiedPlaybackHealthClearance(
+        value: SanitisedStreamFailureFacts
+    ): Boolean =
+        value.providerStatus == "ready" &&
+            value.httpStatus == null &&
+            value.transportError == "none" &&
+            value.containerError == "none" &&
+            value.decoderError == "none" &&
+            value.backendSwitchCount == 0 &&
+            value.sameEpisodeRetryCount == 0 &&
+            !value.episodeAdvanced
 
     private fun retry(category: String, action: String, attempts: Int): ClassifiedStreamFailure =
         result(
