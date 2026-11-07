@@ -359,7 +359,8 @@ class NativeEpisodeWatchedActionTest {
             override fun currentSnapshot():SeriesAccountSnapshot =
                 base.copy(videos=driftingCatalogue())
             override fun canonicalVideoFromReadyMetaDetails(id:String):Map<String,Any?>? =
-                mapOf("id" to target.id,"season" to target.season,"episode" to target.episode)
+                mapOf("id" to target.id,"season" to target.season,
+                    "episode" to target.episode,"title" to "One")
                     .takeIf { id==target.id }
             override fun dispatch(message:Map<String,Any>):Boolean = true
         }
