@@ -83,6 +83,38 @@ class StoryOrderContractTest {
         )
     }
 
+    @Test fun canonicalPresentationRejectsInvalidIdentityAndCoordinates() {
+        val oversizedId = "x".repeat(StoryOrderContract.MAX_STABLE_ID_LENGTH + 1)
+        val invalidCanonicalInputs = listOf(
+            listOf(regularOne.copy(id = " ")),
+            listOf(regularOne.copy(id = oversizedId)),
+            listOf(regularOne.copy(season = -1)),
+            listOf(regularOne.copy(episode = -1)),
+            listOf(regularOne, regularOne)
+        )
+
+        for (invalid in invalidCanonicalInputs) {
+            assertTrue(StoryOrderContract.presentation(invalid, null, false).isEmpty())
+        }
+    }
+
+    @Test fun oversizedStoryOrderIdentityFailsClosed() {
+        val oversizedId = "x".repeat(StoryOrderContract.MAX_STABLE_ID_LENGTH + 1)
+        val broken = hints.copy(
+            storyOrder = listOf(regularOne.id, oversizedId, regularTwo.id)
+        )
+        val resolved = StoryOrderContract.resolve(canonical, broken)
+        assertEquals(
+            StoryOrderFallbackReason.INVALID_ORDER_ID,
+            (resolved as StoryOrderResolution.CanonicalFallback).reason
+        )
+        val next = StoryOrderContract.next(canonical, broken, regularOne.id)
+        assertEquals(
+            NoStoryOverrideReason.INVALID_HINT,
+            (next as NextStoryDecision.UseExistingContinuation).reason
+        )
+    }
+
     @Test fun canonicalModeReturnsDetachedListWithoutHintInterpretation() {
         var hintRead = false
         val hostileOrder = object : AbstractList<String>() {
