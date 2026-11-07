@@ -29,6 +29,24 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         private const val MAX_CANONICAL_VIDEO_STRING_LENGTH = 262_144
         private const val MAX_CANONICAL_VIDEO_TOTAL_STRING_LENGTH = 1_000_000
         private const val MAX_ISSUED_PLANS = 16
+
+        private fun wellFormedUtf16(value: String): Boolean {
+            var index = 0
+            while (index < value.length) {
+                val current = value[index]
+                when {
+                    current.isHighSurrogate() -> {
+                        if (index + 1 >= value.length || !value[index + 1].isLowSurrogate()) {
+                            return false
+                        }
+                        index += 2
+                    }
+                    current.isLowSurrogate() -> return false
+                    else -> index += 1
+                }
+            }
+            return true
+        }
     }
 
     private val ownerThread = Thread.currentThread()
@@ -76,8 +94,10 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
     }
 
     private fun snapshotAccountState(raw: SeriesAccountSnapshot): SeriesAccountSnapshot? {
-        if (raw.seriesId.isBlank() ||
+        if (!wellFormedUtf16(raw.seriesId) ||
+            raw.seriesId.isBlank() ||
             raw.seriesId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
+            !wellFormedUtf16(raw.readyMetaId) ||
             raw.readyMetaId.isBlank() ||
             raw.readyMetaId.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
         ) return null
@@ -86,10 +106,12 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
             CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
         ) ?: return null
         val videos = Collections.unmodifiableList(rawVideos.map { episode ->
-            if (episode.id.isBlank() ||
+            if (!wellFormedUtf16(episode.id) ||
+                episode.id.isBlank() ||
                 episode.id.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH ||
                 episode.season < 0 ||
                 episode.episode < 0 ||
+                (episode.releasedAt != null && !wellFormedUtf16(episode.releasedAt)) ||
                 (episode.releasedAt?.length ?: 0) > CanonicalWatchedBounds.MAX_RELEASED_AT_LENGTH
             ) return null
             episode.copy()
@@ -100,7 +122,9 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
                 ?: return null
         }
         if (storyOrder?.any {
-                it.isBlank() || it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
+                !wellFormedUtf16(it) ||
+                    it.isBlank() ||
+                    it.length > CanonicalWatchedBounds.MAX_STABLE_ID_LENGTH
             } == true
         ) return null
         return raw.copy(videos = videos, storyOrder = storyOrder)
@@ -126,6 +150,7 @@ class NativeTvEpisodeWatchedActuator(private val port: CoreEpisodeAccountPort) {
         }
 
         fun consumeString(value: String) {
+            require(wellFormedUtf16(value)) { "Malformed Core Video UTF-16" }
             require(value.length <= MAX_CANONICAL_VIDEO_STRING_LENGTH) {
                 "Core Video string is too large"
             }
