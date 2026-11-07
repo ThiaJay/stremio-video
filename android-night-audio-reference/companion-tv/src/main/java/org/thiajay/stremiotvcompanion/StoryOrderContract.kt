@@ -26,6 +26,7 @@ data class StoryOrderHints(
 enum class StoryOrderFallbackReason {
     EMPTY_CANONICAL,
     INVALID_CANONICAL_ID,
+    INVALID_CANONICAL_COORDINATES,
     DUPLICATE_CANONICAL_ID,
     UNSUPPORTED_VERSION,
     MISSING_ORDER,
@@ -54,6 +55,7 @@ sealed interface NextStoryDecision {
 
 object StoryOrderContract {
     private const val MAX_INPUT_ENTRIES = 10_000
+    const val MAX_STABLE_ID_LENGTH = 240
 
     private data class InputSnapshot(
         val canonical: List<CanonicalEpisode>,
@@ -101,17 +103,27 @@ object StoryOrderContract {
         return InputSnapshot(canonicalSnapshot, hintsSnapshot)
     }
 
+    private fun canonicalFailure(
+        canonical: List<CanonicalEpisode>
+    ): StoryOrderFallbackReason? {
+        if (canonical.isEmpty()) return StoryOrderFallbackReason.EMPTY_CANONICAL
+        if (canonical.any { it.id.isBlank() || it.id.length > MAX_STABLE_ID_LENGTH }) {
+            return StoryOrderFallbackReason.INVALID_CANONICAL_ID
+        }
+        if (canonical.any { it.season < 0 || (it.episode != null && it.episode < 0) }) {
+            return StoryOrderFallbackReason.INVALID_CANONICAL_COORDINATES
+        }
+        if (canonical.map { it.id }.toSet().size != canonical.size) {
+            return StoryOrderFallbackReason.DUPLICATE_CANONICAL_ID
+        }
+        return null
+    }
+
     private fun resolveSnapshot(snapshot: InputSnapshot): StoryOrderResolution {
         val canonical = snapshot.canonical
         val hints = snapshot.hints
-        if (canonical.isEmpty()) {
-            return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.EMPTY_CANONICAL)
-        }
-        if (canonical.any { it.id.isBlank() }) {
-            return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.INVALID_CANONICAL_ID)
-        }
-        if (canonical.map { it.id }.toSet().size != canonical.size) {
-            return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.DUPLICATE_CANONICAL_ID)
+        canonicalFailure(canonical)?.let { reason ->
+            return StoryOrderResolution.CanonicalFallback(reason)
         }
         if (hints?.storyOrderVersion != 1) {
             return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.UNSUPPORTED_VERSION)
@@ -125,7 +137,7 @@ object StoryOrderContract {
         val seen = LinkedHashSet<String>()
         val ordered = ArrayList<CanonicalEpisode>(requested.size)
         for (id in requested) {
-            if (id.isBlank()) {
+            if (id.isBlank() || id.length > MAX_STABLE_ID_LENGTH) {
                 return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.INVALID_ORDER_ID)
             }
             if (!seen.add(id)) {
@@ -159,6 +171,7 @@ object StoryOrderContract {
         storyOrderSelected: Boolean
     ): List<CanonicalEpisode> {
         val canonicalSnapshot = snapshotList(canonical, MAX_INPUT_ENTRIES) ?: return emptyList()
+        if (canonicalFailure(canonicalSnapshot) != null) return emptyList()
         if (!storyOrderSelected) return canonicalSnapshot
 
         val hintsSnapshot = if (hints == null) {
@@ -199,3 +212,4 @@ object StoryOrderContract {
         return NextStoryDecision.UseCanonicalEpisode(resolved.episodes[index + 1])
     }
 }
+c3980ea45c9746837967e2ae5b3d369680fdc1cff1a209d5872f52131f56fe19  android-night-audio-reference/companion-tv/src/main/java/org/thiajay/stremiotvcompanion/StoryOrderContract.kt
