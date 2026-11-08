@@ -1915,6 +1915,7 @@ if not all(x in native_subtitle_store_test for x in [
     'absentStorageLoadsNoPreference',
     'firstExplicitChoicePersistsAndPromotes',
     'repeatedChoiceIncrementsRevision',
+    'changedExplicitChoiceAdvancesIndependentRevision',
     'existingInstallationDigestIsReused',
     'invalidOrThrowingDigestSourceLeavesStorageUntouched',
     'receiptWithoutInstallationDigestFailsWithoutMutation',
@@ -2850,4 +2851,5 @@ if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_o
 print(json.dumps({'ok':not fail,'checks':532,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
+
 

@@ -466,6 +466,7 @@ jobs:
           assert 'absentStorageLoadsNoPreference' in names, 'Native subtitle store regression absentStorageLoadsNoPreference not executed'
           assert 'firstExplicitChoicePersistsAndPromotes' in names, 'Native subtitle store regression firstExplicitChoicePersistsAndPromotes not executed'
           assert 'repeatedChoiceIncrementsRevision' in names, 'Native subtitle store regression repeatedChoiceIncrementsRevision not executed'
+          assert 'changedExplicitChoiceAdvancesIndependentRevision' in names, 'Native subtitle store changed-binding regression not executed'
           assert 'existingInstallationDigestIsReused' in names, 'Native subtitle store regression existingInstallationDigestIsReused not executed'
           assert 'invalidOrThrowingDigestSourceLeavesStorageUntouched' in names, 'Native subtitle store regression invalidOrThrowingDigestSourceLeavesStorageUntouched not executed'
           assert 'receiptWithoutInstallationDigestFailsWithoutMutation' in names, 'Native subtitle store regression receiptWithoutInstallationDigestFailsWithoutMutation not executed'
@@ -759,5 +760,6 @@ jobs:
           print('Private-client, account, physical display, Fire TV and hardware acceptance remain false.')
           PY
 # Never upload emulator screenshots, APKs, logs, synthetic media or test artifacts.
+
 
 

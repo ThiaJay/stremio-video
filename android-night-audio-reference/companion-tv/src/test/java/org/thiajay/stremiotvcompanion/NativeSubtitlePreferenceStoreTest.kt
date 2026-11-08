@@ -52,6 +52,23 @@ class NativeSubtitlePreferenceStoreTest {
         assertEquals(2, port.receiptCasCalls)
     }
 
+    @Test fun changedExplicitChoiceAdvancesIndependentRevision() {
+        val port = FakeStorage()
+        assertAccepted(store(port).recordExplicitLocalChoice(session, null, "first-run"), 1L)
+
+        val changed = session.copy(language = "spa", source = "external")
+        val second = store(port) { throw AssertionError("digest source must not be called") }
+            .recordExplicitLocalChoice(changed, "spa", "subtitle-settings")
+
+        assertAccepted(second, 2L)
+        assertEquals("2", port.preferenceRevisionRaw)
+        assertEquals("spa", (port.receipt?.get("binding") as Map<*, *>)["sessionLanguage"])
+        assertEquals("spa", (port.receipt?.get("binding") as Map<*, *>)["globalLanguage"])
+        assertEquals("external", (port.receipt?.get("binding") as Map<*, *>)["sessionSource"])
+        assertNull(store(port).loadStoredPreference(session, null))
+        assertEquals(2L, store(port).loadStoredPreference(changed, "spa")?.get("preferenceRevision"))
+    }
+
     @Test fun existingInstallationDigestIsReused() {
         val port = FakeStorage(installationDigest = digest)
         val result = store(port) { throw IllegalStateException("unused digest source") }

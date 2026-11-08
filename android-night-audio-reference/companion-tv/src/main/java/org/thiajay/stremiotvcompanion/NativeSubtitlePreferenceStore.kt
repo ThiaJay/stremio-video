@@ -97,12 +97,11 @@ class NativeSubtitlePreferenceStore(
         if (!DIGEST.matches(installationDigest)) return rejected()
 
         val previousRevision = if (before.preferenceRevision != null) {
-            if (before.receipt == null) {
-                before.preferenceRevision
-            } else {
-                val prior = promote(before, sessionPreference, globalLanguage) ?: return rejected()
-                positiveRevision(prior["preferenceRevision"]) ?: return rejected()
-            }
+            // A fresh explicit local choice is allowed to change the binding.
+            // The independent stored marker owns monotonicity; requiring the
+            // previous receipt to promote against the new choice would make a
+            // legitimate language/source change impossible.
+            before.preferenceRevision
         } else if (before.receipt == null) {
             0L
         } else {
