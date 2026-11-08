@@ -115,6 +115,57 @@ class StoryOrderContractTest {
         )
     }
 
+    @Test fun malformedCanonicalStableIdsAreNeverPresentedOrResolved() {
+        val malformedIds = listOf("series:\uD800", "series:\uDC00")
+        for (malformedId in malformedIds) {
+            val malformedCanonical = listOf(regularOne.copy(id = malformedId))
+            val resolved = StoryOrderContract.resolve(
+                malformedCanonical,
+                StoryOrderHints(1, listOf(malformedId))
+            )
+            assertEquals(
+                StoryOrderFallbackReason.INVALID_CANONICAL_ID,
+                (resolved as StoryOrderResolution.CanonicalFallback).reason
+            )
+            assertTrue(
+                StoryOrderContract.presentation(
+                    malformedCanonical,
+                    null,
+                    storyOrderSelected = false
+                ).isEmpty()
+            )
+            val next = StoryOrderContract.next(
+                malformedCanonical,
+                StoryOrderHints(1, listOf(malformedId)),
+                malformedId
+            )
+            assertEquals(
+                NoStoryOverrideReason.INVALID_HINT,
+                (next as NextStoryDecision.UseExistingContinuation).reason
+            )
+        }
+    }
+
+    @Test fun malformedStoryOrderIdsCannotOverrideCanonicalContinuation() {
+        val malformedIds = listOf("series:\uD800", "series:\uDC00")
+        for (malformedId in malformedIds) {
+            val broken = hints.copy(
+                storyOrder = listOf(regularOne.id, malformedId, regularTwo.id)
+            )
+            val resolved = StoryOrderContract.resolve(canonical, broken)
+            assertEquals(
+                StoryOrderFallbackReason.INVALID_ORDER_ID,
+                (resolved as StoryOrderResolution.CanonicalFallback).reason
+            )
+            assertEquals(canonical, StoryOrderContract.presentation(canonical, broken, true))
+            val next = StoryOrderContract.next(canonical, broken, regularOne.id)
+            assertEquals(
+                NoStoryOverrideReason.INVALID_HINT,
+                (next as NextStoryDecision.UseExistingContinuation).reason
+            )
+        }
+    }
+
     @Test fun canonicalModeReturnsDetachedListWithoutHintInterpretation() {
         var hintRead = false
         val hostileOrder = object : AbstractList<String>() {
@@ -232,3 +283,4 @@ class StoryOrderContractTest {
         )
     }
 }
+

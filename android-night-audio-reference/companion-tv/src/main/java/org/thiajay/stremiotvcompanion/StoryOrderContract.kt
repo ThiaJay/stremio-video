@@ -62,6 +62,24 @@ object StoryOrderContract {
         val hints: StoryOrderHints?
     )
 
+    private fun wellFormedUtf16(value: String): Boolean {
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            when {
+                current.isHighSurrogate() -> {
+                    if (index + 1 >= value.length ||
+                        !value[index + 1].isLowSurrogate()
+                    ) return false
+                    index += 2
+                }
+                current.isLowSurrogate() -> return false
+                else -> index += 1
+            }
+        }
+        return true
+    }
+
     private fun <T> snapshotList(value: List<T>, maximum: Int): List<T>? {
         return try {
             val expectedSize = value.size
@@ -107,7 +125,12 @@ object StoryOrderContract {
         canonical: List<CanonicalEpisode>
     ): StoryOrderFallbackReason? {
         if (canonical.isEmpty()) return StoryOrderFallbackReason.EMPTY_CANONICAL
-        if (canonical.any { it.id.isBlank() || it.id.length > MAX_STABLE_ID_LENGTH }) {
+        if (canonical.any {
+                it.id.isBlank() ||
+                    it.id.length > MAX_STABLE_ID_LENGTH ||
+                    !wellFormedUtf16(it.id)
+            }
+        ) {
             return StoryOrderFallbackReason.INVALID_CANONICAL_ID
         }
         if (canonical.any { it.season < 0 || (it.episode != null && it.episode < 0) }) {
@@ -137,7 +160,10 @@ object StoryOrderContract {
         val seen = LinkedHashSet<String>()
         val ordered = ArrayList<CanonicalEpisode>(requested.size)
         for (id in requested) {
-            if (id.isBlank() || id.length > MAX_STABLE_ID_LENGTH) {
+            if (id.isBlank() ||
+                id.length > MAX_STABLE_ID_LENGTH ||
+                !wellFormedUtf16(id)
+            ) {
                 return StoryOrderResolution.CanonicalFallback(StoryOrderFallbackReason.INVALID_ORDER_ID)
             }
             if (!seen.add(id)) {
@@ -212,3 +238,4 @@ object StoryOrderContract {
         return NextStoryDecision.UseCanonicalEpisode(resolved.episodes[index + 1])
     }
 }
+
