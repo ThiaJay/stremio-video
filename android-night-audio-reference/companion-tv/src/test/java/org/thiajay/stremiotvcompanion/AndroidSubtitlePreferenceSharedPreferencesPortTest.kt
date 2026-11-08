@@ -14,18 +14,21 @@ class AndroidSubtitlePreferenceSharedPreferencesPortTest {
         val port = AndroidSubtitlePreferenceSharedPreferencesPort(fake)
 
         assertEquals(NativeSubtitlePreferenceStore.StorageRead<String>(true, null), port.readInstallationDigest())
+        assertEquals(NativeSubtitlePreferenceStore.StorageRead<String>(true, null), port.readPreferenceRevision())
         assertEquals(NativeSubtitlePreferenceStore.StorageRead<String>(true, null), port.readPreferenceReceipt())
         assertTrue(fake.snapshot().isEmpty())
     }
 
-    @Test fun exactCommitsUseOnlyTheTwoFixedPrivateKeys() {
+    @Test fun exactCommitsUseOnlyTheThreeFixedPrivateKeys() {
         val fake = FakeSharedPreferences()
         val port = AndroidSubtitlePreferenceSharedPreferencesPort(fake)
 
         assertTrue(port.compareAndSetInstallationDigest(null, DIGEST))
+        assertTrue(port.compareAndSetPreferenceRevision(null, "1"))
         assertTrue(port.compareAndSetPreferenceReceipt(null, RECEIPT))
-        assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), fake.snapshot().keys)
+        assertEquals(setOf(DIGEST_KEY, REVISION_KEY, RECEIPT_KEY), fake.snapshot().keys)
         assertEquals(DIGEST, port.readInstallationDigest().value)
+        assertEquals("1", port.readPreferenceRevision().value)
         assertEquals(RECEIPT, port.readPreferenceReceipt().value)
     }
 
@@ -36,6 +39,10 @@ class AndroidSubtitlePreferenceSharedPreferencesPortTest {
 
         assertFalse(port.compareAndSetInstallationDigest(null, OTHER_DIGEST))
         assertEquals(DIGEST, fake.value(DIGEST_KEY))
+
+        assertTrue(port.compareAndSetPreferenceRevision(null, "1"))
+        assertFalse(port.compareAndSetPreferenceRevision(null, "2"))
+        assertEquals("1", fake.value(REVISION_KEY))
     }
 
     @Test fun wrongTypeAndThrowingReadsFailClosed() {
@@ -50,7 +57,9 @@ class AndroidSubtitlePreferenceSharedPreferencesPortTest {
         throwing.setThrowReads(true)
         val throwingPort = AndroidSubtitlePreferenceSharedPreferencesPort(throwing)
         assertFalse(throwingPort.readPreferenceReceipt().ok)
+        assertFalse(throwingPort.readPreferenceRevision().ok)
         assertFalse(throwingPort.compareAndSetPreferenceReceipt(null, RECEIPT))
+        assertFalse(throwingPort.compareAndSetPreferenceRevision(null, "1"))
     }
 
     @Test fun commitRefusalFailsClosedWithoutAWriteClaim() {
@@ -74,12 +83,14 @@ class AndroidSubtitlePreferenceSharedPreferencesPortTest {
     @Test fun nullUpdateRemovesOnlyTheExactReceiptSlot() {
         val fake = FakeSharedPreferences()
         fake.seed(DIGEST_KEY, DIGEST)
+        fake.seed(REVISION_KEY, "1")
         fake.seed(RECEIPT_KEY, RECEIPT)
         fake.seed("unrelated", "preserved")
         val port = AndroidSubtitlePreferenceSharedPreferencesPort(fake)
 
         assertTrue(port.compareAndSetPreferenceReceipt(RECEIPT, null))
         assertEquals(DIGEST, fake.value(DIGEST_KEY))
+        assertEquals("1", fake.value(REVISION_KEY))
         assertNull(fake.value(RECEIPT_KEY))
         assertEquals("preserved", fake.value("unrelated"))
     }
@@ -131,12 +142,16 @@ class AndroidSubtitlePreferenceSharedPreferencesPortTest {
         assertTrue(port.close())
         assertFalse(port.readInstallationDigest().ok)
         assertFalse(port.compareAndSetInstallationDigest(DIGEST, OTHER_DIGEST))
+        assertFalse(port.readPreferenceRevision().ok)
+        assertFalse(port.compareAndSetPreferenceRevision(null, "1"))
         assertFalse(port.close())
     }
 
     private companion object {
         const val DIGEST_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.installation_digest.v1"
+        const val REVISION_KEY =
+            "org.thiajay.stremiotvcompanion.subtitle.preference.revision.v1"
         const val RECEIPT_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.receipt.v1"
         const val DIGEST =

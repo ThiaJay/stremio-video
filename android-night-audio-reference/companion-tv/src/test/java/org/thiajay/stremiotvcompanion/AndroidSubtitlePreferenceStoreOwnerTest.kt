@@ -61,12 +61,13 @@ class AndroidSubtitlePreferenceStoreOwnerTest {
         assertTrue(recorded.ok)
         assertEquals("same-installation-setting", recorded.provenance?.get("kind"))
         assertEquals("2a".repeat(32), preferences.value(DIGEST_KEY))
+        assertEquals("1", preferences.value(REVISION_KEY))
         assertTrue((preferences.value(RECEIPT_KEY) as String).startsWith("nsp1:"))
         assertEquals(
             recorded.provenance,
             owner.loadStoredPreference(enabledPreference(), "English")
         )
-        assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), preferences.snapshot().keys)
+        assertEquals(setOf(DIGEST_KEY, REVISION_KEY, RECEIPT_KEY), preferences.snapshot().keys)
         assertTrue(owner.close())
     }
 
@@ -108,6 +109,7 @@ class AndroidSubtitlePreferenceStoreOwnerTest {
         assertTrue(cleared.ok)
         assertNull(preferences.value(RECEIPT_KEY))
         assertEquals("35".repeat(32), preferences.value(DIGEST_KEY))
+        assertEquals("1", preferences.value(REVISION_KEY))
         assertEquals("preserved", preferences.value("unrelated"))
         assertTrue(owner.close())
     }
@@ -174,6 +176,7 @@ class AndroidSubtitlePreferenceStoreOwnerTest {
         )
         assertEquals(0, freshEntropyCalls)
         assertEquals("61".repeat(32), preferences.value(DIGEST_KEY))
+        assertEquals("1", preferences.value(REVISION_KEY))
         assertTrue(second.close())
     }
 
@@ -214,8 +217,9 @@ class AndroidSubtitlePreferenceStoreOwnerTest {
     private companion object {
         const val DIGEST_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.installation_digest.v1"
+        const val REVISION_KEY =
+            "org.thiajay.stremiotvcompanion.subtitle.preference.revision.v1"
         const val RECEIPT_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.receipt.v1"
     }
 }
-

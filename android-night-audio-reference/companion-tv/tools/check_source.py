@@ -1866,13 +1866,23 @@ if not all(x in native_subtitle_store for x in [
     'class NativeSubtitlePreferenceStore(',
     'interface StoragePort',
     'fun compareAndSetInstallationDigest(',
+    'fun compareAndSetPreferenceRevision(',
     'fun compareAndSetPreferenceReceipt(',
     'private fun readStableTuple()',
     'private fun rollback(before: StoredTuple, target: StoredTuple)',
     'current.installationDigest == before.installationDigest',
+    'current.preferenceRevisionRaw == before.preferenceRevisionRaw',
     'current.receiptRaw == before.receiptRaw'
 ]):
     fail.append('native_subtitle_store_atomic_contract')
+if not all(x in native_subtitle_store for x in [
+    'fun readPreferenceRevision(): StorageRead<String>?',
+    'val preferenceRevisionRaw: String?',
+    'if (stored.preferenceRevision != revision) return null',
+    'private fun canonicalRevision(value: String): Long?',
+    'private val REVISION = Regex("^[1-9][0-9]{0,15}$")'
+]):
+    fail.append('native_subtitle_store_independent_revision_contract')
 if not all(x in native_subtitle_store for x in [
     'fun loadStoredPreference(',
     'fun recordExplicitLocalChoice(',
@@ -1915,6 +1925,9 @@ if not all(x in native_subtitle_store_test for x in [
     'falsePositiveReceiptWriteRollsBackExactTuple',
     'unknownConcurrentDriftIsPreservedWithoutRollbackClaim',
     'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest',
+    'explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay',
+    'legacyReceiptCanAdvanceOnlyThroughNewExplicitChoice',
+    'noncanonicalIndependentRevisionFailsClosedWithoutMutation',
     'explicitOffRefusalLeavesReceiptUntouched',
     'loadingRequiresStableExactReadbackAndBinding',
     'foreignThreadAndClosedStoreFailClosed',
@@ -1926,6 +1939,7 @@ if not all(x in native_subtitle_store_test for x in [
     'assertEquals(foreign, port.receipt)',
     'assertEquals(digest, port.installationDigest)',
     'assertEquals(0, port.digestCasCalls)',
+    'assertEquals(0, port.revisionCasCalls)',
     'assertEquals(0, port.receiptCasCalls)'
 ]):
     fail.append('native_subtitle_store_adversarial_assertions')
@@ -1956,6 +1970,7 @@ if not all(x in android_subtitle_storage for x in [
     'if (!onOwnerThread() || closed)',
     'fun close(): Boolean',
     'INSTALLATION_DIGEST_KEY',
+    'PREFERENCE_REVISION_KEY',
     'PREFERENCE_RECEIPT_KEY',
     'catch (_: RuntimeException)',
     'catch (_: LinkageError)'
@@ -1963,7 +1978,7 @@ if not all(x in android_subtitle_storage for x in [
     fail.append('android_subtitle_shared_preferences_lifecycle_or_exception_boundary')
 if not all(x in android_subtitle_storage_test for x in [
     'absentSlotsReadAsSuccessfulNullWithoutMutation',
-    'exactCommitsUseOnlyTheTwoFixedPrivateKeys',
+    'exactCommitsUseOnlyTheThreeFixedPrivateKeys',
     'compareAndSetMismatchDoesNotWrite',
     'wrongTypeAndThrowingReadsFailClosed',
     'commitRefusalFailsClosedWithoutAWriteClaim',
@@ -1975,7 +1990,7 @@ if not all(x in android_subtitle_storage_test for x in [
 ]):
     fail.append('android_subtitle_shared_preferences_regressions')
 if not all(x in android_subtitle_storage_test for x in [
-    'assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), fake.snapshot().keys)',
+    'assertEquals(setOf(DIGEST_KEY, REVISION_KEY, RECEIPT_KEY), fake.snapshot().keys)',
     'assertEquals("__drift__", fake.value(RECEIPT_KEY))',
     'assertEquals("preserved", fake.value("unrelated"))',
     'assertFalse(foreignClose.get())'
@@ -2077,7 +2092,7 @@ if not all(x in android_subtitle_store_owner_test for x in [
 if not all(x in android_subtitle_store_owner_test for x in [
     'assertNull(owner(preferences, 0x22))',
     'assertEquals(0, entropyCalls)',
-    'assertEquals(setOf(DIGEST_KEY, RECEIPT_KEY), preferences.snapshot().keys)',
+    'assertEquals(setOf(DIGEST_KEY, REVISION_KEY, RECEIPT_KEY), preferences.snapshot().keys)',
     'assertEquals(mapOf("unrelated" to "preserved"), preferences.snapshot())',
     'assertNull(owner(preferences, 0x52))',
     'assertEquals(7, preferences.value(DIGEST_KEY))'
@@ -2835,5 +2850,4 @@ if any(x in java_text+synthetic_fixtures+synthetic_fixtures_test+synthetic_cue_o
 print(json.dumps({'ok':not fail,'checks':532,'issues':fail,'tested_bridge_sha256':CHECKSUM,
                   'production_package':'com.stremio.one','candidate_package':'org.thiajay.stremiotvcompanion'},indent=2))
 sys.exit(1 if fail else 0)
-
 

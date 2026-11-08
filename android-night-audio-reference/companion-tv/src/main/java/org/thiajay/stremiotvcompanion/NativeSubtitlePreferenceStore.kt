@@ -4,10 +4,12 @@ package org.thiajay.stremiotvcompanion
  * Pure, owner-thread installation-local storage transaction boundary for
  * NativeSubtitlePreferenceProvenance.
  *
- * The host supplies atomic compare-and-set operations for a digest slot and a
- * canonical encoded-receipt slot. This class has no Android storage, account,
- * player, network or UI access and is deliberately not wired into either
- * synthetic Activity.
+ * The host supplies atomic compare-and-set operations for an installation
+ * digest, an independent monotonic preference revision and a canonical
+ * encoded receipt. Keeping the revision outside the receipt prevents an old
+ * receipt generation from becoming current again after explicit Off removes
+ * the receipt. This class has no Android storage, account, player, network or
+ * UI access and is deliberately not wired into either synthetic Activity.
  */
 class NativeSubtitlePreferenceStore(
     private val storage: StoragePort,
@@ -30,9 +32,15 @@ class NativeSubtitlePreferenceStore(
 
     interface StoragePort {
         fun readInstallationDigest(): StorageRead<String>?
+        fun readPreferenceRevision(): StorageRead<String>?
         fun readPreferenceReceipt(): StorageRead<String>?
 
         fun compareAndSetInstallationDigest(
+            expected: String?,
+            update: String?
+        ): Boolean
+
+        fun compareAndSetPreferenceRevision(
             expected: String?,
             update: String?
         ): Boolean
@@ -46,6 +54,8 @@ class NativeSubtitlePreferenceStore(
 
     private data class StoredTuple(
         val installationDigest: String?,
+        val preferenceRevisionRaw: String?,
+        val preferenceRevision: Long?,
         val receiptRaw: String?,
         val receipt: Map<String, Any?>?
     )
@@ -79,16 +89,28 @@ class NativeSubtitlePreferenceStore(
         ) return rejected()
 
         val before = readStableTuple() ?: return rejected()
-        if (before.installationDigest == null && before.receiptRaw != null) return rejected()
+        if (before.installationDigest == null &&
+            (before.preferenceRevisionRaw != null || before.receiptRaw != null)
+        ) return rejected()
 
         val installationDigest = before.installationDigest ?: safeDigest() ?: return rejected()
         if (!DIGEST.matches(installationDigest)) return rejected()
 
-        val previousRevision = if (before.receipt == null) {
+        val previousRevision = if (before.preferenceRevision != null) {
+            if (before.receipt == null) {
+                before.preferenceRevision
+            } else {
+                val prior = promote(before, sessionPreference, globalLanguage) ?: return rejected()
+                positiveRevision(prior["preferenceRevision"]) ?: return rejected()
+            }
+        } else if (before.receipt == null) {
             0L
         } else {
-            val prior = promote(before, sessionPreference, globalLanguage) ?: return rejected()
-            positiveRevision(prior["preferenceRevision"]) ?: return rejected()
+            // A source-only predecessor stored its generation only inside the
+            // receipt. A genuine explicit choice may migrate that canonical
+            // receipt by advancing beyond it; the legacy receipt is never
+            // promoted on load without the independent marker.
+            receiptRevisionForInstallation(before) ?: return rejected()
         }
         if (previousRevision >= MAX_SAFE_INTEGER) return rejected()
         val revision = previousRevision + 1L
@@ -106,11 +128,22 @@ class NativeSubtitlePreferenceStore(
             )
         ) ?: return rejected()
         val receiptRaw = NativeSubtitlePreferenceReceiptCodec.encode(receipt) ?: return rejected()
-        val target = StoredTuple(installationDigest, receiptRaw, receipt)
+        val revisionRaw = revision.toString()
+        val target = StoredTuple(
+            installationDigest = installationDigest,
+            preferenceRevisionRaw = revisionRaw,
+            preferenceRevision = revision,
+            receiptRaw = receiptRaw,
+            receipt = receipt
+        )
 
         if (before.installationDigest == null &&
             !safeCompareDigest(null, installationDigest)
         ) return rejected(rollback(before, target))
+
+        if (!safeCompareRevision(before.preferenceRevisionRaw, revisionRaw)) {
+            return rejected(rollback(before, target))
+        }
 
         if (!safeCompareReceipt(before.receiptRaw, receiptRaw)) {
             return rejected(rollback(before, target))
@@ -130,7 +163,8 @@ class NativeSubtitlePreferenceStore(
 
     /**
      * Explicit Off is authoritative. It clears only the receipt while retaining
-     * the installation identity. No enabled preference can call this path.
+     * the installation identity and independent revision marker. No enabled
+     * preference can call this path.
      */
     fun clearStoredReceiptForExplicitOff(
         sessionPreference: NativeSubtitlePreferenceProvenance.SessionPreference?
@@ -142,7 +176,19 @@ class NativeSubtitlePreferenceStore(
         if (before.receiptRaw == null) {
             return CommitResult(ok = true, provenance = null, rollbackVerified = true)
         }
-        val target = before.copy(receiptRaw = null, receipt = null)
+        val retainedRevision = before.preferenceRevision
+            ?: receiptRevisionForInstallation(before)
+            ?: return rejected()
+        val retainedRevisionRaw = retainedRevision.toString()
+        val target = before.copy(
+            preferenceRevisionRaw = retainedRevisionRaw,
+            preferenceRevision = retainedRevision,
+            receiptRaw = null,
+            receipt = null
+        )
+        if (before.preferenceRevisionRaw != retainedRevisionRaw &&
+            !safeCompareRevision(before.preferenceRevisionRaw, retainedRevisionRaw)
+        ) return rejected(rollback(before, target))
         if (!safeCompareReceipt(before.receiptRaw, null)) {
             return rejected(rollback(before, target))
         }
@@ -168,6 +214,7 @@ class NativeSubtitlePreferenceStore(
         val receipt = stored.receipt ?: return null
         if (receipt["kind"] != "explicit-local-choice") return null
         val revision = positiveRevision(receipt["preferenceRevision"]) ?: return null
+        if (stored.preferenceRevision != revision) return null
         val binding = receipt["binding"] as? Map<*, *> ?: return null
         return NativeSubtitlePreferenceProvenance.promoteStoredPreferenceReceipt(
             activeInstallationDigest = digest,
@@ -192,14 +239,21 @@ class NativeSubtitlePreferenceStore(
     private fun readTupleOnce(): StoredTuple? {
         return try {
             val digestRead = storage.readInstallationDigest() ?: return null
+            val revisionRead = storage.readPreferenceRevision() ?: return null
             val receiptRead = storage.readPreferenceReceipt() ?: return null
-            if (!digestRead.ok || !receiptRead.ok) return null
+            if (!digestRead.ok || !revisionRead.ok || !receiptRead.ok) return null
+            val revisionRaw = revisionRead.value
+            val revision = revisionRaw?.let(::canonicalRevision) ?: run {
+                if (revisionRaw == null) null else return null
+            }
             val raw = receiptRead.value
             val receipt = raw?.let(NativeSubtitlePreferenceReceiptCodec::decode) ?: run {
                 if (raw == null) null else return null
             }
             StoredTuple(
                 installationDigest = digestRead.value,
+                preferenceRevisionRaw = revisionRaw,
+                preferenceRevision = revision,
                 receiptRaw = raw,
                 receipt = receipt
             )
@@ -218,9 +272,11 @@ class NativeSubtitlePreferenceStore(
         val current = readStableTuple() ?: return false
         val digestOwned = current.installationDigest == before.installationDigest ||
             current.installationDigest == target.installationDigest
+        val revisionOwned = current.preferenceRevisionRaw == before.preferenceRevisionRaw ||
+            current.preferenceRevisionRaw == target.preferenceRevisionRaw
         val receiptOwned = current.receiptRaw == before.receiptRaw ||
             current.receiptRaw == target.receiptRaw
-        if (!digestOwned || !receiptOwned) return false
+        if (!digestOwned || !revisionOwned || !receiptOwned) return false
 
         if (current.receiptRaw != before.receiptRaw &&
             !safeCompareReceipt(current.receiptRaw, before.receiptRaw)
@@ -228,11 +284,25 @@ class NativeSubtitlePreferenceStore(
 
         val afterReceipt = readStableTuple() ?: return false
         if (afterReceipt.installationDigest != current.installationDigest ||
+            afterReceipt.preferenceRevisionRaw != current.preferenceRevisionRaw ||
             afterReceipt.receiptRaw != before.receiptRaw
         ) return false
 
-        if (afterReceipt.installationDigest != before.installationDigest &&
-            !safeCompareDigest(afterReceipt.installationDigest, before.installationDigest)
+        if (afterReceipt.preferenceRevisionRaw != before.preferenceRevisionRaw &&
+            !safeCompareRevision(
+                afterReceipt.preferenceRevisionRaw,
+                before.preferenceRevisionRaw
+            )
+        ) return false
+
+        val afterRevision = readStableTuple() ?: return false
+        if (afterRevision.installationDigest != current.installationDigest ||
+            afterRevision.preferenceRevisionRaw != before.preferenceRevisionRaw ||
+            afterRevision.receiptRaw != before.receiptRaw
+        ) return false
+
+        if (afterRevision.installationDigest != before.installationDigest &&
+            !safeCompareDigest(afterRevision.installationDigest, before.installationDigest)
         ) return false
 
         return readStableTuple() == before
@@ -268,6 +338,32 @@ class NativeSubtitlePreferenceStore(
         }
     }
 
+    private fun safeCompareRevision(expected: String?, update: String?): Boolean {
+        return try {
+            storage.compareAndSetPreferenceRevision(expected, update)
+        } catch (_: RuntimeException) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
+    }
+
+    private fun receiptRevisionForInstallation(stored: StoredTuple): Long? {
+        val digest = stored.installationDigest ?: return null
+        if (!DIGEST.matches(digest)) return null
+        val receipt = stored.receipt ?: return null
+        if (receipt["kind"] != "explicit-local-choice" ||
+            receipt["installationDigest"] != digest
+        ) return null
+        return positiveRevision(receipt["preferenceRevision"])
+    }
+
+    private fun canonicalRevision(value: String): Long? {
+        if (!REVISION.matches(value)) return null
+        val parsed = value.toLongOrNull() ?: return null
+        return parsed.takeIf { it in 1L..MAX_SAFE_INTEGER && it.toString() == value }
+    }
+
     private fun rejected(rollbackVerified: Boolean = true): CommitResult =
         CommitResult(ok = false, provenance = null, rollbackVerified = rollbackVerified)
 
@@ -283,6 +379,7 @@ class NativeSubtitlePreferenceStore(
 
     companion object {
         private val DIGEST = Regex("^[0-9a-f]{64}$")
+        private val REVISION = Regex("^[1-9][0-9]{0,15}$")
         private val CHOICE_SURFACES = setOf("first-run", "subtitle-settings")
         private const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L
     }

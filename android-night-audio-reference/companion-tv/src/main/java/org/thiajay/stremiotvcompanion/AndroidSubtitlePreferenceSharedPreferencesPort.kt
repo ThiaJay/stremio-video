@@ -3,10 +3,10 @@ package org.thiajay.stremiotvcompanion
 import android.content.SharedPreferences
 
 /**
- * Concrete, owner-thread Android storage port for the two canonical subtitle
+ * Concrete, owner-thread Android storage port for the three canonical subtitle
  * provenance slots.
  *
- * The supplied [SharedPreferences] instance and the two fixed keys must be
+ * The supplied [SharedPreferences] instance and the three fixed keys must be
  * exclusive to this adapter. Synchronisation is process-local and coordinates
  * only adapter instances sharing the same object; this class does not claim
  * cross-process atomicity. It has no Context, account, network, player or UI
@@ -21,6 +21,9 @@ class AndroidSubtitlePreferenceSharedPreferencesPort(
     override fun readInstallationDigest(): NativeSubtitlePreferenceStore.StorageRead<String> =
         readSlot(INSTALLATION_DIGEST_KEY)
 
+    override fun readPreferenceRevision(): NativeSubtitlePreferenceStore.StorageRead<String> =
+        readSlot(PREFERENCE_REVISION_KEY)
+
     override fun readPreferenceReceipt(): NativeSubtitlePreferenceStore.StorageRead<String> =
         readSlot(PREFERENCE_RECEIPT_KEY)
 
@@ -28,6 +31,11 @@ class AndroidSubtitlePreferenceSharedPreferencesPort(
         expected: String?,
         update: String?
     ): Boolean = compareAndSetSlot(INSTALLATION_DIGEST_KEY, expected, update)
+
+    override fun compareAndSetPreferenceRevision(
+        expected: String?,
+        update: String?
+    ): Boolean = compareAndSetSlot(PREFERENCE_REVISION_KEY, expected, update)
 
     override fun compareAndSetPreferenceReceipt(
         expected: String?,
@@ -104,6 +112,8 @@ class AndroidSubtitlePreferenceSharedPreferencesPort(
     private companion object {
         const val INSTALLATION_DIGEST_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.installation_digest.v1"
+        const val PREFERENCE_REVISION_KEY =
+            "org.thiajay.stremiotvcompanion.subtitle.preference.revision.v1"
         const val PREFERENCE_RECEIPT_KEY =
             "org.thiajay.stremiotvcompanion.subtitle.preference.receipt.v1"
     }
