@@ -94,7 +94,7 @@ class NativeSubtitlePreferenceStore(
         ) return rejected()
 
         val installationDigest = before.installationDigest ?: safeDigest() ?: return rejected()
-        if (!DIGEST.matches(installationDigest)) return rejected()
+        if (!validDigest(installationDigest)) return rejected()
 
         val previousRevision = if (before.preferenceRevision != null) {
             // A fresh explicit local choice is allowed to change the binding.
@@ -182,7 +182,7 @@ class NativeSubtitlePreferenceStore(
                 before.preferenceRevisionRaw != null
             ) return rejected()
             if (before.installationDigest != null &&
-                !DIGEST.matches(before.installationDigest)
+                !validDigest(before.installationDigest)
             ) return rejected()
             return CommitResult(ok = true, provenance = null, rollbackVerified = true)
         }
@@ -220,7 +220,7 @@ class NativeSubtitlePreferenceStore(
         globalLanguage: String?
     ): Map<String, Any?>? {
         val digest = stored.installationDigest ?: return null
-        if (!DIGEST.matches(digest)) return null
+        if (!validDigest(digest)) return null
         val receipt = stored.receipt ?: return null
         if (receipt["kind"] != "explicit-local-choice") return null
         val revision = positiveRevision(receipt["preferenceRevision"]) ?: return null
@@ -330,7 +330,7 @@ class NativeSubtitlePreferenceStore(
 
     private fun safeDigest(): String? {
         return try {
-            digestSource.nextInstallationDigest()?.takeIf(DIGEST::matches)
+            digestSource.nextInstallationDigest()?.takeIf(::validDigest)
         } catch (_: RuntimeException) {
             null
         } catch (_: LinkageError) {
@@ -370,7 +370,7 @@ class NativeSubtitlePreferenceStore(
 
     private fun receiptRevisionForInstallation(stored: StoredTuple): Long? {
         val digest = stored.installationDigest ?: return null
-        if (!DIGEST.matches(digest)) return null
+        if (!validDigest(digest)) return null
         val receipt = stored.receipt ?: return null
         if (receipt["kind"] != "explicit-local-choice" ||
             receipt["installationDigest"] != digest
@@ -395,10 +395,14 @@ class NativeSubtitlePreferenceStore(
         else -> null
     }?.takeIf { it in 1L..MAX_SAFE_INTEGER }
 
+    private fun validDigest(value: String?): Boolean =
+        value != null && value != NULL_DIGEST && DIGEST.matches(value)
+
     private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
 
     companion object {
         private val DIGEST = Regex("^[0-9a-f]{64}$")
+        private val NULL_DIGEST = "0".repeat(64)
         private val REVISION = Regex("^[1-9][0-9]{0,15}$")
         private val CHOICE_SURFACES = setOf("first-run", "subtitle-settings")
         private const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L

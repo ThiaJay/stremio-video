@@ -70,6 +70,42 @@ class NativeSubtitlePreferenceProvenanceTest {
         }
     }
 
+    @Test fun nullDigestCannotVerifyIssueOrPromoteSubtitleAuthority() {
+        val nullDigest = "0".repeat(64)
+        val nullReceipt = sameInstallationReceipt(
+            mapOf("installationDigest" to nullDigest)
+        )
+        assertFalse(verify(session, "eng", nullReceipt, nullDigest))
+        assertNull(
+            NativeSubtitlePreferenceProvenance.issueExplicitLocalChoiceReceipt(
+                activeInstallationDigest = nullDigest,
+                preferenceRevision = 1L,
+                sessionPreference = session,
+                globalLanguage = "eng",
+                localChoiceEvent = linkedMapOf(
+                    "installationDigest" to nullDigest,
+                    "preferenceRevision" to 1L,
+                    "surface" to "first-run",
+                    "choice" to "enabled"
+                )
+            )
+        )
+        assertNull(
+            NativeSubtitlePreferenceProvenance.promoteStoredPreferenceReceipt(
+                activeInstallationDigest = nullDigest,
+                sessionPreference = session,
+                globalLanguage = "eng",
+                storedReceipt = nullReceipt,
+                storageReadback = linkedMapOf(
+                    "scope" to "installation-local",
+                    "installationDigest" to nullDigest,
+                    "preferenceRevision" to 1L,
+                    "binding" to nullReceipt["binding"]
+                )
+            )
+        )
+    }
+
     @Test fun receiptCannotSurviveBoundLanguageOrSourceChange() {
         val receipt = sameInstallationReceipt()
         assertFalse(verify(session.copy(language = "fra"), "eng", receipt, installation))

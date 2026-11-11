@@ -97,6 +97,33 @@ class NativeSubtitlePreferenceStoreTest {
         assertNull(throwingPort.receiptRaw)
     }
 
+    @Test fun nullDigestSourceAndStoredIdentityFailClosedWithoutMutation() {
+        val nullDigest = "0".repeat(64)
+        val generated = FakeStorage()
+        val generatedResult = store(generated) { nullDigest }
+            .recordExplicitLocalChoice(session, null, "first-run")
+        assertRejected(generatedResult)
+        assertNull(generated.installationDigest)
+        assertNull(generated.preferenceRevisionRaw)
+        assertNull(generated.receiptRaw)
+
+        val stored = FakeStorage(installationDigest = nullDigest)
+        val storedResult = store(stored) { throw AssertionError("must not generate") }
+            .recordExplicitLocalChoice(session, null, "subtitle-settings")
+        assertRejected(storedResult)
+        assertEquals(nullDigest, stored.installationDigest)
+        assertNull(stored.preferenceRevisionRaw)
+        assertNull(stored.receiptRaw)
+        assertEquals(0, stored.digestCasCalls)
+        assertEquals(0, stored.revisionCasCalls)
+        assertEquals(0, stored.receiptCasCalls)
+
+        val offResult = store(stored)
+            .clearStoredReceiptForExplicitOff(SessionPreference(enabled = false))
+        assertRejected(offResult)
+        assertEquals(nullDigest, stored.installationDigest)
+    }
+
     @Test fun receiptWithoutInstallationDigestFailsWithoutMutation() {
         val port = FakeStorage(receipt = validReceipt(digest, 1L))
         val before = port.receiptRaw

@@ -6,9 +6,9 @@ import java.util.Locale
 /**
  * Native Android translation of the shared installation-local subtitle
  * preference provenance contract synchronised through Web PR #57 head
- * 712711ac738436e9de0a7fe8944f28bd280242ec and Foundation PR #70 head
- * e28b377d5b4f599b14778201ba4f072d03286e1b, runtime blob
- * 69d0c3651025558442eaf1cbcccffe7311a96684.
+ * bc6f4bd3ff3f5ee3ea801fc2bcf3259b27297e11 and Foundation PR #70 head
+ * c63d4d27de2bbaf1b610c14951d18f260efb2c77, corrected Web runtime blob
+ * b52a3dbdc27f7a7e13ab586e0bf41d440fee147a.
  *
  * This pure boundary performs no storage, account, player, network or UI work.
  * An enabled flag, account hydration or a preferred language is never consent.
@@ -21,6 +21,7 @@ object NativeSubtitlePreferenceProvenance {
     )
 
     private val digest = Regex("^[0-9a-f]{64}$")
+    private val nullDigest = "0".repeat(64)
     private val receiptKinds = setOf(
         "same-installation-setting",
         "explicit-local-choice"
@@ -82,8 +83,7 @@ object NativeSubtitlePreferenceProvenance {
         }
         if (!hasExactKeys(evidence, expectedKeys)) return false
         val evidenceInstallationDigest = evidence["installationDigest"] as? String ?: return false
-        if (activeInstallationDigest == null ||
-            !digest.matches(activeInstallationDigest) ||
+        if (!validDigest(activeInstallationDigest) ||
             evidenceInstallationDigest != activeInstallationDigest
         ) return false
         val revision = positiveRevision(evidence["preferenceRevision"]) ?: return false
@@ -133,7 +133,7 @@ object NativeSubtitlePreferenceProvenance {
         globalLanguage: String?,
         localChoiceEvent: Map<*, *>?
     ): Map<String, Any?>? {
-        if (activeInstallationDigest == null || !digest.matches(activeInstallationDigest)) {
+        if (!validDigest(activeInstallationDigest)) {
             return null
         }
         val revision = positiveRevision(preferenceRevision) ?: return null
@@ -287,6 +287,9 @@ object NativeSubtitlePreferenceProvenance {
 
     private fun positiveRevision(value: Any?): Long? =
         wholeNumber(value)?.takeIf { it in 1L..MAX_SAFE_INTEGER }
+
+    private fun validDigest(value: String?): Boolean =
+        value != null && value != nullDigest && digest.matches(value)
 
     private fun wholeNumber(value: Any?): Long? = when (value) {
         is Byte -> value.toLong()
