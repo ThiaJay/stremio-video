@@ -153,6 +153,33 @@ class NativePlaybackRecoveryPolicyTest {
         assertNull(plan.playbackRecovery)
     }
 
+    @Test fun retryableSourceClassificationRequiresEmptyBoundSharedLedger() {
+        val facts = classification(
+            category = "upstream_http",
+            action = "retry_same_source",
+            retryAllowed = true,
+            maxAdditionalAttempts = 1
+        )
+        val unbound = listOf(
+            null,
+            observation(history = null),
+            observation(currentContextId = "video-2:source-1:generation-1"),
+            observation().copy(sourceIdentityMismatch = true)
+        )
+        for (value in unbound) {
+            val plan = NativePlaybackRecoveryPolicy.plan(facts, value)
+            assertEquals("terminal_stop", plan.authority)
+            assertEquals("stop_unbound_shared_recovery_budget", plan.action)
+        }
+
+        val exhausted = NativePlaybackRecoveryPolicy.plan(
+            facts,
+            observation(history = listOf("transcodeAudio"))
+        )
+        assertEquals("terminal_stop", exhausted.authority)
+        assertEquals("stop_shared_recovery_budget_exhausted", exhausted.action)
+    }
+
     @Test fun exhaustedClassifierBudgetCannotSpillIntoPlaybackRecovery() {
         val plan = NativePlaybackRecoveryPolicy.plan(
             classification("http_transport", "retry_same_transport_route"),

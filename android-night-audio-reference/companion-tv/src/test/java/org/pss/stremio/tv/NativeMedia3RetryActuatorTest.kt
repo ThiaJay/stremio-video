@@ -179,6 +179,48 @@ class NativeMedia3RetryActuatorTest {
         ))
     }
 
+    @Test fun classifierAndPlaybackRecoveryShareOneExclusiveEpisodeBudget() {
+        fun recoverySnapshot(value: NativeMedia3RetrySnapshot) = NativeRecoverySnapshot(
+            episodeSessionId = value.episodeSessionId,
+            recoveryContextId = "shared-context-1",
+            videoId = value.videoId,
+            sourceId = value.sourceId,
+            loadGeneration = value.loadGeneration,
+            watchedStateFingerprint = "a".repeat(64),
+            resumeStateFingerprint = "b".repeat(64),
+            supportedRecoveryActions = setOf("transcodeAudio"),
+            loaded = true
+        )
+
+        val playbackFirstPort = Port()
+        val playbackFirstBudget = episodeBudget(playbackFirstPort.snapshot)
+        assertTrue(
+            playbackFirstBudget.reservePlayback(
+                recoverySnapshot(playbackFirstPort.snapshot),
+                "transcodeAudio",
+                emptyList()
+            )
+        )
+        assertNull(
+            actuator(playbackFirstPort, playbackFirstBudget)
+                .prepare(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
+        )
+
+        val classifierFirstPort = Port()
+        val classifierFirstBudget = episodeBudget(classifierFirstPort.snapshot)
+        assertNotNull(
+            actuator(classifierFirstPort, classifierFirstBudget)
+                .prepare(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
+        )
+        assertFalse(
+            classifierFirstBudget.reservePlayback(
+                recoverySnapshot(classifierFirstPort.snapshot),
+                "transcodeAudio",
+                emptyList()
+            )
+        )
+    }
+
     @Test fun budgetIdentityThreadAndLifecycleFailClosed() {
         val code = PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
         val port = Port()

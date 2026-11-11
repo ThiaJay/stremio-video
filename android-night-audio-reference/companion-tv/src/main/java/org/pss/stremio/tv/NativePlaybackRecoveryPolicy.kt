@@ -115,6 +115,16 @@ object NativePlaybackRecoveryPolicy {
 
         if (key in RETRYABLE) {
             if (classification.retryAllowed && classification.maxAdditionalAttempts == 1) {
+                val observed = observation
+                    ?: return stop("stop_unbound_shared_recovery_budget", classification.category)
+                val history = snapshotAttemptHistory(observed.attemptedRecoveries)
+                    ?: return stop("stop_unbound_shared_recovery_budget", classification.category)
+                if (!hasBoundCurrentContext(observed)) {
+                    return stop("stop_unbound_shared_recovery_budget", classification.category)
+                }
+                if (history.isNotEmpty()) {
+                    return stop("stop_shared_recovery_budget_exhausted", classification.category)
+                }
                 return NativeRecoveryPlan(
                     authority = "stream_classifier",
                     action = classification.action,
@@ -171,6 +181,14 @@ object NativePlaybackRecoveryPolicy {
         value != null &&
             value.length in 1..MAX_CONTEXT_ID_LENGTH &&
             CONTEXT_ID.matches(value)
+
+    private fun hasBoundCurrentContext(value: PlaybackHealthObservation): Boolean =
+        validContextId(value.recoveryContextId) &&
+            validContextId(value.currentContextId) &&
+            value.recoveryContextId == value.currentContextId &&
+            !value.sourceIdentityMismatch &&
+            !value.videoIdentityMismatch &&
+            !value.mediaGenerationChanged
 
     private fun snapshotAttemptHistory(value: List<String>?): List<String>? {
         if (value == null) return null

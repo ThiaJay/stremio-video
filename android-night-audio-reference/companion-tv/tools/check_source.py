@@ -1591,6 +1591,10 @@ if 'playback_health:delegate_to_bounded_playback_recovery' not in recovery:
     fail.append('exact_playback_delegation_missing')
 if 'observation?.attemptedRecoveries == null' not in recovery or 'recoveryContextId != value.currentContextId' not in recovery:
     fail.append('bounded_context_ledger_gate_missing')
+if (('stop_unbound_shared_recovery_budget' not in recovery) or
+    ('stop_shared_recovery_budget_exhausted' not in recovery) or
+    ('retryableSourceClassificationRequiresEmptyBoundSharedLedger' not in recovery_test)):
+    fail.append('classifier_retry_shared_recovery_budget_gate_missing')
 if (('private fun snapshotAttemptHistory(value: List<String>?)' not in recovery) or
     ('val history = snapshotAttemptHistory(value.attemptedRecoveries) ?: return null' not in recovery) or
     ('repeat(expectedSize) { index ->' not in recovery) or
@@ -1625,7 +1629,8 @@ if any(name not in media3_intake_test for name in ['networkSignalsMapToOneBounde
 if 'class NativeMedia3RetryActuator' not in media3_retry_actuator or 'interface NativeMedia3RetryPort' not in media3_retry_actuator:
     fail.append('media3_retry_actuator_boundary_missing')
 if ('NativeMedia3FailureIntake.sanitise(' not in media3_retry_actuator or
-    'NativePlaybackRecoveryPolicy.plan(facts = facts, observation = null)' not in media3_retry_actuator):
+    'observation = PlaybackHealthObservation(' not in media3_retry_actuator or
+    'attemptedRecoveries = sharedHistory' not in media3_retry_actuator):
     fail.append('media3_retry_not_composed_through_current_classifier_policy')
 snapshot_class=media3_retry_actuator[
     media3_retry_actuator.find('data class NativeMedia3RetrySnapshot'):
@@ -1636,6 +1641,9 @@ if 'sameEpisodeRetryCount' in snapshot_class:
 if ('class NativeEpisodeRecoveryBudget private constructor' not in media3_retry_actuator or
     media3_retry_actuator.count('private val budget: NativeEpisodeRecoveryBudget') < 1):
     fail.append('media3_episode_scoped_recovery_budget_missing')
+if ('playbackRecoveries.isNotEmpty()' not in media3_retry_actuator or
+    media3_retry_actuator.count('classifierRetryReserved') < 5):
+    fail.append('classifier_and_playback_budget_not_mutually_exclusive')
 if ('internal fun attemptCount(value: NativeMedia3RetrySnapshot): Int?' not in media3_retry_actuator or
     'val sameEpisodeRetryCount = budget.attemptCount(lease) ?: return null' not in media3_retry_actuator or
     'sameEpisodeRetryCount = sameEpisodeRetryCount' not in media3_retry_actuator):
@@ -1677,6 +1685,7 @@ if any(name not in media3_retry_actuator_test for name in [
     'snapshotAndExecutionExceptionsFailClosedWithOneShotConsumption',
     'sharedBudgetSurvivesActuatorCloseAndReplacement',
     'retrySnapshotExposesNoCallerControlledAttemptCounter',
+    'classifierAndPlaybackRecoveryShareOneExclusiveEpisodeBudget',
     'budgetIdentityThreadAndLifecycleFailClosed'
 ]):
     fail.append('media3_retry_actuator_regressions_missing')

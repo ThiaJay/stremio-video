@@ -1,5 +1,7 @@
 package org.pss.stremio.tv
 
+import java.security.MessageDigest
+
 /**
  * Immutable same-episode state used to lease one classifier-owned Media3
  * transport retry. The host must capture this state on its single player
@@ -58,7 +60,9 @@ class NativeEpisodeRecoveryBudget private constructor(
     }
 
     internal fun reserve(value: NativeMedia3RetrySnapshot): Boolean {
-        if (!onOwnerThread() || closed || classifierRetryReserved || !matches(value)) return false
+        if (!onOwnerThread() || closed || classifierRetryReserved ||
+            playbackRecoveries.isNotEmpty() || !matches(value)
+        ) return false
         classifierRetryReserved = true
         return true
     }
@@ -71,12 +75,17 @@ class NativeEpisodeRecoveryBudget private constructor(
         return java.util.Collections.unmodifiableList(ArrayList(playbackRecoveries))
     }
 
+    internal fun playbackHistory(value: NativeMedia3RetrySnapshot): List<String>? {
+        if (!onOwnerThread() || closed || !matches(value)) return null
+        return java.util.Collections.unmodifiableList(ArrayList(playbackRecoveries))
+    }
+
     internal fun reservePlayback(
         value: NativeRecoverySnapshot,
         action: String,
         claimedHistory: List<String>?
     ): Boolean {
-        if (!onOwnerThread() || closed || !matches(value)) return false
+        if (!onOwnerThread() || closed || classifierRetryReserved || !matches(value)) return false
         val history = snapshotClaimedHistory(claimedHistory) ?: return false
         if (history != playbackRecoveries.toList() ||
             playbackRecoveries.size >= MAX_PLAYBACK_RECOVERIES ||
@@ -164,6 +173,8 @@ class NativeMedia3RetryActuator(
         val lease = snapshotOrNull() ?: return null
         if (!trustedSnapshot(lease)) return null
         val sameEpisodeRetryCount = budget.attemptCount(lease) ?: return null
+        val sharedHistory = budget.playbackHistory(lease) ?: return null
+        val contextId = retryContextId(lease) ?: return null
 
         val facts = NativeMedia3FailureIntake.sanitise(
             errorCode = errorCode,
@@ -172,7 +183,14 @@ class NativeMedia3RetryActuator(
             episodeAdvanced = lease.episodeAdvanced,
             userRequestedNextEpisode = lease.userRequestedNextEpisode
         )
-        val plan = NativePlaybackRecoveryPolicy.plan(facts = facts, observation = null)
+        val plan = NativePlaybackRecoveryPolicy.plan(
+            facts = facts,
+            observation = PlaybackHealthObservation(
+                attemptedRecoveries = sharedHistory,
+                recoveryContextId = contextId,
+                currentContextId = contextId
+            )
+        )
         if (!trustedTransportRetryPlan(plan)) return null
 
         val token = token(plan, lease)
@@ -238,6 +256,22 @@ class NativeMedia3RetryActuator(
 
     private fun episodeBudgetKey(value: NativeMedia3RetrySnapshot): String =
         "${value.episodeSessionId}\u001f${value.videoId}"
+
+    private fun retryContextId(value: NativeMedia3RetrySnapshot): String? = try {
+        val framed = listOf(
+            value.episodeSessionId,
+            value.videoId,
+            value.sourceId,
+            value.loadGeneration.toString()
+        ).joinToString(separator = "") { "${it.length}:$it" }
+        MessageDigest.getInstance("SHA-256")
+            .digest(framed.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
 
     private fun token(plan: NativeRecoveryPlan, value: NativeMedia3RetrySnapshot): String =
         listOf(
