@@ -1879,9 +1879,12 @@ if not all(x in native_subtitle_store for x in [
     'fun compareAndSetPreferenceReceipt(',
     'private fun readStableTuple()',
     'private fun rollback(before: StoredTuple, target: StoredTuple)',
-    'current.installationDigest == before.installationDigest',
-    'current.preferenceRevisionRaw == before.preferenceRevisionRaw',
-    'current.receiptRaw == before.receiptRaw'
+    'val afterDigest = before.copy(',
+    'val ownedAfterRevision = afterDigest.copy(',
+    'current != before &&',
+    'current != afterDigest &&',
+    'current != ownedAfterRevision &&',
+    'current != target'
 ]):
     fail.append('native_subtitle_store_atomic_contract')
 if not all(x in native_subtitle_store for x in [
@@ -1903,8 +1906,8 @@ if not all(x in native_subtitle_store for x in [
 if not all(x in native_subtitle_store for x in [
     'if (readStableTuple() != target) return rejected(rollback(before, target))',
     'if (readStableTuple() != target || readStableTuple() != target)',
-    'Any other current value',
-    'is concurrent drift and is preserved without an overwrite'
+    'Any other current value is concurrent drift and is',
+    'preserved without an overwrite'
 ]):
     fail.append('native_subtitle_store_readback_and_drift')
 if not all(x in native_subtitle_store for x in [
@@ -1934,6 +1937,7 @@ if not all(x in native_subtitle_store_test for x in [
     'receiptCompareAndSetRefusalRollsBackGeneratedDigest',
     'falsePositiveReceiptWriteRollsBackExactTuple',
     'unknownConcurrentDriftIsPreservedWithoutRollbackClaim',
+    'impossibleHybridConcurrentDriftIsPreservedWithoutRollbackClaim',
     'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest',
     'receiptlessImpossibleTupleFailsClosedWithoutMutation',
     'explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay',

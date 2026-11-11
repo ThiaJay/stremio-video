@@ -275,18 +275,28 @@ class NativeSubtitlePreferenceStore(
     }
 
     /**
-     * Rollback owns only the exact before/target tuple. Any other current value
-     * is concurrent drift and is preserved without an overwrite.
+     * Rollback owns only the exact before tuple or an ordered prefix written by
+     * this transaction. Any other current value is concurrent drift and is
+     * preserved without an overwrite.
      */
     private fun rollback(before: StoredTuple, target: StoredTuple): Boolean {
         val current = readStableTuple() ?: return false
-        val digestOwned = current.installationDigest == before.installationDigest ||
-            current.installationDigest == target.installationDigest
-        val revisionOwned = current.preferenceRevisionRaw == before.preferenceRevisionRaw ||
-            current.preferenceRevisionRaw == target.preferenceRevisionRaw
-        val receiptOwned = current.receiptRaw == before.receiptRaw ||
-            current.receiptRaw == target.receiptRaw
-        if (!digestOwned || !revisionOwned || !receiptOwned) return false
+        // Writes are ordered digest -> revision -> receipt. Ownership is
+        // therefore limited to the exact before tuple or one of those ordered
+        // prefix states. A field-by-field old/target mixture outside this
+        // sequence is concurrent drift and must be preserved without rollback.
+        val afterDigest = before.copy(
+            installationDigest = target.installationDigest
+        )
+        val ownedAfterRevision = afterDigest.copy(
+            preferenceRevisionRaw = target.preferenceRevisionRaw,
+            preferenceRevision = target.preferenceRevision
+        )
+        if (current != before &&
+            current != afterDigest &&
+            current != ownedAfterRevision &&
+            current != target
+        ) return false
 
         if (current.receiptRaw != before.receiptRaw &&
             !safeCompareReceipt(current.receiptRaw, before.receiptRaw)

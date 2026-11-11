@@ -197,6 +197,29 @@ class NativeSubtitlePreferenceStoreTest {
         assertEquals("nsp1:foreign-corrupt-value", port.receiptRaw)
     }
 
+    @Test fun impossibleHybridConcurrentDriftIsPreservedWithoutRollbackClaim() {
+        val port = FakeStorage()
+        var foreignReceiptRaw: String? = null
+        port.receiptCasHook = { _, update ->
+            // Digest -> revision -> receipt is the only transaction order. A
+            // target receipt paired with the old revision can only be foreign
+            // drift and must never be claimed by rollback.
+            port.preferenceRevisionRaw = null
+            port.receiptRaw = update
+            foreignReceiptRaw = update
+            false
+        }
+
+        val result = store(port).recordExplicitLocalChoice(session, null, "first-run")
+
+        assertFalse(result.ok)
+        assertFalse(result.rollbackVerified)
+        assertEquals(digest, port.installationDigest)
+        assertNull(port.preferenceRevisionRaw)
+        assertEquals(foreignReceiptRaw, port.receiptRaw)
+        assertEquals("explicit-local-choice", port.receipt?.get("kind"))
+    }
+
     @Test fun explicitOffClearsOnlyReceiptAndKeepsInstallationDigest() {
         val port = FakeStorage()
         assertAccepted(store(port).recordExplicitLocalChoice(session, null, "first-run"), 1L)
