@@ -1805,6 +1805,13 @@ if not all(x in native_subtitle_provenance for x in [
     '"kind" to "same-installation-setting"'
 ]):
     fail.append('native_subtitle_provenance_storage_promotion')
+if not all(x in native_subtitle_provenance for x in [
+    'preferenceRevision: Any?',
+    'val revision = positiveRevision(preferenceRevision) ?: return false',
+    'positiveRevision(evidence["preferenceRevision"]) != revision',
+    'stored["preferenceRevision"]'
+]):
+    fail.append('native_subtitle_provenance_current_revision_binding')
 if (
     not all(x in native_subtitle_provenance for x in [
         'Collections.unmodifiableMap(LinkedHashMap(value))',
@@ -1812,7 +1819,7 @@ if (
         'not prove UI, signed package, private-client or device acceptance.'
     ]) or
     'NativeSubtitlePreferenceProvenance' in java_text or
-    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'sameInstallationReceiptCannotPromoteMissingOrNullEnabledState', 'malformedDigestAndRevisionFailClosed', 'nullDigestCannotVerifyIssueOrPromoteSubtitleAuthority', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation', 'hostileAuthorityScalarsFailClosedWithoutExecutingEquality'])
+    not all(x in native_subtitle_provenance_test for x in ['sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults', 'explicitOffRemainsAuthoritativeWithoutInventingConsent', 'sameInstallationReceiptMustBindExactPreferenceAndInstallation', 'sameInstallationReceiptCannotPromoteMissingOrNullEnabledState', 'malformedDigestAndRevisionFailClosed', 'currentRevisionMustMatchReceiptAcrossVerificationChoiceAndIssuance', 'nullDigestCannotVerifyIssueOrPromoteSubtitleAuthority', 'receiptCannotSurviveBoundLanguageOrSourceChange', 'bindingIsNormalisedDetachedAndClosed', 'explicitChoiceAcceptsOnlyReviewedSurfacesAndEnabledSession', 'explicitChoiceEventUsesExactClosedSchema', 'sameInstallationReceiptCannotMasqueradeAsUiChoice', 'exactInstallationLocalReadbackPromotesReceipt', 'promotionRejectsScopeInstallationRevisionAndBindingDrift', 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation', 'hostileAuthorityScalarsFailClosedWithoutExecutingEquality'])
 ):
     fail.append('native_subtitle_provenance_unwired_regressions')
 if not all(x in native_subtitle_provenance for x in [

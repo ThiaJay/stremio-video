@@ -70,6 +70,26 @@ class NativeSubtitlePreferenceProvenanceTest {
         }
     }
 
+    @Test fun currentRevisionMustMatchReceiptAcrossVerificationChoiceAndIssuance() {
+        val receipt = sameInstallationReceipt()
+        assertTrue(verify(session, "eng", receipt, installation, 1L))
+        assertFalse(verify(session, "eng", receipt, installation, 2L))
+        assertTrue(needs(session, "eng", receipt, installation, 2L))
+        for (invalid in listOf<Any?>(null, 0, -1, 1.5, "1")) {
+            assertFalse(verify(session, "eng", receipt, installation, invalid))
+            assertTrue(needs(session, "eng", receipt, installation, invalid))
+        }
+        assertNull(
+            NativeSubtitlePreferenceProvenance.issueExplicitLocalChoiceReceipt(
+                activeInstallationDigest = installation,
+                preferenceRevision = 2L,
+                sessionPreference = session,
+                globalLanguage = "eng",
+                localChoiceEvent = choiceEvent()
+            )
+        )
+    }
+
     @Test fun nullDigestCannotVerifyIssueOrPromoteSubtitleAuthority() {
         val nullDigest = "0".repeat(64)
         val nullReceipt = sameInstallationReceipt(
@@ -338,10 +358,12 @@ class NativeSubtitlePreferenceProvenanceTest {
         preference: SessionPreference?,
         globalLanguage: String?,
         evidence: Map<*, *>?,
-        digest: String?
+        digest: String?,
+        preferenceRevision: Any? = 1L
     ): Boolean = NativeSubtitlePreferenceProvenance.verifySubtitlePreferenceProvenance(
         preference,
         globalLanguage,
+        preferenceRevision,
         evidence,
         digest
     )
@@ -350,10 +372,12 @@ class NativeSubtitlePreferenceProvenanceTest {
         preference: SessionPreference?,
         globalLanguage: String?,
         evidence: Map<*, *>?,
-        digest: String?
+        digest: String?,
+        preferenceRevision: Any? = 1L
     ): Boolean = NativeSubtitlePreferenceProvenance.needsSubtitlePreferenceChoice(
         preference,
         globalLanguage,
+        preferenceRevision,
         evidence,
         digest
     )

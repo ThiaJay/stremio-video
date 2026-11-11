@@ -450,6 +450,7 @@ jobs:
           assert 'promotionRejectsScopeInstallationRevisionAndBindingDrift' in names, 'Native subtitle provenance regression promotionRejectsScopeInstallationRevisionAndBindingDrift not executed'
           assert 'promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation' in names, 'Native subtitle provenance regression promotionRejectsInjectedStorageOrReceiptClaimsWithoutMutation not executed'
           assert 'nullDigestCannotVerifyIssueOrPromoteSubtitleAuthority' in names, 'Native subtitle provenance null-digest regression not executed'
+          assert 'currentRevisionMustMatchReceiptAcrossVerificationChoiceAndIssuance' in names, 'Native subtitle provenance current-revision regression not executed'
           assert 'callerMapsAreSnapshottedOnceBeforeValidation' in names, 'Native subtitle provenance hostile-map regression callerMapsAreSnapshottedOnceBeforeValidation not executed'
           assert 'throwingTopLevelAndNestedMapsFailClosedWithoutEscaping' in names, 'Native subtitle provenance hostile-map regression throwingTopLevelAndNestedMapsFailClosedWithoutEscaping not executed'
           assert 'iteratorCardinalityDriftFailsClosed' in names, 'Native subtitle provenance hostile-map regression iteratorCardinalityDriftFailsClosed not executed'

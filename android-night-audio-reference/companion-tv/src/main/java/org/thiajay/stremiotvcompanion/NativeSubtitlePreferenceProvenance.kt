@@ -67,9 +67,14 @@ object NativeSubtitlePreferenceProvenance {
         )
     )
 
+    /**
+     * [preferenceRevision] is the caller's current independent revision marker,
+     * not a value inferred from the receipt being checked.
+     */
     fun verifySubtitlePreferenceProvenance(
         sessionPreference: SessionPreference?,
         globalLanguage: String?,
+        preferenceRevision: Any?,
         preferenceProvenance: Map<*, *>?,
         activeInstallationDigest: String?
     ): Boolean {
@@ -86,8 +91,8 @@ object NativeSubtitlePreferenceProvenance {
         if (!validDigest(activeInstallationDigest) ||
             evidenceInstallationDigest != activeInstallationDigest
         ) return false
-        val revision = positiveRevision(evidence["preferenceRevision"]) ?: return false
-        if (revision < 1L) return false
+        val revision = positiveRevision(preferenceRevision) ?: return false
+        if (positiveRevision(evidence["preferenceRevision"]) != revision) return false
         val expected = preferenceBinding(sessionPreference, globalLanguage)
         // Both receipt kinds require an explicitly enabled session. A stored
         // language or partially hydrated preference is not consent.
@@ -107,6 +112,7 @@ object NativeSubtitlePreferenceProvenance {
     fun needsSubtitlePreferenceChoice(
         sessionPreference: SessionPreference?,
         globalLanguage: String?,
+        preferenceRevision: Any?,
         preferenceProvenance: Map<*, *>?,
         activeInstallationDigest: String?
     ): Boolean {
@@ -117,6 +123,7 @@ object NativeSubtitlePreferenceProvenance {
         return !verifySubtitlePreferenceProvenance(
             sessionPreference,
             globalLanguage,
+            preferenceRevision,
             preferenceProvenance,
             activeInstallationDigest
         )
@@ -184,6 +191,7 @@ object NativeSubtitlePreferenceProvenance {
             !verifySubtitlePreferenceProvenance(
                 sessionPreference,
                 globalLanguage,
+                stored["preferenceRevision"],
                 stored,
                 activeInstallationDigest
             )
