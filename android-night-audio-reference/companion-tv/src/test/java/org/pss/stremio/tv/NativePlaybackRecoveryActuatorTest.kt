@@ -385,7 +385,7 @@ class NativePlaybackRecoveryActuatorTest {
         assertEquals(emptyList<String>(), port.actions)
     }
 
-    @Test fun episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes() {
+    @Test fun episodeIdentityAndSharedLifecycleExcludeParallelClassifierAndPlaybackRoutes() {
         val recoveryPort = FakePort(snapshot())
         val shared = budget(recoveryPort.snapshot)
         val retrySnapshot = NativeMedia3RetrySnapshot(
@@ -403,7 +403,7 @@ class NativePlaybackRecoveryActuatorTest {
         assertNotNull(retry.prepare(androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
 
         val playback = actuator(recoveryPort, shared)
-        assertNotNull(playback.prepare(classification(), observation()))
+        assertNull(playback.prepare(classification(), observation()))
 
         val wrongEpisodePort = FakePort(snapshot(episodeSessionId = "episode-session-2"))
         assertNull(actuator(wrongEpisodePort, shared).prepare(classification(), observation()))

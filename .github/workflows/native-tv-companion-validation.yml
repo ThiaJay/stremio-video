@@ -436,7 +436,7 @@ jobs:
           assert 'throwingFinalSnapshotRefusesWithoutExecution' in names, 'Final snapshot exception regression not executed'
           assert 'throwingPortExecutionConsumesLeaseAndFailsClosed' in names, 'Native execution exception one-shot regression not executed'
           assert 'sharedEpisodeBudgetSurvivesActuatorReplacementAndRejectsLedgerReset' in names, 'Shared native recovery ledger regression not executed'
-          assert 'episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes' in names, 'Classifier/playback shared authority regression not executed'
+          assert 'episodeIdentityAndSharedLifecycleExcludeParallelClassifierAndPlaybackRoutes' in names, 'Classifier/playback exclusive shared-budget regression not executed'
           assert 'sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults' in names, 'Native subtitle provenance regression sideBySideFirstRunRequiresLocalChoiceDespiteLanguageDefaults not executed'
           assert 'explicitOffRemainsAuthoritativeWithoutInventingConsent' in names, 'Native subtitle provenance regression explicitOffRemainsAuthoritativeWithoutInventingConsent not executed'
           assert 'sameInstallationReceiptMustBindExactPreferenceAndInstallation' in names, 'Native subtitle provenance regression sameInstallationReceiptMustBindExactPreferenceAndInstallation not executed'

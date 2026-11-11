@@ -1757,7 +1757,7 @@ if ('private val budget: NativeEpisodeRecoveryBudget' not in actuator or
     fail.append('playback_actuator_not_bound_to_shared_episode_budget')
 if any(name not in actuator_test for name in [
     'sharedEpisodeBudgetSurvivesActuatorReplacementAndRejectsLedgerReset',
-    'episodeIdentityAndSharedLifecycleBindClassifierAndPlaybackRoutes'
+    'episodeIdentityAndSharedLifecycleExcludeParallelClassifierAndPlaybackRoutes'
 ]):
     fail.append('shared_classifier_playback_budget_regressions_missing')
 # Native subtitle preference provenance remains a pure translation of
