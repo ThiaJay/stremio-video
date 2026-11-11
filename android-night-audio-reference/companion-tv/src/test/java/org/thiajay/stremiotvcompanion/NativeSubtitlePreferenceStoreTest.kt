@@ -210,6 +210,30 @@ class NativeSubtitlePreferenceStoreTest {
         assertNull(port.receiptRaw)
     }
 
+    @Test fun receiptlessImpossibleTupleFailsClosedWithoutMutation() {
+        val orphanRevision = FakeStorage(preferenceRevisionRaw = "1")
+        val orphanResult = store(orphanRevision)
+            .clearStoredReceiptForExplicitOff(SessionPreference(enabled = false))
+        assertRejected(orphanResult)
+        assertNull(orphanRevision.installationDigest)
+        assertEquals("1", orphanRevision.preferenceRevisionRaw)
+        assertNull(orphanRevision.receiptRaw)
+        assertEquals(0, orphanRevision.digestCasCalls)
+        assertEquals(0, orphanRevision.revisionCasCalls)
+        assertEquals(0, orphanRevision.receiptCasCalls)
+
+        val corruptDigest = FakeStorage(installationDigest = "not-a-digest")
+        val corruptResult = store(corruptDigest)
+            .clearStoredReceiptForExplicitOff(SessionPreference(enabled = false))
+        assertRejected(corruptResult)
+        assertEquals("not-a-digest", corruptDigest.installationDigest)
+        assertNull(corruptDigest.preferenceRevisionRaw)
+        assertNull(corruptDigest.receiptRaw)
+        assertEquals(0, corruptDigest.digestCasCalls)
+        assertEquals(0, corruptDigest.revisionCasCalls)
+        assertEquals(0, corruptDigest.receiptCasCalls)
+    }
+
     @Test fun explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay() {
         val port = FakeStorage()
         assertAccepted(store(port).recordExplicitLocalChoice(session, null, "first-run"), 1L)

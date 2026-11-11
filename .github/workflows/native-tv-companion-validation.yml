@@ -478,6 +478,7 @@ jobs:
           assert 'unknownConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store regression unknownConcurrentDriftIsPreservedWithoutRollbackClaim not executed'
           assert 'corruptConcurrentDriftIsPreservedWithoutRollbackClaim' in names, 'Native subtitle store corrupt concurrent-drift regression not executed'
           assert 'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest' in names, 'Native subtitle store regression explicitOffClearsOnlyReceiptAndKeepsInstallationDigest not executed'
+          assert 'receiptlessImpossibleTupleFailsClosedWithoutMutation' in names, 'Native subtitle store impossible receiptless-tuple regression not executed'
           assert 'explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay' in names, 'Native subtitle store independent revision replay regression not executed'
           assert 'legacyReceiptCanAdvanceOnlyThroughNewExplicitChoice' in names, 'Native subtitle store legacy revision migration regression not executed'
           assert 'noncanonicalIndependentRevisionFailsClosedWithoutMutation' in names, 'Native subtitle store canonical revision regression not executed'

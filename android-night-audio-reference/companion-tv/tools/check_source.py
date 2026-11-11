@@ -1926,6 +1926,7 @@ if not all(x in native_subtitle_store_test for x in [
     'falsePositiveReceiptWriteRollsBackExactTuple',
     'unknownConcurrentDriftIsPreservedWithoutRollbackClaim',
     'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest',
+    'receiptlessImpossibleTupleFailsClosedWithoutMutation',
     'explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay',
     'legacyReceiptCanAdvanceOnlyThroughNewExplicitChoice',
     'noncanonicalIndependentRevisionFailsClosedWithoutMutation',

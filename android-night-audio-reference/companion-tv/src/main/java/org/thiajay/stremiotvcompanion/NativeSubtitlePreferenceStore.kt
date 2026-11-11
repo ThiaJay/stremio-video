@@ -173,6 +173,17 @@ class NativeSubtitlePreferenceStore(
         }
         val before = readStableTuple() ?: return rejected()
         if (before.receiptRaw == null) {
+            // A no-op Off result is accepted only for a coherent empty or
+            // previously-cleared installation tuple. An orphan revision can
+            // otherwise strand every later explicit choice, while an invalid
+            // retained digest would falsely report corrupt storage as an
+            // accepted user preference.
+            if (before.installationDigest == null &&
+                before.preferenceRevisionRaw != null
+            ) return rejected()
+            if (before.installationDigest != null &&
+                !DIGEST.matches(before.installationDigest)
+            ) return rejected()
             return CommitResult(ok = true, provenance = null, rollbackVerified = true)
         }
         val retainedRevision = before.preferenceRevision
