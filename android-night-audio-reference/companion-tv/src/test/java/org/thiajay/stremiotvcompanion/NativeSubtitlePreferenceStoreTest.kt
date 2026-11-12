@@ -284,6 +284,29 @@ class NativeSubtitlePreferenceStoreTest {
         assertEquals(0, corruptDigest.receiptCasCalls)
     }
 
+    @Test fun explicitOffCannotSanitiseReceiptIntoInvalidIdentityTuple() {
+        val receipt = validReceipt(digest, 1L)
+        for (invalidDigest in listOf(null, "not-a-digest", "0".repeat(64))) {
+            val port = FakeStorage(
+                installationDigest = invalidDigest,
+                preferenceRevisionRaw = "1",
+                receipt = receipt
+            )
+            val before = port.receiptRaw
+
+            val result = store(port)
+                .clearStoredReceiptForExplicitOff(SessionPreference(enabled = false))
+
+            assertRejected(result)
+            assertEquals(invalidDigest, port.installationDigest)
+            assertEquals("1", port.preferenceRevisionRaw)
+            assertEquals(before, port.receiptRaw)
+            assertEquals(0, port.digestCasCalls)
+            assertEquals(0, port.revisionCasCalls)
+            assertEquals(0, port.receiptCasCalls)
+        }
+    }
+
     @Test fun explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay() {
         val port = FakeStorage()
         assertAccepted(store(port).recordExplicitLocalChoice(session, null, "first-run"), 1L)

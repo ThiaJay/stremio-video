@@ -1955,6 +1955,7 @@ if not all(x in native_subtitle_store_test for x in [
     'impossibleHybridConcurrentDriftIsPreservedWithoutRollbackClaim',
     'explicitOffClearsOnlyReceiptAndKeepsInstallationDigest',
     'receiptlessImpossibleTupleFailsClosedWithoutMutation',
+    'explicitOffCannotSanitiseReceiptIntoInvalidIdentityTuple',
     'explicitOffThenReenableAdvancesIndependentRevisionAndRejectsReplay',
     'legacyReceiptCanAdvanceOnlyThroughNewExplicitChoice',
     'noncanonicalIndependentRevisionFailsClosedWithoutMutation',
