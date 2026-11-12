@@ -49,8 +49,8 @@ class CompanionTvStoryOrderInstrumentationTest {
             assertNotNull("Synthetic Story Order selector was not uniquely rendered", toggle)
         }
         assertTrue(
-            "Synthetic Story Order window did not become visibly focused",
-            awaitVisibleWindowFocus(5_000L)
+            "Synthetic Story Order window did not obtain one stable visible view focus",
+            awaitStableVisibleWindowFocus(5_000L)
         )
         assertTrue(
             "Synthetic Story Order selector did not receive real visible window focus",
@@ -161,16 +161,32 @@ class CompanionTvStoryOrderInstrumentationTest {
         return snapshot
     }
 
-    private fun awaitVisibleWindowFocus(timeoutMs: Long): Boolean {
+    private fun awaitStableVisibleWindowFocus(timeoutMs: Long): Boolean {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
+        var stableFocusIdentity = 0
+        var stableSince = 0L
         while (SystemClock.uptimeMillis() < deadline) {
-            var focused = false
+            var focusedIdentity = 0
             scenario.onActivity { activity ->
                 val root = activity.window.decorView
-                focused = root.isShown && root.hasWindowFocus()
+                val focusedView = root.findFocus()
+                if (root.isShown && root.hasWindowFocus() &&
+                    focusedView?.isShown == true
+                ) {
+                    focusedIdentity = System.identityHashCode(focusedView)
+                }
             }
-            if (focused) return true
-            SystemClock.sleep(100L)
+            val now = SystemClock.uptimeMillis()
+            if (focusedIdentity == 0) {
+                stableFocusIdentity = 0
+                stableSince = 0L
+            } else if (focusedIdentity != stableFocusIdentity) {
+                stableFocusIdentity = focusedIdentity
+                stableSince = now
+            } else if (now - stableSince >= STABLE_WINDOW_FOCUS_MILLIS) {
+                return true
+            }
+            SystemClock.sleep(FOCUS_POLL_MILLIS)
         }
         return false
     }
@@ -192,6 +208,7 @@ class CompanionTvStoryOrderInstrumentationTest {
             if (move < maximumMoves) {
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
                 instrumentation.waitForIdleSync()
+                SystemClock.sleep(REMOTE_MOVE_SETTLE_MILLIS)
             }
         }
         return false
@@ -227,5 +244,8 @@ class CompanionTvStoryOrderInstrumentationTest {
             "Selected stable ID: local:mobile-watched:0:2"
         const val ORIGINAL_OBJECT_MESSAGE =
             "Resolved the original canonical object by stable ID."
+        const val REMOTE_MOVE_SETTLE_MILLIS = 50L
+        const val FOCUS_POLL_MILLIS = 50L
+        const val STABLE_WINDOW_FOCUS_MILLIS = 500L
     }
 }
