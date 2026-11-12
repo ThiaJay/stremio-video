@@ -760,7 +760,7 @@ jobs:
               'testFrameworkClicksSelectStoryOrderAndAdvanceByStableIdOnApi30',
               'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
               'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',
-              'testFrameworkClicksApplyAndClearMobileSeasonWatchedWithCanonicalReadbackOnApi30',
+              'testFutureEpisodeSuppressesUnsafeMobileSeasonActionsOnApi30',
               'testDpadDownEscapesSyntheticTypedFieldToLocalSubmitOnApi30',
               'testTypedSubmitStaysLocalAndReportsHeldWithoutEchoOnApi30',
           }
