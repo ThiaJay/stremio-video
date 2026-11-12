@@ -78,6 +78,7 @@ object NativeSubtitlePreferenceProvenance {
         preferenceProvenance: Map<*, *>?,
         activeInstallationDigest: String?
     ): Boolean {
+        if (!validSessionPreference(sessionPreference)) return false
         val evidence = snapshotExactObject(preferenceProvenance, explicitChoiceKeys.size, true) ?: return false
         val kind = evidence["kind"] as? String ?: return false
         if (wholeNumber(evidence["schemaVersion"]) != 1L || kind !in receiptKinds) return false
@@ -118,6 +119,9 @@ object NativeSubtitlePreferenceProvenance {
     ): Boolean {
         // Explicit Off is authoritative.
         if (sessionPreference?.enabled == false) return false
+        // Match the shared Web contract: malformed non-null fields cannot be
+        // normalised into an apparently valid null-bound preference.
+        if (!validSessionPreference(sessionPreference)) return globalLanguage != null
         // No enabled session and no global language means no automatic choice.
         if (sessionPreference?.enabled != true && globalLanguage == null) return false
         return !verifySubtitlePreferenceProvenance(
@@ -143,6 +147,7 @@ object NativeSubtitlePreferenceProvenance {
         if (!validDigest(activeInstallationDigest)) {
             return null
         }
+        if (!validSessionPreference(sessionPreference)) return null
         val revision = positiveRevision(preferenceRevision) ?: return null
         val event = snapshotExactObject(localChoiceEvent, choiceEventKeys.size, false) ?: return null
         val eventInstallationDigest = event["installationDigest"] as? String ?: return null
@@ -298,6 +303,11 @@ object NativeSubtitlePreferenceProvenance {
 
     private fun validDigest(value: String?): Boolean =
         value != null && value != nullDigest && digest.matches(value)
+
+    private fun validSessionPreference(value: SessionPreference?): Boolean =
+        value == null ||
+            (value.language == null || normalisedText(value.language) != null) &&
+            (value.source == null || normalisedSource(value.source) != null)
 
     private fun wholeNumber(value: Any?): Long? = when (value) {
         is Byte -> value.toLong()

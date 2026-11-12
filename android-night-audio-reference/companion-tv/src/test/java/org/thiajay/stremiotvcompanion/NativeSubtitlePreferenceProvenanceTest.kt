@@ -133,6 +133,25 @@ class NativeSubtitlePreferenceProvenanceTest {
         assertFalse(verify(session, "fra", receipt, installation))
     }
 
+    @Test fun malformedNonNullPreferenceFieldsCannotBecomeNullBoundAuthority() {
+        for (malformed in listOf(
+            session.copy(language = "   "),
+            session.copy(source = "provider")
+        )) {
+            val nullBoundReceipt = sameInstallationReceipt(
+                mapOf(
+                    "binding" to NativeSubtitlePreferenceProvenance.preferenceBinding(
+                        malformed,
+                        "eng"
+                    )
+                )
+            )
+            assertFalse(verify(malformed, "eng", nullBoundReceipt, installation))
+            assertTrue(needs(malformed, "eng", nullBoundReceipt, installation))
+            assertNull(issue(sessionPreference = malformed))
+        }
+    }
+
     @Test fun bindingIsNormalisedDetachedAndClosed() {
         val binding = NativeSubtitlePreferenceProvenance.preferenceBinding(
             SessionPreference(true, " EN_us ", "embedded"),
