@@ -91,6 +91,56 @@ class MobileTitleWatchedInstrumentationTest {
         }
     }
 
+    @Test
+    fun testFrameworkClicksApplyAndClearMobileSeasonWatchedWithCanonicalReadbackOnApi30() {
+        clickUniqueButton(MARK_SEASON_WATCHED)
+
+        val status = awaitText(APPLIED, 5_000L)
+        assertTrue(status, status.contains(EXPECTED_EPISODE_1))
+        assertTrue(status, status.contains(EXPECTED_EPISODE_2))
+        assertFalse(status, status.contains(NARRATIVE_SPECIAL))
+        assertFalse(status, status.contains(FUTURE_EPISODE))
+        assertFalse(status, status.contains(ANCILLARY_SPECIAL))
+        assertStoryMarkers(
+            expectedWatched = setOf(
+                EXPECTED_EPISODE_1,
+                EXPECTED_EPISODE_2
+            )
+        )
+
+        scenario.onActivity { activity ->
+            val opposite = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == MARK_SEASON_UNWATCHED }
+            assertTrue(
+                "Canonical mobile season readback did not re-arm the opposite action",
+                opposite?.let { it.isEnabled && it.isClickable } == true
+            )
+        }
+
+        clickUniqueButton(MARK_SEASON_UNWATCHED)
+        onView(withText(CONFIRM)).inRoot(isDialog()).perform(click())
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+        val cleared = awaitText(EMPTY_WATCHED_READBACK, 5_000L)
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_1))
+        assertFalse(cleared, cleared.contains(EXPECTED_EPISODE_2))
+        assertFalse(cleared, cleared.contains(NARRATIVE_SPECIAL))
+        assertFalse(cleared, cleared.contains(FUTURE_EPISODE))
+        assertFalse(cleared, cleared.contains(ANCILLARY_SPECIAL))
+        assertStoryMarkers(expectedWatched = emptySet())
+
+        scenario.onActivity { activity ->
+            val opposite = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == MARK_SEASON_WATCHED }
+            assertTrue(
+                "Canonical mobile season unwatched readback did not re-arm the watched action",
+                opposite?.let { it.isEnabled && it.isClickable } == true
+            )
+        }
+    }
+
     private fun clickUniqueButton(label: String) {
         scenario.onActivity { activity ->
             val button = findViews(activity.window.decorView)
@@ -161,6 +211,8 @@ class MobileTitleWatchedInstrumentationTest {
     private companion object {
         const val MARK_SERIES_WATCHED = "Mark all released episodes watched"
         const val MARK_SERIES_UNWATCHED = "Mark all released episodes unwatched"
+        const val MARK_SEASON_WATCHED = "Mark released season 1 episodes watched"
+        const val MARK_SEASON_UNWATCHED = "Mark released season 1 episodes unwatched"
         const val CONFIRM = "Confirm"
         const val APPLIED = "Applied to local synthetic watched state."
         const val EMPTY_WATCHED_READBACK = "Synthetic watched IDs: none"

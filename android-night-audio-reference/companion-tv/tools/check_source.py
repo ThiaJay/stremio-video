@@ -2760,9 +2760,12 @@ if not all(x in mobile_title_watched_instrumentation for x in [
     '@RunWith(AndroidJUnit4::class)',
     'ActivityScenario.launch(MobileStoryOrderLabActivity::class.java)',
     'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',
+    'testFrameworkClicksApplyAndClearMobileSeasonWatchedWithCanonicalReadbackOnApi30',
     'exactButton.performClick()',
     'Mark all released episodes watched',
     'Mark all released episodes unwatched',
+    'Mark released season 1 episodes watched',
+    'Mark released season 1 episodes unwatched',
     'Applied to local synthetic watched state.',
     'local:mobile-watched:1:1',
     'local:mobile-watched:1:2',
@@ -2779,6 +2782,14 @@ if ('clickUniqueButton(MARK_SERIES_UNWATCHED)' not in
         mobile_title_watched_instrumentation or
     'Synthetic watched IDs: none' not in mobile_title_watched_instrumentation):
     fail.append('synthetic_mobile_title_unwatched_api30_readback_missing')
+if not all(x in mobile_title_watched_instrumentation for x in [
+    'clickUniqueButton(MARK_SEASON_WATCHED)',
+    'clickUniqueButton(MARK_SEASON_UNWATCHED)',
+    'assertFalse(status, status.contains(NARRATIVE_SPECIAL))',
+    'Canonical mobile season readback did not re-arm the opposite action',
+    'Canonical mobile season unwatched readback did not re-arm the watched action'
+]):
+    fail.append('synthetic_mobile_season_watched_api30_readback_missing')
 if "'androidx.test.espresso:espresso-core:3.7.0'" not in gradle:
     fail.append('synthetic_mobile_title_unwatched_espresso_dependency_missing')
 if not all(x in mobile_title_watched_instrumentation for x in [
