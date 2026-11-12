@@ -1076,9 +1076,14 @@ if ('.setPositiveButton("Confirm")' not in android_tv_title_widget_port or
     fail.append('android_tv_unwatch_confirmation_or_cancel_gate_missing')
 if ('result.intent.action' not in android_tv_title_widget_port or
     'result.intent.focusedActionId' not in android_tv_title_widget_port or
-    'result.intent.remoteKey' not in android_tv_title_widget_port or
-    'setOnClickListener' in android_tv_title_widget_port):
-    fail.append('android_tv_widget_exact_callback_or_remote_only_gate_missing')
+    'result.intent.remoteKey' not in android_tv_title_widget_port):
+    fail.append('android_tv_widget_exact_callback_gate_missing')
+if ('isClickable = true' not in android_tv_title_widget_port or
+    'setOnLongClickListener { true }' not in android_tv_title_widget_port or
+    'setOnClickListener' not in android_tv_title_widget_port or
+    'activateWidget(' not in android_tv_title_widget_port or
+    'NativeTvTitleWatchedWidgetController.KEY_ENTER' not in android_tv_title_widget_port):
+    fail.append('android_tv_widget_semantic_activation_gate_missing')
 if ('activeConfirmationDialog' not in android_tv_title_widget_port or
     'controller.invalidateConfirmation()' not in android_tv_title_widget_port or
     'controller.beginConfirmation(intent)' not in android_tv_title_widget_port or
@@ -2707,6 +2712,8 @@ if not all(x in title_watched_instrumentation for x in [
     'sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)',
     'boundedTitleWatchedRuntimeStatusForInstrumentation()',
     'testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
+    'testFrameworkClickAppliesSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
+    'clicked = button.performClick()',
     'Mark all released episodes watched',
     'Mark all released episodes unwatched',
     'Applied to local synthetic watched state.',

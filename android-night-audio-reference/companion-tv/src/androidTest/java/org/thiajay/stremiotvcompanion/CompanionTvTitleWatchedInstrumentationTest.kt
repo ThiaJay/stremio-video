@@ -117,6 +117,35 @@ class CompanionTvTitleWatchedInstrumentationTest {
         )
     }
 
+    @Test
+    fun testFrameworkClickAppliesSyntheticSeriesWatchedWithCanonicalReadbackOnApi30() {
+        var clicked = false
+        scenario.onActivity { activity ->
+            val button = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == MARK_SERIES_WATCHED }
+            assertNotNull("Synthetic series watched action was not uniquely rendered", button)
+            assertTrue("Synthetic TV title action was not clickable", button!!.isClickable)
+            assertTrue("Synthetic TV title action was not enabled", button.isEnabled)
+            clicked = button.performClick()
+        }
+        assertTrue("Framework click was not dispatched", clicked)
+
+        val status = awaitWatchedStatus(APPLIED, 5_000L)
+        assertTrue(status, status.contains(EXPECTED_EPISODE_1))
+        assertTrue(status, status.contains(EXPECTED_EPISODE_2))
+        assertTrue(status, status.contains(NARRATIVE_SPECIAL))
+        assertFalse(status, status.contains(FUTURE_EPISODE))
+        assertFalse(status, status.contains(ANCILLARY_SPECIAL))
+        assertStoryMarkers(
+            expectedWatched = setOf(
+                EXPECTED_EPISODE_1,
+                NARRATIVE_SPECIAL,
+                EXPECTED_EPISODE_2
+            )
+        )
+    }
+
     private fun awaitWatchedStatus(needle: String, timeoutMs: Long): String {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
         var snapshot = ""

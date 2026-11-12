@@ -17,6 +17,11 @@ import org.pss.stremio.tv.NativeTvTitleWatchedWidgetController
  * port. The disclosed side-by-side synthetic TV launcher instantiates it only
  * against local in-memory state; private and official clients remain unwired.
  *
+ * Remote ENTER/DPAD_CENTER key-up keeps its real-focus gate. Android framework
+ * click, accessibility click and keyboard click are also accepted through
+ * performClick/setOnClickListener and normalised to the existing ENTER
+ * confirmation path. Raw coordinates and long press are never activation.
+ *
  * This adapter owns only Android Views and confirmation presentation. It has no
  * account/Core/network surface. The host callback must pass the exact action
  * back to NativeTvTitleWatchedHostBinding on the same main thread.
@@ -88,6 +93,14 @@ class AndroidTvTitleWatchedWidgetPort(
             isAllCaps = false
             isFocusable = true
             isFocusableInTouchMode = false
+            isClickable = true
+            setOnLongClickListener { true }
+            setOnClickListener {
+                activateWidget(
+                    widget,
+                    NativeTvTitleWatchedWidgetController.KEY_ENTER
+                )
+            }
             setOnKeyListener { view, keyCode, event ->
                 if (!onMainOwnerThread() || closed || !view.hasFocus()) {
                     return@setOnKeyListener false
@@ -103,25 +116,34 @@ class AndroidTvTitleWatchedWidgetPort(
                 } else {
                     "OTHER"
                 }
-                val intent = controller.consume(
-                    widget = widget,
-                    focusedActionId = widget.actionId,
-                    remoteKey = remoteKey,
-                    keyAction = keyAction
-                ) ?: return@setOnKeyListener false
-
-                if (!removeOwnedViews()) {
-                    poison()
-                    return@setOnKeyListener true
-                }
-                if (widget.requiresAcknowledgement) {
-                    showUnwatchConfirmation(widget, intent)
-                } else {
-                    deliver(intent.action, intent.focusedActionId, intent.remoteKey, false)
-                }
-                true
+                activateWidget(widget, remoteKey, keyAction)
             }
         }
+
+    private fun activateWidget(
+        widget: NativeTvTitleWatchedWidget,
+        activationKey: String,
+        keyAction: String = NativeTvTitleWatchedWidgetController.KEY_ACTION_UP
+    ): Boolean {
+        if (!onMainOwnerThread() || closed) return false
+        val intent = controller.consume(
+            widget = widget,
+            focusedActionId = widget.actionId,
+            remoteKey = activationKey,
+            keyAction = keyAction
+        ) ?: return false
+
+        if (!removeOwnedViews()) {
+            poison()
+            return true
+        }
+        if (widget.requiresAcknowledgement) {
+            showUnwatchConfirmation(widget, intent)
+        } else {
+            deliver(intent.action, intent.focusedActionId, intent.remoteKey, false)
+        }
+        return true
+    }
 
     private fun showUnwatchConfirmation(
         widget: NativeTvTitleWatchedWidget,

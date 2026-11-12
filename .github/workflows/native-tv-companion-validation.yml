@@ -755,13 +755,14 @@ jobs:
               'testExplicitOffExecutesMedia3DrawAndWindowPixelCopyOnApi30',
               'testAdmittedEnabledExecutesMedia3CuesDrawAndWindowPixelCopyOnApi30',
               'testDpadCenterAppliesAndClearsSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
+              'testFrameworkClickAppliesSyntheticSeriesWatchedWithCanonicalReadbackOnApi30',
               'testDpadCenterSelectsStoryOrderAndAdvancesByStableIdOnApi30',
               'testFrameworkClickSwitchesMobileStoryOrderAndSelectsOriginalStableIdOnApi30',
               'testFrameworkClicksApplyAndClearMobileSeriesWatchedWithCanonicalReadbackOnApi30',
               'testDpadDownEscapesSyntheticTypedFieldToLocalSubmitOnApi30',
               'testTypedSubmitStaysLocalAndReportsHeldWithoutEchoOnApi30',
           }
-          assert tests==8 and failures==0 and errors==0, (tests,failures,errors)
+          assert tests==9 and failures==0 and errors==0, (tests,failures,errors)
           assert expected.issubset(set(names)), (expected,names)
           print('Verified API 30 synthetic subtitle, TV/mobile title-action, Story Order and typed-entry runtime:',tests,'failures:',failures,'errors:',errors)
           print('Private-client, account, physical display, Fire TV and hardware acceptance remain false.')
