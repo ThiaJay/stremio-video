@@ -19,8 +19,9 @@ import org.junit.runner.RunWith
 
 /**
  * Exercises the synthetic Story Order selector and next-item action through real
- * Android TV focus traversal and DPAD_CENTER on API 30. All metadata is local and
- * no catalogue, player, account, network or Stremio state is available here.
+ * Android TV focus traversal, DPAD_CENTER and the standard framework click path
+ * used by accessibility and keyboard activation on API 30. All metadata is local
+ * and no catalogue, player, account, network or Stremio state is available here.
  */
 @RunWith(AndroidJUnit4::class)
 class CompanionTvStoryOrderInstrumentationTest {
@@ -74,6 +75,49 @@ class CompanionTvStoryOrderInstrumentationTest {
         )
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER)
         instrumentation.waitForIdleSync()
+
+        val advanced = awaitStoryStatus(ADVANCED_STABLE_ID, 5_000L)
+        assertTrue(advanced, advanced.contains(ORIGINAL_OBJECT_MESSAGE))
+        assertTrue(advanced, advanced.contains(NARRATIVE_SPECIAL))
+        assertTrue(advanced, advanced.contains(FUTURE_EPISODE))
+        assertFalse(advanced, advanced.contains(ANCILLARY_SPECIAL))
+        assertNoWatchedMarkers(advanced, shouldContainAncillary = false)
+    }
+
+    @Test
+    fun testFrameworkClicksSelectStoryOrderAndAdvanceByStableIdOnApi30() {
+        val canonical = awaitStoryStatus(CANONICAL_LABEL, 5_000L)
+        assertNoWatchedMarkers(canonical, shouldContainAncillary = true)
+
+        var toggleClicked = false
+        scenario.onActivity { activity ->
+            val toggle = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == CANONICAL_LABEL }
+            assertNotNull("Synthetic Story Order selector was not uniquely rendered", toggle)
+            assertTrue("Synthetic Story Order selector was not clickable", toggle!!.isClickable)
+            toggleClicked = toggle.performClick()
+        }
+        assertTrue("Story Order framework click was not dispatched", toggleClicked)
+
+        val selected = awaitStoryStatus(STORY_LABEL, 5_000L)
+        assertTrue(selected, selected.contains(REGULAR_EPISODE_1))
+        assertTrue(selected, selected.contains(NARRATIVE_SPECIAL))
+        assertTrue(selected, selected.contains(REGULAR_EPISODE_2))
+        assertTrue(selected, selected.contains(FUTURE_EPISODE))
+        assertFalse(selected, selected.contains(ANCILLARY_SPECIAL))
+        assertNoWatchedMarkers(selected, shouldContainAncillary = false)
+
+        var nextClicked = false
+        scenario.onActivity { activity ->
+            val next = findViews(activity.window.decorView)
+                .filterIsInstance<Button>()
+                .singleOrNull { it.text.toString() == NEXT_STORY_LABEL }
+            assertNotNull("Synthetic Next Story action was not uniquely rendered", next)
+            assertTrue("Synthetic Next Story action was not clickable", next!!.isClickable)
+            nextClicked = next.performClick()
+        }
+        assertTrue("Next Story framework click was not dispatched", nextClicked)
 
         val advanced = awaitStoryStatus(ADVANCED_STABLE_ID, 5_000L)
         assertTrue(advanced, advanced.contains(ORIGINAL_OBJECT_MESSAGE))
