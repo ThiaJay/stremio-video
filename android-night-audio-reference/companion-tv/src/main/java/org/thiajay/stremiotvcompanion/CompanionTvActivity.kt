@@ -1,0 +1,1330 @@
+package org.thiajay.stremiotvcompanion
+
+import android.app.Activity
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Rect
+import android.net.Uri
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.InputFilter
+import android.text.InputType
+import android.view.KeyEvent
+import android.view.PixelCopy
+import android.view.View
+import android.view.ViewTreeObserver
+import android.view.inputmethod.EditorInfo
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.common.text.CueGroup
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.ui.PlayerView
+import org.pss.stremio.tv.CoreMessagePort
+import org.pss.stremio.tv.CoreSkipSegment
+import org.pss.stremio.tv.CompanionTextEntryFacts
+import org.pss.stremio.tv.NativeCompanionTextEntryPolicy
+import org.pss.stremio.tv.NativeSkipOutcome
+import org.pss.stremio.tv.NativeMedia3FailureIntake
+import org.pss.stremio.tv.NativeSeekPort
+import org.pss.stremio.tv.NativeTvTitleWatchedOutcome
+import org.pss.stremio.tv.SnapshotBoundNativeSeekPort
+import org.pss.stremio.tv.NativeTvSkipActuator
+import org.pss.stremio.tv.SegmentIdentity
+import org.pss.stremio.tv.SkipKind
+import org.pss.stremio.tv.SkipMode
+import org.pss.stremio.tv.TvPlaybackState
+import org.pss.stremio.tv.TvSkipCoordinator
+import org.pss.stremio.tv.TvWatchedCoordinator
+import org.stremio.nightaudio.reference.NightAudioMedia3Processor
+import org.stremio.nightaudio.reference.PcmDynamicsProcessor
+import java.io.File
+
+/**
+ * Side-by-side Android TV Media3 proof using existing tested Core bridge and
+ * the existing independently tested Night Audio PCM processor.
+ * No Stremio credentials, account state, external streams or addon sessions.
+ */
+@UnstableApi
+class CompanionTvActivity : Activity() {
+    private enum class SubtitleWindowPixelDiagnostic {
+        NOT_STARTED,
+        PENDING,
+        LEASE_ISSUED,
+        CONTEXT_DRIFT,
+        INVALID_DIMENSIONS,
+        OUTSIDE_WINDOW,
+        BITMAP_ALLOCATION_FAILED,
+        SOURCE_NO_DATA_RETRY,
+        COPY_SOURCE_NO_DATA,
+        COPY_TIMEOUT,
+        COPY_SOURCE_INVALID,
+        COPY_DESTINATION_INVALID,
+        COPY_UNKNOWN,
+        COPY_UNRECOGNISED,
+        COPY_SUCCEEDED,
+        PIXEL_POLICY_REFUSED,
+        ACCEPTED,
+        CALLBACK_EXCEPTION,
+        REQUEST_EXCEPTION
+    }
+
+    private lateinit var player: ExoPlayer
+    private val dsp = NightAudioMedia3Processor()
+    private val ui = Handler(Looper.getMainLooper())
+    private lateinit var status: TextView
+    private lateinit var controls: LinearLayout
+    private lateinit var syntheticSearchInput: EditText
+    private lateinit var syntheticSearchStatus: TextView
+    private val manualButtons = LinkedHashMap<SkipKind, Button>()
+    private var watchedOwner: AndroidTvTitleWatchedScreenOwner? = null
+    private val watchedHost = SyntheticTitleWatchedAccountHost()
+    private lateinit var watchedStatus: TextView
+    private var subtitleOwner: PersistentSyntheticSubtitlePreferenceScreenOwner? = null
+    private var subtitlePlayback: Media3SubtitlePlaybackPreferenceAdapter? = null
+    private var subtitlePendingTrigger:
+        NativeSubtitlePlaybackPreferenceActuator.Trigger? = null
+    private lateinit var subtitleStatus: TextView
+    private lateinit var storyOrderToggle: Button
+    private lateinit var storyOrderSummary: TextView
+    private var storyOrderSelected = false
+    private var storyDemoCurrentId = STORY_CANONICAL.first().id
+    private val skipCoordinator = TvSkipCoordinator()
+    private var generation = 0L
+    private var fixtureLoaded = false
+    private var skipMode = SkipMode.Ask
+    private var nightAudioName = "Off"
+    private var errorMessage: String? = null
+    private var playbackFailed = false
+    private val subtitleCueObserver = SyntheticSubtitleCueDeliveryObserver()
+    private val subtitleTrackObserver = SyntheticSubtitleTrackStateObserver()
+    private val subtitlePlaybackEvidenceObserver = SyntheticSubtitlePlaybackEvidenceObserver()
+    private val subtitlePreferenceEvidenceObserver =
+        SyntheticSubtitlePreferenceEvidenceObserver()
+    private val subtitleRenderPipelineObserver =
+        SyntheticSubtitleRenderPipelineObserver()
+    private val subtitleWindowPixelObserver =
+        SyntheticSubtitleWindowPixelObserver()
+    private val subtitleWindowPixelCaptureLease =
+        SyntheticSubtitleWindowPixelCaptureLease()
+    private var subtitleWindowPixelDiagnostic =
+        SubtitleWindowPixelDiagnostic.NOT_STARTED
+    private var subtitleRenderView: View? = null
+    private var subtitleCueRevision = 0L
+    private val subtitleDrawListener = ViewTreeObserver.OnDrawListener {
+        val current = subtitleRenderView
+        if (fixtureLoaded && current != null && subtitleCueRevision > 0L) {
+            val context = syntheticRenderPipelineContext()
+            if (subtitleRenderPipelineObserver.observeView(context, current.renderState())) {
+                subtitleRenderPipelineObserver.observeDraw(context, subtitleCueRevision)
+                val renderEvidence = subtitleRenderPipelineObserver.snapshot(context)
+                val pixelContext = syntheticWindowPixelContext()
+                if (renderEvidence?.renderPipelineEvidenceComplete == true &&
+                    subtitleWindowPixelObserver.snapshot(pixelContext)?.status ==
+                    SyntheticSubtitleWindowPixelObserver.Status.RENDER_PIPELINE_PENDING) {
+                    val revision = subtitleCueRevision
+                    val captureContext = syntheticWindowPixelCaptureContext(revision)
+                    subtitleWindowPixelCaptureLease.begin(captureContext)?.let { lease ->
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.LEASE_ISSUED
+                        window.decorView.postOnAnimation {
+                            requestSyntheticSubtitleWindowPixels(
+                                current,
+                                pixelContext,
+                                context,
+                                revision,
+                                lease,
+                                true
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The real Media3 seek must be guarded against the selected programme changing
+    // AFTER the Core dismiss acknowledgement but BEFORE the native player actuator.
+    private val nativePlayer: NativeSeekPort = SnapshotBoundNativeSeekPort(
+        observe = {
+            val duration = player.duration.takeIf { it in 1L..120_100L } ?: 0L
+            TvPlaybackState(
+                generation = generation,
+                videoId = if (fixtureLoaded) FIXTURE_ID else "",
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                durationMs = duration,
+                loaded = fixtureLoaded && player.playbackState == Player.STATE_READY,
+                paused = !player.playWhenReady,
+                buffering = player.playbackState == Player.STATE_BUFFERING,
+                seeking = false,
+                switchingSource = false,
+                menuOpen = false,
+                nextVideoPopupOpen = false
+            )
+        },
+        applySeek = { ms ->
+            player.seekTo(ms)
+            true
+        }
+    )
+
+    // A SYNTHETIC fixture-only Core acknowledgement, not a signed-in Stremio reducer.
+    private val fixtureCore = object : CoreMessagePort {
+        override fun dispatch(message: Map<String, Any>): Boolean =
+            fixtureLoaded && message["action"] == "Player" &&
+                (message["args"] as? Map<*, *>)?.get("action") == "DismissSkipSegment"
+    }
+    private val skipActuator = NativeTvSkipActuator(skipCoordinator, fixtureCore, nativePlayer)
+
+    private val refresh = object : Runnable {
+        override fun run() {
+            if (::player.isInitialized && ::status.isInitialized) updateUi()
+            pollWatchedOutcome()
+            pollSubtitleOutcome()
+            ui.postDelayed(this, 300L)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioOutputPlaybackParams: Boolean
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableFloatOutput(false)
+                .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                .setAudioProcessors(arrayOf<AudioProcessor>(dsp))
+                .build()
+        }
+        player = ExoPlayer.Builder(this, renderers).build()
+        player.volume = 0.20f
+        player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (subtitlePendingTrigger !=
+                    NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY) {
+                    subtitlePendingTrigger = if (
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                    ) {
+                        NativeSubtitlePlaybackPreferenceActuator.Trigger.EPISODE_TRANSITION
+                    } else {
+                        NativeSubtitlePlaybackPreferenceActuator.Trigger.INITIAL_LOAD
+                    }
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    subtitlePendingTrigger?.let { trigger ->
+                        subtitlePlayback?.reconcile(trigger)
+                        subtitlePendingTrigger = null
+                    }
+                }
+                refreshSubtitlePreferenceEvidence()
+                updateUi()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                val classification = NativeMedia3FailureIntake.classify(error.errorCode)
+                playbackFailed = true
+                errorMessage =
+                    "Local synthetic playback stopped: ${classification.category}. " +
+                        "No automatic retry or source change."
+                dsp.request(null)
+                nightAudioName = "Off"
+                updateUi()
+            }
+
+            override fun onCues(cueGroup: CueGroup) {
+                if (!fixtureLoaded) return
+                val cueTexts = cueGroup.cues.mapNotNull { it.text?.toString() }
+                val cueContext = syntheticCueContext()
+                val evidenceContext = syntheticPlaybackEvidenceContext()
+                val renderContext = syntheticRenderPipelineContext()
+                when (subtitleCueObserver.observe(cueContext, cueTexts)) {
+                    SyntheticSubtitleCueDeliveryObserver.Observation.REFUSED -> {
+                        subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
+                        subtitleRenderPipelineObserver.invalidate(renderContext)
+                        subtitleWindowPixelObserver.invalidate(syntheticWindowPixelContext())
+                    }
+                    else -> subtitleCueObserver.snapshot(cueContext)?.let { observed ->
+                        subtitlePlaybackEvidenceObserver.observeCues(
+                            evidenceContext,
+                            observed.deliveredCueCount,
+                            observed.expectedCueCount,
+                            observed.allExpectedCuesObserved
+                        )
+                        subtitleCueRevision++
+                        subtitleRenderPipelineObserver.observeCueGroup(
+                            renderContext,
+                            subtitleCueRevision,
+                            cueTexts.size
+                        )
+                    }
+                }
+                refreshSubtitlePreferenceEvidence()
+                updateUi()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                if (!fixtureLoaded) return
+                val trackContext = syntheticTrackContext()
+                val evidenceContext = syntheticPlaybackEvidenceContext()
+                if (!subtitleTrackObserver.observe(trackContext, syntheticTextTracks(tracks))) {
+                    subtitlePlaybackEvidenceObserver.invalidate(evidenceContext)
+                } else {
+                    subtitleTrackObserver.snapshot(trackContext)?.let { observed ->
+                        subtitlePlaybackEvidenceObserver.observeTrack(evidenceContext, observed.state)
+                    }
+                }
+                refreshSubtitlePreferenceEvidence()
+                updateUi()
+            }
+        })
+
+        val container = ScrollView(this).apply {
+            setFillViewport(true)
+            setBackgroundColor(Color.rgb(16, 23, 34))
+        }
+        controls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 28, 40, 28)
+        }
+        container.addView(controls)
+        header("Stremio Companion Lab")
+        small("Independent Android TV build. Existing Stremio remains untouched. No account or network access.")
+        small(
+            "Typed search below is an app-owned, process-local input surface only. " +
+                "It exposes no microphone, speech permission, companion session, " +
+                "Stremio catalogue or Fire TV acceptance claim."
+        )
+        syntheticSearchInput = EditText(this).apply {
+            id = View.generateViewId()
+            hint = "Type a synthetic local search"
+            contentDescription = SYNTHETIC_SEARCH_INPUT_DESCRIPTION
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            filters = arrayOf(InputFilter.LengthFilter(MAX_SYNTHETIC_SEARCH_LENGTH))
+            setSingleLine(true)
+            isFocusable = true
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(160, 175, 190))
+        }
+        controls.addView(
+            syntheticSearchInput,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        val syntheticSearchSubmit = button(SYNTHETIC_SEARCH_BUTTON_LABEL) {
+            runSyntheticTypedSearch()
+        }.apply {
+            id = View.generateViewId()
+        }
+        syntheticSearchInput.nextFocusDownId = syntheticSearchSubmit.id
+        syntheticSearchSubmit.nextFocusUpId = syntheticSearchInput.id
+        syntheticSearchInput.setOnKeyListener { _, keyCode, event ->
+            keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
+                event.action == KeyEvent.ACTION_DOWN &&
+                syntheticSearchSubmit.requestFocus()
+        }
+        syntheticSearchInput.setOnEditorActionListener { _, actionId, event ->
+            val explicitSearchAction = actionId == EditorInfo.IME_ACTION_SEARCH
+            val hardwareEnter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
+                event.action == KeyEvent.ACTION_DOWN
+            if (!explicitSearchAction && !hardwareEnter) {
+                false
+            } else {
+                runSyntheticTypedSearch()
+                true
+            }
+        }
+        syntheticSearchStatus = small(
+            "Typed input ready. Companion route and device identity remain unknown; " +
+                "live acceptance is false."
+        )
+        val video = PlayerView(this).apply {
+            useController = false
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+            player = this@CompanionTvActivity.player
+            isFocusable = false
+            setBackgroundColor(Color.BLACK)
+        }
+        subtitleRenderView = video.subtitleView
+        subtitleRenderView?.viewTreeObserver?.addOnDrawListener(subtitleDrawListener)
+        controls.addView(video, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 280.dp
+        ))
+        val play = button("Play offline synthetic Media3 fixture with local subtitles") {
+            startFixture()
+        }
+        button("Pause / Resume") {
+            if (fixtureLoaded) player.playWhenReady = !player.playWhenReady
+        }
+        small("Skip demonstrations below operate ONLY on the synthetic local clip. They do not infer timings for a real programme.")
+        for (kind in listOf(SkipKind.Recap, SkipKind.Intro, SkipKind.Outro)) {
+            val b = button(kind.label()) { skipFixture(kind) }
+            b.isEnabled = false
+            manualButtons[kind] = b
+        }
+        button("Mode Ask / Always / Never") {
+            skipMode = when (skipMode) { SkipMode.Ask -> SkipMode.Always; SkipMode.Always -> SkipMode.Never; SkipMode.Never -> SkipMode.Ask }
+            updateUi()
+        }
+        small("Night Audio is Off by default. The strength controls use the already-tested Media3 PCM processor.")
+        button("Night Audio Off") { setNightAudio(null, "Off") }
+        button("Night Audio Gentle") { setNightAudio(PcmDynamicsProcessor.Strength.GENTLE, "Gentle") }
+        button("Night Audio Balanced") { setNightAudio(PcmDynamicsProcessor.Strength.BALANCED, "Balanced") }
+        button("Night Audio Strong") { setNightAudio(PcmDynamicsProcessor.Strength.STRONG, "Strong") }
+        button("Stop playback and reset Night Audio") { stopFixture() }
+        small(
+            "Story Order below uses synthetic local metadata and canonical local " +
+                "watched readback only. It cannot read a Stremio catalogue, start a " +
+                "stream or read or change account watched state."
+        )
+        storyOrderToggle = button("Presentation: Canonical") {
+            storyOrderSelected = !storyOrderSelected
+            updateStoryOrderDemo()
+        }
+        button("Next Story item (local metadata only)") { advanceStoryOrderDemo() }
+        storyOrderSummary = small("")
+        updateStoryOrderDemo()
+        small(
+            "Title actions below use the real bounded Android TV widget and owner " +
+                "against this process's local in-memory fixture only. They cannot read " +
+                "or change a Stremio account."
+        )
+        watchedStatus = small("Preparing synthetic title actions.")
+        val watchedActions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        controls.addView(watchedActions)
+        val createdWatched = AndroidTvTitleWatchedScreenOwner.create(
+            watchedActions,
+            TvWatchedCoordinator(),
+            watchedHost
+        )
+        if (createdWatched == null || !createdWatched.render(1)) {
+            createdWatched?.close()
+            watchedStatus.text =
+                "Synthetic title actions unavailable. No account action was attempted."
+        } else {
+            watchedOwner = createdWatched
+            watchedStatus.text =
+                "Title actions ready. Any accepted action changes this process's local " +
+                    "synthetic watched set only."
+        }
+        small(
+            "Subtitle choices below use the accepted Android preference owner against " +
+                "this TV lab's app-private state, which starts explicitly Off. Only " +
+                "this TV lab's preference and provenance receipt may be stored. " +
+                "The player fixture has deterministic local English WebVTT cues. " +
+                "Production Stremio preferences are never read or changed."
+        )
+        subtitleStatus = small("Preparing synthetic subtitle preference choices.")
+        val subtitleActions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        controls.addView(subtitleActions)
+        val createdSubtitle = PersistentSyntheticSubtitlePreferenceScreenOwner.open(
+            getSharedPreferences(SYNTHETIC_TV_SUBTITLE_STATE_PREFS, MODE_PRIVATE),
+            getSharedPreferences(SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS, MODE_PRIVATE),
+            PersistentSyntheticSubtitlePreferenceHost.Namespace.TV,
+            subtitleActions
+        )
+        val initialSubtitle = createdSubtitle?.initialState()
+        if (createdSubtitle == null || initialSubtitle == null ||
+            !createdSubtitle.renderInitial()) {
+            createdSubtitle?.close()
+            subtitleStatus.text =
+                "Synthetic subtitle choices unavailable. Production preferences remain untouched."
+        } else {
+            subtitleOwner = createdSubtitle
+            subtitlePlayback = Media3SubtitlePlaybackPreferenceAdapter.open(
+                player = player,
+                contextPort = Media3SubtitlePlaybackPreferenceAdapter.ContextPort {
+                    Media3SubtitlePlaybackPreferenceAdapter.Context(
+                        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+                        loadGeneration = generation,
+                        videoId = if (fixtureLoaded) FIXTURE_ID else "",
+                        sourceId = if (fixtureLoaded) SYNTHETIC_SOURCE_ID else "",
+                        transitioning = player.playbackState != Player.STATE_READY,
+                        nextEpisodeRequested = false
+                    )
+                },
+                preferencePort = NativeSubtitlePlaybackPreferenceActuator.PreferencePort {
+                    createdSubtitle.currentPlaybackPreference()
+                }
+            )
+            val admissionStatus = when (initialSubtitle.admission) {
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.EXPLICIT_OFF ->
+                    "Current app-private TV state is explicit Off; no enabled choice is inferred."
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_SAME_INSTALLATION ->
+                    "Current enabled TV state has an exact same-installation choice receipt."
+                PersistentSyntheticSubtitlePreferenceScreenOwner.Admission.ENABLED_UNADMITTED ->
+                    "Current enabled TV state has no matching same-installation receipt and is " +
+                        "not admitted as consent."
+            }
+            subtitleStatus.text = admissionStatus + "\n" +
+                "Choose enabled or explicit Off for this app-private TV lab preference. " +
+                    "The TV and mobile lab namespaces are independent."
+        }
+        status = header("Ready. No media or account loaded.")
+        small("No external media, credentials, Stremio account, history or source URL are read or written by this build.")
+        setContentView(container)
+        play.requestFocus()
+        ui.post(refresh)
+    }
+
+    private fun startFixture() {
+        subtitlePendingTrigger = if (playbackFailed) {
+            NativeSubtitlePlaybackPreferenceActuator.Trigger.RECOVERY
+        } else {
+            NativeSubtitlePlaybackPreferenceActuator.Trigger.INITIAL_LOAD
+        }
+        playbackFailed = false
+        errorMessage = null
+        subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.PENDING
+        currentSyntheticWindowPixelCaptureContext()?.let {
+            subtitleWindowPixelCaptureLease.abandon(it)
+        }
+        fixtureLoaded = false
+        generation++
+        player.stop()
+        val cueContext = syntheticCueContext()
+        val trackContext = syntheticTrackContext()
+        val evidenceContext = syntheticPlaybackEvidenceContext()
+        val preferenceEvidenceContext = syntheticPreferenceEvidenceContext()
+        val renderPipelineContext = syntheticRenderPipelineContext()
+        val windowPixelContext = syntheticWindowPixelContext()
+        subtitleCueRevision = 0L
+        val cueStarted = subtitleCueObserver.begin(cueContext)
+        val trackStarted = subtitleTrackObserver.begin(trackContext)
+        val evidenceStarted = subtitlePlaybackEvidenceObserver.begin(evidenceContext)
+        val preferenceEvidenceStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitlePreferenceEvidenceObserver.begin(preferenceEvidenceContext, it)
+        } == true
+        val renderPipelineStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitleRenderPipelineObserver.begin(renderPipelineContext, it)
+        } == true
+        val windowPixelStarted = subtitleOwner?.currentPlaybackPreference()?.let {
+            subtitleWindowPixelObserver.begin(windowPixelContext, it)
+        } == true
+        if (!cueStarted || !trackStarted || !evidenceStarted || !preferenceEvidenceStarted ||
+            !renderPipelineStarted || !windowPixelStarted) {
+            if (cueStarted) subtitleCueObserver.abandon(cueContext)
+            if (trackStarted) subtitleTrackObserver.abandon(trackContext)
+            if (evidenceStarted) subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
+            if (preferenceEvidenceStarted) {
+                subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
+            }
+            if (renderPipelineStarted) {
+                subtitleRenderPipelineObserver.abandon(renderPipelineContext)
+            }
+            if (windowPixelStarted) {
+                subtitleWindowPixelObserver.abandon(windowPixelContext)
+            }
+            errorMessage = "Synthetic subtitle playback observation was refused."
+            updateUi()
+            return
+        }
+        try {
+            val clip: File = SyntheticAudioFixture.createIfMissing(cacheDir)
+            val subtitles: File = SyntheticSubtitleFixture.createIfMissing(cacheDir)
+            val subtitleConfiguration = MediaItem.SubtitleConfiguration.Builder(
+                Uri.fromFile(subtitles)
+            )
+                .setMimeType(MimeTypes.TEXT_VTT)
+                .setLanguage("en")
+                .setLabel("English (synthetic lab)")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+            player.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(Uri.fromFile(clip))
+                    .setSubtitleConfigurations(listOf(subtitleConfiguration))
+                    .build()
+            )
+            player.volume = 0.20f
+            fixtureLoaded = true
+            player.prepare()
+            player.playWhenReady = true
+        } catch (_: Exception) {
+            subtitleCueObserver.abandon(cueContext)
+            subtitleTrackObserver.abandon(trackContext)
+            subtitlePlaybackEvidenceObserver.abandon(evidenceContext)
+            subtitlePreferenceEvidenceObserver.abandon(preferenceEvidenceContext)
+            subtitleRenderPipelineObserver.abandon(renderPipelineContext)
+            subtitleWindowPixelObserver.abandon(windowPixelContext)
+            errorMessage = "Unable to prepare the offline test media."
+            fixtureLoaded = false
+            player.stop()
+        }
+        updateUi()
+    }
+
+    private fun currentSegment(kind: SkipKind, state: TvPlaybackState): CoreSkipSegment? {
+        if (!fixtureLoaded || state.durationMs !in 11_900L..12_100L) return null
+        val interval = when (kind) {
+            SkipKind.Recap -> 0L to 1_500L
+            SkipKind.Intro -> 1_500L to 3_500L
+            SkipKind.Outro -> 8_500L to 10_000L
+            SkipKind.Preview -> return null
+        }
+        return CoreSkipSegment(kind, generation, FIXTURE_ID, interval.first, interval.second,
+            state.durationMs, skipMode, true, false, interval.second)
+    }
+
+    private fun skipFixture(kind: SkipKind) {
+        val snapshot = nativePlayer.snapshot()
+        val segment = currentSegment(kind, snapshot)
+        val focused: SegmentIdentity? = skipCoordinator.presentation(segment, snapshot)?.focusedIdentity
+        when (skipActuator.manual(segment, focused, "DPAD_CENTER")) {
+            NativeSkipOutcome.APPLIED -> errorMessage = null
+            else -> errorMessage = "Skip unavailable: player position, focus or media state changed."
+        }
+        updateUi()
+    }
+
+    private fun updateUi() {
+        if (!::status.isInitialized) return
+        val p = nativePlayer.snapshot()
+        if (skipMode == SkipMode.Always && fixtureLoaded && !p.paused) {
+            val candidate = listOf(SkipKind.Recap, SkipKind.Intro, SkipKind.Outro)
+                .mapNotNull { currentSegment(it, p) }
+                .firstOrNull { it.active && p.positionMs in it.fromMs until it.toMs }
+            if (candidate != null && skipActuator.automatic(candidate) == NativeSkipOutcome.APPLIED) {
+                // The media controller owns current-position readback on the next frame.
+            }
+        }
+        for ((kind, b) in manualButtons) {
+            val s = currentSegment(kind, p)
+            b.isEnabled = skipMode == SkipMode.Ask && skipCoordinator.presentation(s, p) != null
+        }
+        val state = when {
+            errorMessage != null -> errorMessage!!
+            !fixtureLoaded -> "Ready. Stremio account not connected. No content playing."
+            player.playbackState == Player.STATE_ENDED -> "Local test finished. No next episode and no watched write."
+            player.isPlaying -> "Synthetic playback at ${p.positionMs / 1000}s of ${p.durationMs / 1000}s."
+            else -> "Synthetic playback paused or loading."
+        }
+        val dspStatus = when {
+            nightAudioName == "Off" -> "Night Audio Off."
+            dsp.isPcmProcessingObserved() -> "Night Audio $nightAudioName: PCM processed; audible route NOT verified."
+            else -> "Night Audio $nightAudioName: waiting for eligible PCM; no active output claim."
+        }
+        val cueStatus = if (!fixtureLoaded) {
+            "Synthetic cue delivery not active."
+        } else {
+            subtitleCueObserver.snapshot(syntheticCueContext())?.let { observed ->
+                "Media3 synthetic cue delivery ${observed.deliveredCueCount}/" +
+                    "${observed.expectedCueCount}; visible output NOT accepted."
+            } ?: "Synthetic cue delivery held closed; visible output NOT accepted."
+        }
+        val trackStatus = if (!fixtureLoaded) {
+            "Synthetic text-track state not active."
+        } else {
+            when (subtitleTrackObserver.snapshot(syntheticTrackContext())?.state) {
+                SyntheticSubtitleTrackStateObserver.State.NOT_REPORTED ->
+                    "Media3 text track not yet reported; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.ABSENT ->
+                    "Media3 text track absent; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.PRESENT_UNSELECTED ->
+                    "Media3 synthetic text track present and unselected; visible output NOT accepted."
+                SyntheticSubtitleTrackStateObserver.State.PRESENT_SELECTED ->
+                    "Media3 synthetic text track present and selected; visible output NOT accepted."
+                null ->
+                    "Synthetic text-track observation held closed; visible output NOT accepted."
+            }
+        }
+        val playbackEvidenceStatus = if (!fixtureLoaded) {
+            "Synthetic subtitle callback correlation not active."
+        } else {
+            subtitlePlaybackEvidenceObserver.snapshot(syntheticPlaybackEvidenceContext())?.let { observed ->
+                "Media3 subtitle callback correlation ${observed.status}; " +
+                    "visible output NOT accepted."
+            } ?: "Synthetic subtitle callback correlation held closed; visible output NOT accepted."
+        }
+        val preferenceEvidenceStatus = if (!fixtureLoaded) {
+            "Preference-bound subtitle callback evidence not active."
+        } else {
+            subtitlePreferenceEvidenceObserver.snapshot(syntheticPreferenceEvidenceContext())
+                ?.let { observed ->
+                    "Preference-bound subtitle callback evidence ${observed.status}; " +
+                        "visible output NOT accepted."
+                } ?: "Preference-bound subtitle callback evidence held closed; " +
+                "visible output NOT accepted."
+        }
+        val renderPipelineStatus = if (!fixtureLoaded) {
+            "Subtitle view draw-pipeline evidence not active."
+        } else {
+            subtitleRenderPipelineObserver.snapshot(syntheticRenderPipelineContext())
+                ?.let { observed ->
+                    "Subtitle view draw-pipeline evidence ${observed.status}; " +
+                        "visible pixels and device output NOT accepted."
+                } ?: "Subtitle view draw-pipeline evidence held closed; " +
+                "visible pixels and device output NOT accepted."
+        }
+        val windowPixelStatus = if (!fixtureLoaded) {
+            "Synthetic subtitle window-pixel evidence not active."
+        } else {
+            subtitleWindowPixelObserver.snapshot(syntheticWindowPixelContext())
+                ?.let { observed ->
+                    "Synthetic subtitle window-pixel evidence ${observed.status}; " +
+                        "diagnostic ${subtitleWindowPixelDiagnostic.name}; " +
+                        "physical display and device output NOT accepted."
+                } ?: "Synthetic subtitle window-pixel evidence held closed or pending; " +
+                "diagnostic ${subtitleWindowPixelDiagnostic.name}; " +
+                "physical display and device output NOT accepted."
+        }
+        status.text =
+            "$state  Skip mode $skipMode.  $dspStatus  $cueStatus  $trackStatus  " +
+                "$playbackEvidenceStatus  $preferenceEvidenceStatus  $renderPipelineStatus  " +
+                windowPixelStatus
+    }
+
+    /**
+     * Read-only instrumentation surface for the two existing bounded subtitle status
+     * strings. It refuses detached or replaced UI and never returns cue text, pixels,
+     * media, account, source or preference storage.
+     */
+    internal fun boundedSubtitleRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::subtitleStatus.isInitialized ||
+            !::status.isInitialized || !controls.isAttachedToWindow ||
+            !subtitleStatus.isAttachedToWindow || !status.isAttachedToWindow ||
+            subtitleStatus.parent !== controls || status.parent !== controls) {
+            return null
+        }
+        val bounded = listOf(
+            subtitleStatus.text.toString(),
+            status.text.toString()
+        ).joinToString(" | ")
+        return bounded.takeIf { it.isNotBlank() && it.length <= 8_192 }
+    }
+
+    /**
+     * Read-only instrumentation surface for the process-local synthetic title
+     * action outcome. It exposes no account, credential, network or Core object.
+     */
+    internal fun boundedTitleWatchedRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::watchedStatus.isInitialized ||
+            !controls.isAttachedToWindow || !watchedStatus.isAttachedToWindow ||
+            watchedStatus.parent !== controls) {
+            return null
+        }
+        return watchedStatus.text.toString().takeIf {
+            it.isNotBlank() && it.length <= 2_048
+        }
+    }
+
+    /**
+     * Read-only instrumentation surface for the synthetic Story Order controls.
+     * It exposes only local fixture labels and never returns catalogue, account,
+     * playback, source or preference state.
+     */
+    internal fun boundedStoryOrderRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::storyOrderToggle.isInitialized ||
+            !::storyOrderSummary.isInitialized || !controls.isAttachedToWindow ||
+            !storyOrderToggle.isAttachedToWindow || !storyOrderSummary.isAttachedToWindow ||
+            storyOrderToggle.parent !== controls || storyOrderSummary.parent !== controls) {
+            return null
+        }
+        return listOf(
+            storyOrderToggle.text.toString(),
+            storyOrderSummary.text.toString()
+        ).joinToString(" | ").takeIf { it.isNotBlank() && it.length <= 4_096 }
+    }
+
+    /**
+     * Read-only instrumentation surface for the local typed-search boundary. It
+     * never returns the query and cannot claim companion delivery or acceptance.
+     */
+    internal fun boundedSyntheticSearchRuntimeStatusForInstrumentation(): String? {
+        if (Looper.myLooper() != Looper.getMainLooper() || isFinishing || isDestroyed ||
+            !::controls.isInitialized || !::syntheticSearchInput.isInitialized ||
+            !::syntheticSearchStatus.isInitialized || !controls.isAttachedToWindow ||
+            !syntheticSearchInput.isAttachedToWindow ||
+            !syntheticSearchStatus.isAttachedToWindow ||
+            syntheticSearchInput.parent !== controls ||
+            syntheticSearchStatus.parent !== controls) {
+            return null
+        }
+        return syntheticSearchStatus.text.toString().takeIf {
+            it.isNotBlank() && it.length <= 2_048
+        }
+    }
+
+    private fun updateStoryOrderDemo(message: String? = null) {
+        val canonicalIds = STORY_CANONICAL.mapTo(LinkedHashSet()) { it.id }
+        val readbackIds = watchedHost.watchedIds().toSet()
+        val watchedIds = readbackIds.takeIf {
+            it.size <= STORY_CANONICAL.size && canonicalIds.containsAll(it)
+        } ?: emptySet()
+        val visible = StoryOrderContract.presentation(
+            STORY_CANONICAL,
+            STORY_HINTS,
+            storyOrderSelected
+        )
+        storyOrderToggle.text = if (storyOrderSelected) {
+            "Presentation: Story Order"
+        } else {
+            "Presentation: Canonical"
+        }
+        val sequence = visible.joinToString("  →  ") {
+            val watched = if (watchedIds.contains(it.id)) " • Watched" else ""
+            "${it.id} [S${it.season} E${it.episode ?: "?"}]$watched"
+        }
+        storyOrderSummary.text = listOfNotNull(
+            message,
+            "Selected stable ID: $storyDemoCurrentId",
+            "Visible local sequence: $sequence",
+            if (watchedIds.size == readbackIds.size) {
+                "Markers reflect canonical local watched readback only."
+            } else {
+                "Watched markers held because local readback left the canonical ID set."
+            },
+            "No player, account or production watched-state binding."
+        ).joinToString("\n")
+    }
+
+    private fun advanceStoryOrderDemo() {
+        if (!storyOrderSelected) {
+            updateStoryOrderDemo("Story Order is not selected; existing continuation remains untouched.")
+            return
+        }
+        when (val decision = StoryOrderContract.next(
+            STORY_CANONICAL,
+            STORY_HINTS,
+            storyDemoCurrentId
+        )) {
+            is NextStoryDecision.UseCanonicalEpisode -> {
+                storyDemoCurrentId = decision.episode.id
+                updateStoryOrderDemo("Resolved the original canonical object by stable ID.")
+            }
+            is NextStoryDecision.UseExistingContinuation -> {
+                updateStoryOrderDemo("No Story Order override: ${decision.reason}.")
+            }
+        }
+    }
+
+    private fun pollWatchedOutcome() {
+        watchedOwner?.let { current ->
+            val outcome = current.consumeOutcome() ?: return
+            val result = when (outcome) {
+                NativeTvTitleWatchedOutcome.APPLIED ->
+                    "Applied to local synthetic watched state."
+                NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK ->
+                    "Local readback was not available; no further action is enabled."
+                NativeTvTitleWatchedOutcome.REFUSED ->
+                    "Action refused by the bounded title-action contract."
+            }
+            watchedStatus.text =
+                result + "\nSynthetic watched IDs: " +
+                    watchedHost.watchedIds().ifEmpty { listOf("none") }.joinToString()
+            if (outcome == NativeTvTitleWatchedOutcome.APPLIED) {
+                updateStoryOrderDemo(
+                    "Story Order markers refreshed from canonical local watched readback."
+                )
+            }
+            if (!current.render(1)) {
+                watchedStatus.text =
+                    watchedStatus.text.toString() +
+                        "\nTitle-action lab closed after a rejected re-render."
+                current.close()
+                watchedOwner = null
+            }
+        }
+    }
+
+    private fun pollSubtitleOutcome() {
+        subtitleOwner?.let { current ->
+            val outcome = current.consumeOutcome() ?: return
+            val preference = current.currentPreference()?.sessionPreference
+            subtitleStatus.text = when {
+                outcome.result.ok && preference != null ->
+                    "Accepted explicit synthetic " + outcome.choice.name.lowercase() +
+                        " choice. Current app-private TV lab state: " +
+                        (if (preference.enabled == true) "enabled." else "Off.")
+                outcome.result.rollbackVerified ->
+                    "Synthetic choice was refused and exact rollback was verified."
+                else ->
+                    "Synthetic choice was refused with unverified rollback; " +
+                        "the TV subtitle lab is held closed."
+            } + "\nProduction Stremio preferences were not read or changed."
+
+            if (outcome.result.ok && preference != null) {
+                subtitlePlayback?.reconcile(
+                    NativeSubtitlePlaybackPreferenceActuator.Trigger.PREFERENCE_CHANGE
+                )
+                refreshSubtitlePreferenceEvidence()
+            }
+
+            if (!outcome.result.rollbackVerified) {
+                subtitlePlayback?.close()
+                subtitlePlayback = null
+                current.close()
+                subtitleOwner = null
+            } else if (!current.renderSettings()) {
+                subtitleStatus.text =
+                    subtitleStatus.text.toString() +
+                        "\nTV subtitle lab closed after a rejected re-render."
+                subtitlePlayback?.close()
+                subtitlePlayback = null
+                current.close()
+                subtitleOwner = null
+            }
+        }
+    }
+
+    private fun stopFixture() {
+        currentSyntheticWindowPixelCaptureContext()?.let {
+            subtitleWindowPixelCaptureLease.abandon(it)
+        }
+        if (fixtureLoaded) subtitleCueObserver.abandon(syntheticCueContext())
+        if (fixtureLoaded) subtitleTrackObserver.abandon(syntheticTrackContext())
+        if (fixtureLoaded) {
+            subtitlePlaybackEvidenceObserver.abandon(syntheticPlaybackEvidenceContext())
+            subtitlePreferenceEvidenceObserver.abandon(syntheticPreferenceEvidenceContext())
+            subtitleRenderPipelineObserver.abandon(syntheticRenderPipelineContext())
+            subtitleWindowPixelObserver.abandon(syntheticWindowPixelContext())
+        }
+        player.stop()
+        fixtureLoaded = false
+        generation++
+        subtitlePendingTrigger = null
+        setNightAudio(null, "Off")
+    }
+
+    private fun setNightAudio(strength: PcmDynamicsProcessor.Strength?, name: String) {
+        nightAudioName = name
+        dsp.request(strength)
+        updateUi()
+    }
+
+    private fun runSyntheticTypedSearch() {
+        val text = syntheticSearchInput.text?.toString().orEmpty()
+        val plan = NativeCompanionTextEntryPolicy.plan(
+            CompanionTextEntryFacts(
+                searchSurfaceActive = false,
+                typedSearchFocused = syntheticSearchInput.hasFocus(),
+                explicitCompanionInputGesture = true,
+                sensitiveInput = false,
+                deliveryConfirmedInStremio = false,
+                resultsRemainInStremio = false,
+                companionRoute = "unknown",
+                companionSessionIdentity = "unknown"
+            )
+        )
+        syntheticSearchStatus.text = if (text.isBlank()) {
+            "No synthetic query submitted. ${plan.action}: ${plan.reason}. " +
+                "Live acceptance remains false."
+        } else {
+            "Retained ${text.length} typed characters inside this local lab. " +
+                "${plan.action}: ${plan.reason}. No voice, network, account, " +
+                "official Stremio result or Fire TV acceptance is claimed."
+        }
+    }
+
+    private fun header(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 23f
+        setTextColor(Color.WHITE)
+        setPadding(0, 6.dp, 0, 10.dp)
+        controls.addView(this)
+    }
+
+    private fun small(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 16f
+        setTextColor(Color.rgb(210, 223, 237))
+        setPadding(0, 2.dp, 0, 12.dp)
+        controls.addView(this)
+    }
+
+    private fun button(text: String, click: () -> Unit): Button = Button(this).apply {
+        this.text = text
+        isAllCaps = false
+        textSize = 18f
+        isFocusable = true
+        setOnClickListener { click() }
+        controls.addView(this)
+    }
+
+    private val Int.dp get() = (this * resources.displayMetrics.density).toInt()
+    private fun SkipKind.label() = when (this) {
+        SkipKind.Recap -> "Skip Recap"
+        SkipKind.Intro -> "Skip Intro"
+        SkipKind.Outro -> "Skip Credits"
+        SkipKind.Preview -> "Skip Preview (not supported)"
+    }
+
+    override fun onStop() {
+        if (::player.isInitialized) player.pause()
+        dsp.request(null)
+        nightAudioName = "Off"
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        ui.removeCallbacks(refresh)
+        watchedOwner?.close()
+        watchedOwner = null
+        subtitlePlayback?.close()
+        subtitlePlayback = null
+        subtitleOwner?.close()
+        subtitleOwner = null
+        subtitleCueObserver.close()
+        subtitleTrackObserver.close()
+        subtitlePlaybackEvidenceObserver.close()
+        subtitlePreferenceEvidenceObserver.close()
+        subtitleRenderView?.viewTreeObserver?.let { observer ->
+            if (observer.isAlive) observer.removeOnDrawListener(subtitleDrawListener)
+        }
+        subtitleRenderView = null
+        subtitleRenderPipelineObserver.close()
+        subtitleWindowPixelCaptureLease.close()
+        subtitleWindowPixelObserver.close()
+        if (::player.isInitialized) player.release()
+        dsp.request(null)
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val FIXTURE_ID = "local:synthetic-media:12s"
+        private const val SYNTHETIC_SOURCE_ID = "local:synthetic-wav"
+        private const val SYNTHETIC_PLAYER_GENERATION = 1L
+        internal const val SYNTHETIC_SEARCH_INPUT_DESCRIPTION =
+            "Synthetic typed search input"
+        internal const val SYNTHETIC_SEARCH_BUTTON_LABEL = "Run local typed search"
+        private const val MAX_SYNTHETIC_SEARCH_LENGTH = 160
+        private const val SYNTHETIC_TV_SUBTITLE_RECEIPT_PREFS =
+            "synthetic_tv_subtitle_receipt_v1"
+        private const val SYNTHETIC_TV_SUBTITLE_STATE_PREFS =
+            "synthetic_tv_subtitle_state_v1"
+        private val STORY_CANONICAL = listOf(
+            CanonicalEpisode("local:mobile-watched:1:1", 1, 1, "Episode one"),
+            CanonicalEpisode("local:mobile-watched:0:2", 0, 2, "Narrative special"),
+            CanonicalEpisode("local:mobile-watched:1:2", 1, 2, "Episode two"),
+            CanonicalEpisode("local:mobile-watched:1:3", 1, 3, "Episode three (future)"),
+            CanonicalEpisode("local:mobile-watched:0:99", 0, 99, "Ancillary extra")
+        )
+        private val STORY_HINTS = StoryOrderHints(
+            storyOrderVersion = 1,
+            storyOrder = listOf(
+                "local:mobile-watched:1:1",
+                "local:mobile-watched:0:2",
+                "local:mobile-watched:1:2",
+                "local:mobile-watched:1:3"
+            )
+        )
+    }
+
+    private fun syntheticCueContext() = SyntheticSubtitleCueDeliveryObserver.Context(
+        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+        loadGeneration = generation,
+        videoId = FIXTURE_ID,
+        sourceId = SYNTHETIC_SOURCE_ID
+    )
+
+    private fun syntheticTrackContext() = SyntheticSubtitleTrackStateObserver.Context(
+        playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+        loadGeneration = generation,
+        videoId = FIXTURE_ID,
+        sourceId = SYNTHETIC_SOURCE_ID
+    )
+
+    private fun syntheticPlaybackEvidenceContext() =
+        SyntheticSubtitlePlaybackEvidenceObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
+    private fun syntheticPreferenceEvidenceContext() =
+        SyntheticSubtitlePreferenceEvidenceObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
+    private fun syntheticRenderPipelineContext() =
+        SyntheticSubtitleRenderPipelineObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
+    private fun syntheticWindowPixelContext() =
+        SyntheticSubtitleWindowPixelObserver.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID
+        )
+
+    private fun syntheticWindowPixelCaptureContext(revision: Long) =
+        SyntheticSubtitleWindowPixelCaptureLease.Context(
+            playerGeneration = SYNTHETIC_PLAYER_GENERATION,
+            loadGeneration = generation,
+            videoId = FIXTURE_ID,
+            sourceId = SYNTHETIC_SOURCE_ID,
+            cueRevision = revision
+        )
+
+    private fun refreshSubtitlePreferenceEvidence() {
+        if (!fixtureLoaded || !::player.isInitialized) return
+        val preferenceContext = syntheticPreferenceEvidenceContext()
+        val playbackEvidence =
+            subtitlePlaybackEvidenceObserver.snapshot(syntheticPlaybackEvidenceContext())
+        val preference = subtitleOwner?.currentPlaybackPreference()
+        val origin = subtitlePlayback?.currentSelectionOrigin()
+        if (playbackEvidence == null || preference == null || origin == null) {
+            subtitlePreferenceEvidenceObserver.invalidate(preferenceContext)
+            return
+        }
+        if (!subtitlePreferenceEvidenceObserver.observe(
+            preferenceContext,
+            preference,
+            origin,
+            playbackEvidence,
+            player.playbackState == Player.STATE_ENDED
+        )) {
+            subtitleRenderPipelineObserver.invalidate(syntheticRenderPipelineContext())
+            subtitleWindowPixelObserver.invalidate(syntheticWindowPixelContext())
+            return
+        }
+        val preferenceEvidence =
+            subtitlePreferenceEvidenceObserver.snapshot(preferenceContext)
+        if (preferenceEvidence == null ||
+            !subtitleRenderPipelineObserver.observePreferenceEvidence(
+                syntheticRenderPipelineContext(),
+                preference,
+                preferenceEvidence
+            )) {
+            return
+        }
+        subtitleRenderView?.let { current ->
+            subtitleRenderPipelineObserver.observeView(
+                syntheticRenderPipelineContext(),
+                current.renderState()
+            )
+        }
+    }
+
+    private fun requestSyntheticSubtitleWindowPixels(
+        view: View,
+        pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
+        renderContext: SyntheticSubtitleRenderPipelineObserver.Context,
+        revision: Long,
+        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease,
+        sourceNoDataRetryAvailable: Boolean
+    ) {
+        val currentCaptureContext = currentSyntheticWindowPixelCaptureContext()
+        if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
+            renderContext != syntheticRenderPipelineContext() ||
+            revision != subtitleCueRevision ||
+            lease.context != syntheticWindowPixelCaptureContext(revision)) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.CONTEXT_DRIFT
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
+            return
+        }
+        val width = view.width
+        val height = view.height
+        val total = width.toLong() * height.toLong()
+        if (width !in 16..4096 || height !in 16..4096 || total !in 1L..4_194_304L) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.INVALID_DIMENSIONS
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
+            return
+        }
+        val location = IntArray(2)
+        view.getLocationInWindow(location)
+        val rect = Rect(location[0], location[1], location[0] + width, location[1] + height)
+        if (rect.left < 0 || rect.top < 0 || rect.right > window.decorView.width ||
+            rect.bottom > window.decorView.height) {
+            subtitleWindowPixelDiagnostic = SubtitleWindowPixelDiagnostic.OUTSIDE_WINDOW
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
+            return
+        }
+        val bitmap = try {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        } catch (_: RuntimeException) {
+            subtitleWindowPixelDiagnostic =
+                SubtitleWindowPixelDiagnostic.BITMAP_ALLOCATION_FAILED
+            failSyntheticSubtitlePixelCapture(lease, pixelContext, currentCaptureContext)
+            return
+        }
+        try {
+            PixelCopy.request(window, rect, bitmap, pixelCopy@{ result ->
+                var pixels: IntArray? = null
+                val callbackContext = currentSyntheticWindowPixelCaptureContext()
+                if (result == PixelCopy.ERROR_SOURCE_NO_DATA &&
+                    sourceNoDataRetryAvailable &&
+                    subtitleWindowPixelCaptureLease.pending(lease, callbackContext)) {
+                    subtitleWindowPixelDiagnostic =
+                        SubtitleWindowPixelDiagnostic.SOURCE_NO_DATA_RETRY
+                    bitmap.eraseColor(Color.TRANSPARENT)
+                    bitmap.recycle()
+                    window.decorView.postOnAnimation {
+                        requestSyntheticSubtitleWindowPixels(
+                            view,
+                            pixelContext,
+                            renderContext,
+                            revision,
+                            lease,
+                            false
+                        )
+                    }
+                    return@pixelCopy
+                }
+                subtitleWindowPixelDiagnostic = when (result) {
+                    PixelCopy.SUCCESS -> SubtitleWindowPixelDiagnostic.COPY_SUCCEEDED
+                    PixelCopy.ERROR_SOURCE_NO_DATA ->
+                        SubtitleWindowPixelDiagnostic.COPY_SOURCE_NO_DATA
+                    PixelCopy.ERROR_TIMEOUT -> SubtitleWindowPixelDiagnostic.COPY_TIMEOUT
+                    PixelCopy.ERROR_SOURCE_INVALID ->
+                        SubtitleWindowPixelDiagnostic.COPY_SOURCE_INVALID
+                    PixelCopy.ERROR_DESTINATION_INVALID ->
+                        SubtitleWindowPixelDiagnostic.COPY_DESTINATION_INVALID
+                    PixelCopy.ERROR_UNKNOWN -> SubtitleWindowPixelDiagnostic.COPY_UNKNOWN
+                    else -> SubtitleWindowPixelDiagnostic.COPY_UNRECOGNISED
+                }
+                val resolution = subtitleWindowPixelCaptureLease.resolve(
+                    lease,
+                    callbackContext,
+                    result == PixelCopy.SUCCESS
+                )
+                try {
+                    when (resolution) {
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.STALE_IGNORED ->
+                            return@pixelCopy
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_FAILURE -> {
+                            subtitleWindowPixelObserver.invalidate(pixelContext)
+                            return@pixelCopy
+                        }
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_SUCCESS -> Unit
+                    }
+                    if (!fixtureLoaded || pixelContext != syntheticWindowPixelContext() ||
+                        renderContext != syntheticRenderPipelineContext() ||
+                        revision != subtitleCueRevision) {
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                        return@pixelCopy
+                    }
+                    val capturedPixels = IntArray(width * height)
+                    pixels = capturedPixels
+                    bitmap.getPixels(capturedPixels, 0, width, 0, 0, width, height)
+                    val renderEvidence = subtitleRenderPipelineObserver.snapshot(renderContext)
+                    val accepted = renderEvidence != null &&
+                        subtitleWindowPixelObserver.observe(
+                            pixelContext,
+                            renderEvidence,
+                            revision,
+                            width,
+                            height,
+                            capturedPixels
+                        )
+                    if (!accepted) {
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.PIXEL_POLICY_REFUSED
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                    } else {
+                        subtitleWindowPixelDiagnostic =
+                            SubtitleWindowPixelDiagnostic.ACCEPTED
+                    }
+                } catch (_: RuntimeException) {
+                    subtitleWindowPixelDiagnostic =
+                        SubtitleWindowPixelDiagnostic.CALLBACK_EXCEPTION
+                    if (resolution ==
+                        SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_SUCCESS) {
+                        subtitleWindowPixelObserver.invalidate(pixelContext)
+                    }
+                } finally {
+                    pixels?.fill(0)
+                    bitmap.eraseColor(Color.TRANSPARENT)
+                    bitmap.recycle()
+                    updateUi()
+                }
+            }, ui)
+        } catch (_: RuntimeException) {
+            subtitleWindowPixelDiagnostic =
+                SubtitleWindowPixelDiagnostic.REQUEST_EXCEPTION
+            bitmap.eraseColor(Color.TRANSPARENT)
+            bitmap.recycle()
+            failSyntheticSubtitlePixelCapture(
+                lease,
+                pixelContext,
+                currentSyntheticWindowPixelCaptureContext()
+            )
+        }
+    }
+
+    private fun currentSyntheticWindowPixelCaptureContext():
+        SyntheticSubtitleWindowPixelCaptureLease.Context? =
+        if (fixtureLoaded && subtitleCueRevision > 0L) {
+            syntheticWindowPixelCaptureContext(subtitleCueRevision)
+        } else {
+            null
+        }
+
+    private fun failSyntheticSubtitlePixelCapture(
+        lease: SyntheticSubtitleWindowPixelCaptureLease.Lease,
+        pixelContext: SyntheticSubtitleWindowPixelObserver.Context,
+        currentContext: SyntheticSubtitleWindowPixelCaptureLease.Context?
+    ) {
+        if (subtitleWindowPixelCaptureLease.resolve(lease, currentContext, false) ==
+            SyntheticSubtitleWindowPixelCaptureLease.Resolution.CURRENT_FAILURE) {
+            subtitleWindowPixelObserver.invalidate(pixelContext)
+        }
+    }
+
+    private fun View.renderState() = SyntheticSubtitleRenderPipelineObserver.ViewState(
+        attached = isAttachedToWindow,
+        shown = isShown,
+        width = width,
+        height = height,
+        alphaPermille = (alpha * 1000f).toInt().coerceIn(0, 1000)
+    )
+
+    private fun syntheticTextTracks(
+        tracks: Tracks
+    ): List<SyntheticSubtitleTrackStateObserver.TextTrack> {
+        val textTracks = ArrayList<SyntheticSubtitleTrackStateObserver.TextTrack>()
+        for (group in tracks.groups) {
+            if (group.type != C.TRACK_TYPE_TEXT) continue
+            for (index in 0 until group.length) {
+                val format = group.getTrackFormat(index)
+                textTracks += SyntheticSubtitleTrackStateObserver.TextTrack(
+                    sampleMimeType = format.sampleMimeType,
+                    codecs = format.codecs,
+                    language = format.language,
+                    label = format.label,
+                    selected = group.isTrackSelected(index)
+                )
+            }
+        }
+        return textTracks
+    }
+}
+

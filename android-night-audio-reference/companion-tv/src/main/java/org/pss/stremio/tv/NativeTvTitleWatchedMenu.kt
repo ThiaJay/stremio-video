@@ -1,0 +1,338 @@
+package org.pss.stremio.tv
+
+/**
+ * One focusable Android TV title action issued from one fresh Core account snapshot.
+ * The object cannot be copied or reconstructed by a caller; activation accepts only
+ * the exact instance issued by its owning menu.
+ */
+class NativeTvTitleWatchedAction internal constructor(
+    val actionId: String,
+    val label: String,
+    val confirmation: String,
+    val scope: WatchedScope,
+    val watched: Boolean,
+    private val provenanceSeal: Any
+) {
+    internal fun wasIssuedBy(seal: Any): Boolean = provenanceSeal === seal
+}
+
+enum class NativeTvTitleWatchedOutcome {
+    APPLIED,
+    DISPATCHED_PENDING_READBACK,
+    REFUSED
+}
+
+/**
+ * Canonical watched state from the same ready Core account/library item as
+ * [SeriesAccountSnapshot]. A dispatch acknowledgement is not enough: a real
+ * client must expose this readback before another title-action generation can
+ * be rendered.
+ */
+data class CanonicalWatchedStateReadback(
+    val accountFingerprint: String,
+    val libraryItemFingerprint: String,
+    val seriesId: String,
+    val watchedVideoIds: List<String>,
+    /**
+     * Historical Core video_id. It must not be rewritten by a title action.
+     * Null is empty history and is valid only with a zero time_offset.
+     */
+    val resumeVideoId: String?,
+    /** Exact non-negative Core time_offset value, without unit conversion. */
+    val resumeTimeOffset: Long
+)
+
+/** Mandatory account boundary for a real Android title-action screen owner. */
+interface CanonicalWatchedStatePort : StremioAccountPort {
+    fun currentWatchedState(): CanonicalWatchedStateReadback?
+}
+
+/**
+ * Fail-closed presenter/actuator for Android TV title-level watched actions.
+ *
+ * It is deliberately not connected to the synthetic companion Activity. A real host
+ * must inject its authenticated Core account port and retain this menu on one UI
+ * thread. Presentation performs no write. Activation consumes the issued action
+ * before a fresh Core read and before dispatch, so stale, rejected or throwing paths
+ * cannot replay the same confirmation.
+ */
+class NativeTvTitleWatchedMenu(
+    coordinator: TvWatchedCoordinator,
+    private val account: CanonicalWatchedStatePort
+) {
+    companion object {
+        const val MAX_PRESENTED_ACTIONS = 4
+    }
+
+    private data class IssuedAction(
+        val action: NativeTvTitleWatchedAction,
+        val plan: WatchedPlan
+    )
+
+    private data class PendingReadback(
+        val plan: WatchedPlan,
+        val before: CanonicalWatchedStateReadback
+    )
+
+    private val ownerThread = Thread.currentThread()
+    private val menuSeal = Any()
+    // Both directions initially share the supplied one-shot coordinator. Only a
+    // matching canonical readback re-arms the opposite direction, while the
+    // confirmed direction stays consumed and cannot repeat as a no-op write.
+    private val coordinators = mutableMapOf(
+        true to coordinator,
+        false to coordinator
+    )
+    private val issued = LinkedHashMap<String, IssuedAction>()
+    private var pendingReadback: PendingReadback? = null
+    private var closed = false
+
+    private fun <T> snapshotList(source: List<T>, maximum: Int): List<T>? {
+        return try {
+            val expectedSize = source.size
+            if (expectedSize < 0 || expectedSize > maximum) return null
+            val iterator = source.iterator()
+            val detached = ArrayList<T>(expectedSize)
+            repeat(expectedSize) {
+                if (!iterator.hasNext()) return null
+                detached += iterator.next()
+            }
+            if (iterator.hasNext()) return null
+            java.util.Collections.unmodifiableList(detached)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    fun present(seasonNumber: Int?): List<NativeTvTitleWatchedAction> {
+        if (!onOwnerThread() || closed) return emptyList()
+        issued.clear()
+        val snapshot = snapshotOrNull() ?: return emptyList()
+        if (!confirmPendingReadback(snapshot)) return emptyList()
+        val requests = buildList {
+            add(WatchedScope.Series to true)
+            add(WatchedScope.Series to false)
+            if (seasonNumber != null && seasonNumber > 0) {
+                add(WatchedScope.Season(seasonNumber) to true)
+                add(WatchedScope.Season(seasonNumber) to false)
+            }
+        }
+        val prepared = try {
+            requests.mapNotNull { (scope, watched) ->
+                coordinatorFor(watched).prepare(snapshot, scope, watched)
+                    ?.let { Triple(scope, watched, it) }
+            }
+        } catch (_: Exception) {
+            return emptyList()
+        } catch (_: LinkageError) {
+            return emptyList()
+        }
+        if (prepared.isEmpty() || prepared.size > MAX_PRESENTED_ACTIONS) return emptyList()
+
+        val actions = ArrayList<NativeTvTitleWatchedAction>(prepared.size)
+        for ((scope, watched, plan) in prepared) {
+            val scopeId = when (scope) {
+                WatchedScope.Series -> "series"
+                is WatchedScope.Season -> "season-${scope.number}"
+            }
+            val stateId = if (watched) "watched" else "unwatched"
+            val actionId = "title-$scopeId-$stateId-${plan.fingerprint}"
+            val label = when (scope) {
+                WatchedScope.Series -> if (watched)
+                    "Mark all released episodes watched" else
+                    "Mark all released episodes unwatched"
+                is WatchedScope.Season -> if (watched)
+                    "Mark released season ${scope.number} episodes watched" else
+                    "Mark released season ${scope.number} episodes unwatched"
+            }
+            val action = NativeTvTitleWatchedAction(
+                actionId = actionId,
+                label = label,
+                confirmation = plan.confirmation,
+                scope = scope,
+                watched = watched,
+                provenanceSeal = menuSeal
+            )
+            if (issued.put(actionId, IssuedAction(action, plan)) != null) {
+                issued.clear()
+                return emptyList()
+            }
+            actions.add(action)
+        }
+        return actions.toList()
+    }
+
+    fun activate(
+        action: NativeTvTitleWatchedAction,
+        focusedActionId: String?,
+        remoteKey: String,
+        unwatchAcknowledged: Boolean = false
+    ): NativeTvTitleWatchedOutcome {
+        if (!onOwnerThread() || closed) return NativeTvTitleWatchedOutcome.REFUSED
+        val record = issued[action.actionId] ?: return NativeTvTitleWatchedOutcome.REFUSED
+        issued.clear()
+        if (record.action !== action || !action.wasIssuedBy(menuSeal) ||
+            focusedActionId != action.actionId ||
+            (remoteKey != "ENTER" && remoteKey != "DPAD_CENTER")) {
+            return NativeTvTitleWatchedOutcome.REFUSED
+        }
+        val fresh = snapshotOrNull() ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val command = try {
+            coordinatorFor(record.plan.watched).confirm(
+                record.plan,
+                fresh,
+                TvWatchedConfirmation(
+                    focusOnConfirmation = true,
+                    remoteKey = remoteKey,
+                    fingerprint = record.plan.fingerprint,
+                    unwatchAcknowledged = unwatchAcknowledged
+                )
+            )
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        } ?: return NativeTvTitleWatchedOutcome.REFUSED
+
+        val before = watchedStateOrNull()
+            ?.takeIf { validReadback(it, fresh) }
+            ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val finalSnapshot = snapshotOrNull()
+            ?: return NativeTvTitleWatchedOutcome.REFUSED
+        val finalPlan = try {
+            coordinatorFor(record.plan.watched).prepare(
+                finalSnapshot,
+                record.plan.scope,
+                record.plan.watched
+            )
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        }
+        if (finalSnapshot != fresh || finalPlan != record.plan ||
+            !validReadback(before, finalSnapshot)) {
+            return NativeTvTitleWatchedOutcome.REFUSED
+        }
+        if (!dispatchOrFalse(command.coreAction)) return NativeTvTitleWatchedOutcome.REFUSED
+        pendingReadback = PendingReadback(record.plan, before)
+        val postDispatch = snapshotOrNull()
+        return if (postDispatch != null && confirmPendingReadback(postDispatch)) {
+            NativeTvTitleWatchedOutcome.APPLIED
+        } else NativeTvTitleWatchedOutcome.DISPATCHED_PENDING_READBACK
+    }
+
+    fun close(): Boolean {
+        if (!onOwnerThread() || closed) return false
+        closed = true
+        issued.clear()
+        pendingReadback = null
+        return true
+    }
+
+    private fun onOwnerThread(): Boolean = Thread.currentThread() === ownerThread
+
+    private fun snapshotOrNull(): SeriesAccountSnapshot? = try {
+        account.currentSnapshot()?.let {
+            val videos = snapshotList(
+                it.videos,
+                CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+            ) ?: return null
+            val storyOrder = it.storyOrder?.let { order ->
+                snapshotList(order, CanonicalWatchedBounds.MAX_CANONICAL_EPISODES)
+                    ?: return null
+            }
+            it.copy(videos = videos, storyOrder = storyOrder)
+        }
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
+    private fun dispatchOrFalse(message: Map<String, Any>): Boolean = try {
+        account.dispatch(message)
+    } catch (_: Exception) {
+        false
+    } catch (_: LinkageError) {
+        false
+    }
+
+    private fun confirmPendingReadback(snapshot: SeriesAccountSnapshot): Boolean {
+        val pending = pendingReadback ?: return true
+        val currentPlan = try {
+            coordinatorFor(pending.plan.watched)
+                .prepare(snapshot, pending.plan.scope, pending.plan.watched)
+        } catch (_: Exception) {
+            null
+        } catch (_: LinkageError) {
+            null
+        } ?: return false
+        if (currentPlan != pending.plan) return false
+
+        val state = watchedStateOrNull() ?: return false
+        if (!validReadback(state, snapshot) || !validReadback(pending.before, snapshot)) return false
+
+        val beforeIds = pending.before.watchedVideoIds.toSet()
+        val selectedIds = pending.plan.selectedIds.toSet()
+        val expectedIds = if (pending.plan.watched) {
+            beforeIds + selectedIds
+        } else {
+            beforeIds - selectedIds
+        }
+        if (state.watchedVideoIds.toSet() != expectedIds) return false
+
+        val resumeConfirmed = when (pending.plan.scope) {
+            WatchedScope.Series -> if (pending.plan.watched) {
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == 0L
+            } else {
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == pending.before.resumeTimeOffset
+            }
+            is WatchedScope.Season ->
+                state.resumeVideoId == pending.before.resumeVideoId &&
+                    state.resumeTimeOffset == pending.before.resumeTimeOffset
+        }
+        if (!resumeConfirmed) return false
+        coordinators[!pending.plan.watched] = TvWatchedCoordinator()
+        pendingReadback = null
+        return true
+    }
+
+    private fun coordinatorFor(watched: Boolean): TvWatchedCoordinator =
+        coordinators.getValue(watched)
+
+    private fun watchedStateOrNull(): CanonicalWatchedStateReadback? = try {
+        val state = account.currentWatchedState() ?: return null
+        val watchedVideoIds = snapshotList(
+            state.watchedVideoIds,
+            CanonicalWatchedBounds.MAX_CANONICAL_EPISODES
+        ) ?: return null
+        state.copy(watchedVideoIds = watchedVideoIds)
+    } catch (_: Exception) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
+    private fun validReadback(
+        state: CanonicalWatchedStateReadback,
+        snapshot: SeriesAccountSnapshot
+    ): Boolean {
+        if (state.accountFingerprint != snapshot.accountFingerprint ||
+            state.libraryItemFingerprint != snapshot.libraryItemFingerprint ||
+            state.seriesId != snapshot.seriesId ||
+            state.watchedVideoIds.any { it.isBlank() } ||
+            state.watchedVideoIds.size != state.watchedVideoIds.toSet().size ||
+            state.resumeVideoId?.isBlank() == true ||
+            state.resumeTimeOffset < 0L ||
+            (state.resumeVideoId == null && state.resumeTimeOffset != 0L)
+        ) return false
+        val canonicalVideoIds = snapshot.videos.map { it.id }.toSet()
+        return canonicalVideoIds.containsAll(state.watchedVideoIds) &&
+            (state.resumeVideoId == null || state.resumeVideoId in canonicalVideoIds)
+    }
+}
